@@ -1,5 +1,7 @@
 # Cloudflare deploy notes — Toy Dairy
 
+> 完整 API 见 [`api.md`](./api.md)；架构与模块见 [`tech.md`](./tech.md)。
+
 ## Pages (frontend)
 
 | Item | Value |

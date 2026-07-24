@@ -8,7 +8,7 @@
 | **技术** | React + TypeScript + Vite + Tailwind · Cloudflare Pages (+ Functions) |
 | **数据** | 浏览器 Mock（localStorage）；AI 日记可走 Pages Function |
 
-相关文档：[`plan.md`](./plan.md)（协作与接口）· [`docs/PRD.md`](./docs/PRD.md)（冲刺范围）· [`docs/cloudflare.md`](./docs/cloudflare.md)（部署细节）· [`web/README.md`](./web/README.md)（前端目录）
+相关文档：[`plan.md`](./plan.md)（协作与接口）· [`docs/PRD.md`](./docs/PRD.md)（冲刺范围）· [`docs/api.md`](./docs/api.md)（API）· [`docs/tech.md`](./docs/tech.md)（前后端技术细节）· [`docs/cloudflare.md`](./docs/cloudflare.md)（部署）· [`web/README.md`](./web/README.md)（前端目录）
 
 ---
 
