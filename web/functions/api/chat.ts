@@ -1,16 +1,25 @@
 /**
  * Cloudflare Pages Function: POST /api/chat
  *
- * Secrets (same as analyze-entry, set in Pages Environment variables):
- *   OPENAI_API_KEY   (Encrypt) — required
- *   OPENAI_BASE_URL  — optional, default https://api.openai.com/v1
- *   OPENAI_MODEL     — optional, default gpt-4o-mini
+ * Env (Dashboard → Pages → toydiary → Settings → Environment variables):
+ *   OPENAI_API_KEY   (Encrypt) — required (works as Anthropic key too)
+ *   OPENAI_BASE_URL  — optional base URL
+ *   OPENAI_MODEL     — optional model id
+ *   AI_PROVIDER      — optional: openai | anthropic | auto (default auto)
  */
+
+import {
+  buildAuthMeta,
+  callChatModel,
+  resolveAiConfig,
+  type ChatMessage,
+} from '../_shared/aiProvider'
 
 type Env = {
   OPENAI_API_KEY?: string
   OPENAI_BASE_URL?: string
   OPENAI_MODEL?: string
+  AI_PROVIDER?: string
 }
 
 type ChatTurn = {
@@ -48,7 +57,11 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     return json(
       {
         error:
-          'OPENAI_API_KEY is not configured. Set it as a secret in Cloudflare Pages.',
+          'OPENAI_API_KEY is not configured. Set it as a secret in Cloudflare Pages → Settings → Environment variables (Production).',
+        auth: {
+          envKey: 'OPENAI_API_KEY',
+          keyConfigured: false,
+        },
       },
       500,
     )
@@ -105,8 +118,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     .join('\n')
 
   const history = (body.history ?? []).slice(-12)
-  const messages: { role: 'system' | 'user' | 'assistant'; content: string }[] =
-    [{ role: 'system', content: system }]
+  const messages: ChatMessage[] = [{ role: 'system', content: system }]
 
   for (const turn of history) {
     const text = turn.text?.trim()
@@ -119,62 +131,42 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   }
   messages.push({ role: 'user', content: message })
 
-  const baseUrl = (
-    env.OPENAI_BASE_URL?.trim() || 'https://api.openai.com/v1'
-  ).replace(/\/$/, '')
-  const model = env.OPENAI_MODEL?.trim() || 'gpt-4o-mini'
+  const config = resolveAiConfig(env)
+  const result = await callChatModel({
+    apiKey,
+    baseUrl: config.baseUrl,
+    model: config.model,
+    providerHint: env.AI_PROVIDER,
+    messages,
+    temperature: 0.85,
+    maxTokens: 280,
+  })
 
-  let upstream: Response
-  try {
-    upstream = await fetch(`${baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model,
-        temperature: 0.85,
-        max_tokens: 280,
-        messages,
-      }),
-    })
-  } catch (err) {
+  const auth = buildAuthMeta(config, result.endpoint, apiKey)
+  // Prefer actual provider used by the call
+  auth.provider = result.provider
+
+  if (!result.ok) {
     return json(
       {
-        error: 'Failed to reach AI provider',
-        detail: err instanceof Error ? err.message : String(err),
+        error: result.error,
+        detail: result.detail,
+        auth,
+        hint:
+          result.hint ||
+          (config.baseUrlSource === 'default' || config.modelSource === 'default'
+            ? 'Set OPENAI_BASE_URL + OPENAI_MODEL on toydiary Production. For Claude/Anthropic, also set AI_PROVIDER=anthropic (or use a claude-* model id).'
+            : undefined),
       },
       502,
     )
   }
 
-  if (!upstream.ok) {
-    const detail = await upstream.text().catch(() => '')
-    return json(
-      {
-        error: `AI provider HTTP ${upstream.status}`,
-        detail: detail.slice(0, 800),
-      },
-      502,
-    )
-  }
-
-  let reply = ''
-  try {
-    const data = (await upstream.json()) as {
-      choices?: { message?: { content?: string } }[]
-    }
-    reply = data.choices?.[0]?.message?.content?.trim() || ''
-  } catch {
-    return json({ error: 'Invalid AI provider response' }, 502)
-  }
-
-  if (!reply) {
-    return json({ error: 'Empty AI response' }, 502)
-  }
-
-  return json({ reply, source: 'api' })
+  return json({
+    reply: result.text,
+    source: 'api',
+    auth,
+  })
 }
 
 function json(data: unknown, status = 200) {

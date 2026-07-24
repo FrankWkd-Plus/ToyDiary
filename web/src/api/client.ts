@@ -9,7 +9,13 @@ import type {
   CommunityMessage,
   CommunityPost,
 } from '../community/communityData'
-import type { CreateEntryInput, CreateToyInput, Entry, Toy } from '../types'
+import type {
+  CreateEntryInput,
+  CreateToyInput,
+  Entry,
+  Toy,
+  TravelMapResponse,
+} from '../types'
 import {
   communityStore,
   type CreateCommunityPostInput,
@@ -79,6 +85,12 @@ export const api = {
       if (v != null) form.append(k, String(v))
     })
     return http(`/toys/${toyId}/entries`, { method: 'POST', body: form })
+  },
+
+  /** GET /api/toys/:toyId/travel-map — mock-local for now */
+  async getTravelMap(toyId: string): Promise<TravelMapResponse> {
+    if (USE_MOCK) return mockStore.getTravelMap(toyId)
+    return http(`/toys/${toyId}/travel-map`)
   },
 
   async regenerateEntry(id: string): Promise<Entry> {

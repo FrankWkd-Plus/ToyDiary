@@ -1,6 +1,21 @@
-/** Matches plan.md interface contract */
+/** Matches plan.md interface contract + place-aware travel map */
 
-export type EntryType = 'travel' | 'daily' | 'memorial' | 'text'
+export type EntryType = 'travel' | 'daily' | 'memorial' | 'text' | 'heart'
+
+/** Structured place saved with a record (country/region/city/district/poi…) */
+export interface Place {
+  id?: string
+  country?: string
+  region?: string
+  city?: string
+  district?: string
+  poi?: string
+  displayName: string
+  lat: number
+  lng: number
+  providerPlaceId?: string
+  provider?: 'nominatim' | 'manual' | 'exif' | 'geolocation' | 'seed'
+}
 
 export interface Toy {
   id: string
@@ -9,7 +24,7 @@ export interface Toy {
   birthPlace: string
   role: string
   traits: string[]
-  /** AI-filled */
+  /** AI-filled / user-edited */
   zodiac?: string
   bio?: string
   monologue?: string
@@ -23,6 +38,10 @@ export interface CreateToyInput {
   birthPlace: string
   role: string
   traits: string[]
+  bio?: string
+  monologue?: string
+  avatarUrl?: string
+  zodiac?: string
 }
 
 export interface Entry {
@@ -30,7 +49,10 @@ export interface Entry {
   toyId: string
   type: EntryType
   date: string
+  /** Legacy free-text location (kept for display fallback) */
   location?: string
+  /** Structured place for map / reverse-geo / search */
+  place?: Place
   title?: string
   userNote?: string
   mood?: string
@@ -45,6 +67,7 @@ export interface CreateEntryInput {
   type: EntryType
   date: string
   location?: string
+  place?: Place
   title?: string
   userNote?: string
   mood?: string
@@ -55,11 +78,39 @@ export interface CreateEntryInput {
   imageAnalysis?: string
 }
 
+export interface TravelMapPoint {
+  entryId: string
+  toyId: string
+  date: string
+  title?: string
+  mood?: string
+  imageUrl?: string
+  aiDiary?: string
+  userNote?: string
+  place: Place
+}
+
+export interface TravelMapResponse {
+  toyId: string
+  points: TravelMapPoint[]
+  years: number[]
+  cityCount: number
+  travelCount: number
+}
+
 export const ENTRY_TYPE_LABEL: Record<EntryType, string> = {
   travel: '旅行',
   daily: '日常',
+  heart: '心事',
   memorial: '纪念日',
   text: '文字',
 }
+
+export const COMPOSE_ENTRY_TYPES: EntryType[] = [
+  'travel',
+  'daily',
+  'heart',
+  'memorial',
+]
 
 export const MOOD_OPTIONS = ['开心', '平静', '好奇', '想家', '兴奋', '温柔'] as const

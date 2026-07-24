@@ -6,13 +6,14 @@
   "pages_build_output_dir": "./dist",
 
   // Provisioned for future Workers API (currently SPA is mock-first).
-  // Production Pages project: toydairy (https://toydairy.pages.dev)
+  // Production Pages project: toydiary (https://toydiary.pages.dev)
   // Production branch: main · preview deploys: non-main branches
   //
-  // AI secrets (Dashboard only, never commit):
-  //   OPENAI_API_KEY  — required secret
-  //   OPENAI_BASE_URL — optional, default https://api.openai.com/v1
-  //   OPENAI_MODEL    — optional, default gpt-4o-mini
+  // AI env (Dashboard → Pages → toydiary → Settings → Environment variables):
+  //   OPENAI_API_KEY  — required secret (Encrypt; also used for Anthropic)
+  //   OPENAI_BASE_URL — plain text; OpenAI or Anthropic-compatible base
+  //   OPENAI_MODEL    — plain text; e.g. gpt-4o-mini or claude-3-5-haiku-latest
+  //   AI_PROVIDER     — optional: openai | anthropic | auto (default auto)
   "kv_namespaces": [
     {
       "binding": "TOYDAIRY_KV",

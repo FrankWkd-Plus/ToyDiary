@@ -13,9 +13,18 @@ export interface ChatToyReplyInput {
   quietMode?: boolean
 }
 
+export interface ChatApiError {
+  /** HTTP status from our /api/chat (or 0 if network/parse failed). */
+  status: number
+  /** Raw response body text (or network error message). */
+  body: string
+}
+
 export interface ChatToyReplyResult {
   reply: string
   source: 'api' | 'local'
+  /** Present when remote AI was attempted but did not yield a usable reply. */
+  apiError?: ChatApiError
 }
 
 const CHAT_ENDPOINT =
@@ -71,9 +80,64 @@ export function localPersonaReply(
   return `我认真听到啦。作为一只${trait}的${toy.role}，我想把你刚刚说的这一刻好好接住。然后呢，还发生了什么？`
 }
 
+/** Pretty-print API body for chat display; keep raw text if not JSON. */
+export function formatChatApiError(error: ChatApiError): string {
+  const header =
+    error.status > 0
+      ? `AI 调用失败 · HTTP ${error.status}`
+      : 'AI 调用失败 · 网络或请求异常'
+  const raw = error.body?.trim()
+  if (!raw) return `${header}\n（无返回内容）`
+
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>
+    // Prefer a short human line first (from our Pages Function or OpenAI-style payload).
+    const summary =
+      pickErrorSummary(parsed) ||
+      (typeof parsed.detail === 'string' ? parsed.detail : undefined)
+    const pretty = JSON.stringify(parsed, null, 2)
+    return summary
+      ? `${header}\n${summary}\n\n${pretty}`
+      : `${header}\n${pretty}`
+  } catch {
+    return `${header}\n${raw}`
+  }
+}
+
+function pickErrorSummary(parsed: Record<string, unknown>): string | undefined {
+  if (typeof parsed.error === 'string' && parsed.error.trim()) {
+    return parsed.error.trim()
+  }
+  const nested = parsed.error
+  if (nested && typeof nested === 'object') {
+    const errObj = nested as { message?: unknown; code?: unknown; type?: unknown }
+    const parts = [errObj.message, errObj.code, errObj.type]
+      .filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
+      .map((v) => v.trim())
+    if (parts.length) return parts.join(' · ')
+  }
+  if (typeof parsed.message === 'string' && parsed.message.trim()) {
+    return parsed.message.trim()
+  }
+  if (typeof parsed.detail === 'string' && parsed.detail.trim()) {
+    // detail may itself be a JSON string from the upstream provider
+    const detail = parsed.detail.trim()
+    try {
+      const inner = JSON.parse(detail) as Record<string, unknown>
+      const innerSummary = pickErrorSummary(inner)
+      if (innerSummary) return innerSummary
+    } catch {
+      // keep raw detail below
+    }
+    return detail.slice(0, 240)
+  }
+  return undefined
+}
+
 /**
  * Ask the toy to reply. Tries Pages Function `/api/chat` (OPENAI_* secrets),
- * falls back to local persona templates.
+ * falls back to local persona templates. On remote failure, includes apiError
+ * with the HTTP status and response body so the UI can surface it.
  */
 export async function chatToyReply(
   input: ChatToyReplyInput,
@@ -85,6 +149,8 @@ export async function chatToyReply(
       source: 'local',
     }
   }
+
+  let apiError: ChatApiError | undefined
 
   if (CHAT_ENDPOINT) {
     try {
@@ -118,17 +184,49 @@ export async function chatToyReply(
         }),
       })
 
-      if (!response.ok) throw new Error(`Chat HTTP ${response.status}`)
-      const data = (await response.json()) as { reply?: string }
-      const reply = data.reply?.trim()
-      if (reply) return { reply, source: 'api' }
-    } catch {
-      // fall through to local
+      const rawBody = await response.text().catch(() => '')
+
+      if (!response.ok) {
+        apiError = {
+          status: response.status,
+          body: rawBody.slice(0, 2000) || `Chat HTTP ${response.status}`,
+        }
+      } else {
+        let data: { reply?: string; error?: string; detail?: string } = {}
+        try {
+          data = rawBody ? (JSON.parse(rawBody) as typeof data) : {}
+        } catch {
+          apiError = {
+            status: response.status,
+            body: rawBody.slice(0, 2000) || 'Invalid JSON response',
+          }
+        }
+
+        if (!apiError) {
+          const reply = data.reply?.trim()
+          if (reply) return { reply, source: 'api' }
+          apiError = {
+            status: response.status,
+            body:
+              rawBody.slice(0, 2000) ||
+              JSON.stringify({
+                error: data.error || 'Empty AI reply',
+                detail: data.detail,
+              }),
+          }
+        }
+      }
+    } catch (err) {
+      apiError = {
+        status: 0,
+        body: err instanceof Error ? err.message : String(err),
+      }
     }
   }
 
   return {
     reply: localPersonaReply(input.toy, message, input.entries),
     source: 'local',
+    apiError,
   }
 }

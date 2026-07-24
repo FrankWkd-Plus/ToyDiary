@@ -13,8 +13,15 @@ export function EntryDetailPage() {
   const { id } = useParams<{ id: string }>()
   const nav = useNavigate()
   const location = useLocation()
-  const fromGrowth = location.state && (location.state as { from?: string }).from === 'growth'
-  const backTo = fromGrowth ? '/growth' : '/archive'
+  const fromState = (location.state as { from?: string } | null)?.from
+  const backTo =
+    fromState === 'growth' ||
+    fromState === 'growth-timeline' ||
+    fromState === 'growth-stats'
+      ? fromState === 'growth-timeline'
+        ? '/growth/timeline'
+        : '/growth'
+      : '/archive'
   const { showToast, refreshEntries, currentToy, toys } = useApp()
   const [entry, setEntry] = useState<Entry | null>(null)
   const [loading, setLoading] = useState(true)
