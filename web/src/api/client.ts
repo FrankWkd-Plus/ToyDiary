@@ -105,6 +105,17 @@ export const api = {
     communityStore.reset()
   },
 
+  importGrowth: (payload: {
+    toys: Toy[]
+    entries: Entry[]
+    currentToyId?: string | null
+  }) => {
+    if (!USE_MOCK) {
+      throw new Error('正式 API 暂不支持导入，请使用演示模式')
+    }
+    return mockStore.importGrowth(payload)
+  },
+
   // —— Community (mock-first) ——
   communitySnapshot: () => communityStore.snapshot(),
   listCommunityPosts: (): Promise<CommunityPost[]> =>

@@ -11,6 +11,7 @@ import {
   Sparkles,
 } from 'lucide-react'
 import { companionDays, toyAvatar } from '../archive/archiveUtils'
+import { DayCountNumber } from '../components/DayCountNumber'
 import { PageHeader } from '../components/PageHeader'
 import { useApp } from '../context/AppContext'
 import { seedPlaceForLabel, uniqueCities } from '../places/placeUtils'
@@ -120,53 +121,53 @@ export function GrowthPage() {
           )}
         </div>
 
-        {/* Clickable overview stats */}
-        <section className="mb-4 grid grid-cols-4 gap-2">
-          <OverviewStat
-            icon="📅"
+        {/* Clickable overview stats — Days Matter style */}
+        <section className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <DayCountNumber
+            value={days}
             label="陪伴"
-            value={`${days}`}
             unit="天"
+            size="stat"
             onClick={() => requireToy('/growth/stats/companion')}
           />
-          <OverviewStat
-            icon="✈️"
+          <DayCountNumber
+            value={travelCount}
             label="旅行"
-            value={`${travelCount}`}
             unit="次"
+            size="stat"
             onClick={() => requireToy('/growth/stats/travel')}
           />
-          <OverviewStat
-            icon="🏙️"
+          <DayCountNumber
+            value={cityCount}
             label="城市"
-            value={`${cityCount}`}
             unit="座"
+            size="stat"
             onClick={() => requireToy('/growth/stats/cities')}
           />
-          <OverviewStat
-            icon="✨"
+          <DayCountNumber
+            value={entries.length}
             label="瞬间"
-            value={`${entries.length}`}
             unit="条"
+            size="stat"
             onClick={() => requireToy('/growth/stats/moments')}
           />
         </section>
 
-        <div className="mb-4 space-y-2.5">
+        <div className="mb-3 space-y-1.5">
           <SecondaryMenuButton
-            icon={<Globe2 className="growth-globe-spin h-5 w-5" />}
+            icon={<Globe2 className="growth-globe-spin h-4 w-4" />}
             title="旅行轨迹地图"
-            subtitle="按日期串起每一次出发 · OpenStreetMap"
+            subtitle="按日期串起每一次出发"
             onClick={() => requireToy('/growth/travel-map')}
-            trailing={<MapPin className="h-4 w-4 text-matcha-deep" />}
+            trailing={<MapPin className="h-3.5 w-3.5 text-matcha-deep" />}
             gradient="from-mist-soft via-white to-mustard-soft"
           />
           <SecondaryMenuButton
-            icon={<Sparkles className="h-5 w-5" />}
+            icon={<Sparkles className="h-4 w-4" />}
             title="成长时间线"
-            subtitle="按时间回顾每一篇日志与瞬间"
+            subtitle="回顾每一篇日志与瞬间"
             onClick={() => requireToy('/growth/timeline')}
-            trailing={<ChevronRight className="h-4 w-4 text-matcha-deep" />}
+            trailing={<ChevronRight className="h-3.5 w-3.5 text-matcha-deep" />}
             gradient="from-mustard-soft via-white to-mist-soft"
           />
         </div>
@@ -273,48 +274,24 @@ function SecondaryMenuButton({
     <button
       type="button"
       onClick={onClick}
-      className={`flex w-full items-center gap-3 rounded-[1.25rem] bg-gradient-to-r ${gradient} p-3.5 text-left shadow-[var(--shadow-warm-sm)] ring-1 ring-line/50 transition-transform active:scale-[0.99]`}
+      className={`flex w-full items-center gap-2.5 rounded-[1rem] bg-gradient-to-r ${gradient} px-3 py-2 text-left shadow-[var(--shadow-warm-sm)] ring-1 ring-line/50 transition-transform active:scale-[0.99]`}
     >
-      <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-matcha-deep shadow-sm">
+      <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-white text-matcha-deep shadow-sm">
         {icon}
       </span>
       <span className="min-w-0 flex-1">
-        <strong className="block font-display text-sm text-ink">{title}</strong>
-        <span className="mt-0.5 block text-[10px] text-ink-muted">{subtitle}</span>
+        <strong className="block font-display text-[13px] leading-tight text-ink">
+          {title}
+        </strong>
+        <span className="mt-0.5 block truncate text-[9px] text-ink-muted">
+          {subtitle}
+        </span>
       </span>
       {trailing}
     </button>
   )
 }
 
-function OverviewStat({
-  icon,
-  label,
-  value,
-  unit,
-  onClick,
-}: {
-  icon: string
-  label: string
-  value: string
-  unit: string
-  onClick: () => void
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="rounded-2xl bg-white px-1.5 py-2.5 text-center shadow-[var(--shadow-warm-sm)] ring-1 ring-line/50 transition-transform active:scale-95"
-    >
-      <span className="text-sm">{icon}</span>
-      <strong className="mt-0.5 block font-display text-base leading-none text-ink">
-        {value}
-        <span className="ml-0.5 text-[9px] font-sans text-ink-muted">{unit}</span>
-      </strong>
-      <span className="mt-1 block text-[9px] text-ink-muted">{label}</span>
-    </button>
-  )
-}
 
 function buildMilestones(entries: Entry[], days: number) {
   const items: {

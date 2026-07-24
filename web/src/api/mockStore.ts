@@ -6,6 +6,7 @@ import type {
   Toy,
   TravelMapResponse,
 } from '../types'
+import { zodiacFromDate as zodiacFromDateShared } from '../archive/zodiac'
 import { seedPlaceForLabel } from '../places/placeUtils'
 import { uniqueCities } from '../places/placeUtils'
 
@@ -20,8 +21,6 @@ function delay(ms = 0) {
   if (ms <= 0) return Promise.resolve()
   return new Promise((r) => setTimeout(r, ms))
 }
-
-import { zodiacFromDate as zodiacFromDateShared } from '../archive/zodiac'
 
 /** @deprecated prefer archive/zodiac — kept for existing imports */
 export function zodiacFromDate(isoDate: string): string {
@@ -728,5 +727,28 @@ export const mockStore = {
   resetDemo() {
     localStorage.removeItem(STORAGE_KEY)
     return seed()
+  },
+
+  /** Replace toys/entries from a growth JSON import (demo backup restore). */
+  importGrowth(payload: {
+    toys: Toy[]
+    entries: Entry[]
+    currentToyId?: string | null
+  }) {
+    const toys = Array.isArray(payload.toys) ? payload.toys : []
+    const entries = Array.isArray(payload.entries)
+      ? payload.entries.map(attachPlace)
+      : []
+    if (!toys.length) {
+      throw new Error('导入数据里没有玩偶')
+    }
+    const currentToyId =
+      (payload.currentToyId &&
+        toys.find((t) => t.id === payload.currentToyId)?.id) ||
+      toys[0]?.id ||
+      null
+    const data: StoreData = { toys, entries, currentToyId }
+    save(data)
+    return data
   },
 }

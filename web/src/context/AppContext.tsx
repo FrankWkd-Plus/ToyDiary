@@ -35,6 +35,11 @@ interface AppContextValue {
   refreshEntries: (toyId?: string) => Promise<void>
   setCurrentToyId: (id: string) => void
   resetDemo: () => Promise<void>
+  importGrowthData: (payload: {
+    toys: Toy[]
+    entries: Entry[]
+    currentToyId?: string | null
+  }) => Promise<void>
 
   // community
   communityPosts: CommunityPost[]
@@ -147,6 +152,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     else setEntries([])
     showToast('已恢复演示数据')
   }, [refreshToys, refreshCommunity, refreshEntries, showToast])
+
+  const importGrowthData = useCallback(
+    async (payload: {
+      toys: Toy[]
+      entries: Entry[]
+      currentToyId?: string | null
+    }) => {
+      api.importGrowth(payload)
+      await refreshToys()
+      const id = api.getCurrentToyId()
+      if (id) await refreshEntries(id)
+      else setEntries([])
+      showToast(
+        `已导入 ${payload.toys.length} 只玩偶 · ${payload.entries.length} 条日记`,
+      )
+    },
+    [refreshToys, refreshEntries, showToast],
+  )
 
   useEffect(() => {
     let cancelled = false
@@ -354,6 +377,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       refreshEntries,
       setCurrentToyId,
       resetDemo,
+      importGrowthData,
       communityPosts,
       communityComments,
       communityLikes,
@@ -386,6 +410,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       refreshEntries,
       setCurrentToyId,
       resetDemo,
+      importGrowthData,
       communityPosts,
       communityComments,
       communityLikes,

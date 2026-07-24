@@ -1,6 +1,6 @@
 /**
  * In-app proactive toy nudges (demo stand-in for push).
- * Respects prefs.toyReminders / diaryPush and quietMode.
+ * Granular prefs: miss / diary / travel / night + frequency.
  */
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -9,14 +9,11 @@ import { toyAvatar } from '../archive/archiveUtils'
 import { getToyVitality } from '../archive/toyVitality'
 import { useAuth } from '../auth/AuthContext'
 import { useApp } from '../context/AppContext'
+import type { UserPrefs } from '../auth/authStorage'
 
 const LAST_NUDGE_KEY = 'toydairy.nudge.lastAt'
-/** First poke after app shell is ready (demo-friendly). */
-const FIRST_DELAY_MS = 28_000
-const INTERVAL_MS = 4 * 60_000
-const MIN_GAP_MS = 2 * 60_000
 
-type NudgeKind = 'miss' | 'diary' | 'travel' | 'energy' | 'night' | 'window'
+type NudgeKind = 'miss' | 'diary' | 'travel' | 'energy' | 'night' | 'window' | 'joke'
 
 interface NudgePayload {
   id: string
@@ -43,69 +40,119 @@ function saveLastAt(ts: number) {
   }
 }
 
+function frequencyMs(freq: UserPrefs['nudgeFrequency']) {
+  switch (freq) {
+    case 'rare':
+      return { first: 90_000, interval: 8 * 60_000, minGap: 5 * 60_000 }
+    case 'chatty':
+      return { first: 18_000, interval: 2 * 60_000, minGap: 75_000 }
+    default:
+      return { first: 28_000, interval: 4 * 60_000, minGap: 2 * 60_000 }
+  }
+}
+
 function buildNudgePool(
   name: string,
-  diaryPush: boolean,
+  prefs: UserPrefs,
   vitalityLine: string,
   energy: number,
   hour: number,
   hasTravel: boolean,
+  locationHint?: string,
 ): NudgePayload[] {
-  const pool: NudgePayload[] = [
-    {
-      id: 'miss',
-      kind: 'miss',
-      text: `【${name}】想你啦～口袋里有点空，你在忙吗？`,
-      cta: '去聊天',
-      to: '/conversation',
-    },
-    {
-      id: 'window',
-      kind: 'window',
-      text: `【${name}】窗外的光变了，${vitalityLine}`,
-      cta: '去聊天',
-      to: '/conversation',
-    },
-    {
+  const pool: NudgePayload[] = []
+
+  if (prefs.nudgeMiss) {
+    pool.push(
+      {
+        id: 'miss1',
+        kind: 'miss',
+        text: `【${name}】想你啦～口袋里有点空，你在忙吗？`,
+        cta: '去聊天',
+        to: '/conversation',
+      },
+      {
+        id: 'miss2',
+        kind: 'miss',
+        text: `【${name}】刚刚对着窗户发呆三分钟，结论是：还是你比较好玩。`,
+        cta: '去聊天',
+        to: '/conversation',
+      },
+      {
+        id: 'window',
+        kind: 'window',
+        text: `【${name}】窗外的光变了，${vitalityLine}`,
+        cta: '去聊天',
+        to: '/conversation',
+      },
+      {
+        id: 'joke',
+        kind: 'joke',
+        text: `【${name}】报告：今日可爱值 +1（未经科学认证，仅对你有效）。`,
+        cta: '去聊天',
+        to: '/conversation',
+      },
+    )
+  }
+
+  if (prefs.nudgeNight) {
+    pool.push({
       id: 'energy',
       kind: 'energy',
       text:
         energy < 40
-          ? `【${name}】电量有点低，但还是想听你说一句晚安`
-          : `【${name}】电量充足（${energy}），想听你吐槽今天`,
+          ? `【${name}】电量 ${energy}%，已进入省电模式，但仍想听你说一句晚安。`
+          : `【${name}】电量充足（${energy}），想听你吐槽今天！`,
       cta: '去聊天',
       to: '/conversation',
-    },
-  ]
+    })
+    if (hour >= 22 || hour < 6) {
+      pool.push({
+        id: 'night',
+        kind: 'night',
+        text: `【${name}】夜深了，我把灯调成小小的一盏。你还没睡的话，回我一句就好。`,
+        cta: '去聊天',
+        to: '/conversation',
+      })
+    }
+  }
 
-  if (hasTravel) {
+  if (prefs.nudgeTravel && hasTravel) {
     pool.push({
       id: 'travel',
       kind: 'travel',
-      text: `【${name}】刚刚梦见上次旅行…想说给你听`,
+      text: locationHint
+        ? `【${name}】梦见我们又去了${locationHint}…风还是那阵味道，要不要重温一下？`
+        : `【${name}】刚刚梦见上次旅行…地图上的小点在眨眼睛。`,
       cta: '去聊天',
       to: '/conversation',
     })
-  }
-
-  if (diaryPush) {
     pool.push({
-      id: 'diary',
-      kind: 'diary',
-      text: `【${name}】今天还没写日记哦，要不要一起记一笔？`,
-      cta: '写日记',
-      to: '/compose',
+      id: 'travel2',
+      kind: 'travel',
+      text: `【${name}】提议：打开旅行轨迹，我们再走一遍好不好？（我会乖乖当导航）`,
+      cta: '看地图',
+      to: '/growth/travel-map',
     })
   }
 
-  if (hour >= 22 || hour < 6) {
-    pool.push({
-      id: 'night',
-      kind: 'night',
-      text: `【${name}】有点困了，但还是想等你回一句晚安`,
-      cta: '去聊天',
-      to: '/conversation',
-    })
+  if (prefs.diaryPush) {
+    pool.push(
+      {
+        id: 'diary',
+        kind: 'diary',
+        text: `【${name}】今天还没写日记哦～一句话也行，我来补上玩偶视角！`,
+        cta: '写日记',
+        to: '/compose',
+      },
+      {
+        id: 'diary2',
+        kind: 'diary',
+        text: `【${name}】手帐页还空着一角，感觉少了你的笔迹。`,
+        cta: '记一笔',
+        to: '/compose',
+      },
+    )
   }
 
   return pool
@@ -122,7 +169,6 @@ export function ToyNudgeHost() {
   const toy = currentToy ?? toys[0]
   const toyIndex = toys.findIndex((t) => t.id === toy?.id)
   const avatar = toy ? toyAvatar(toy, toyIndex >= 0 ? toyIndex : 0) : ''
-  /** Don't stack on top of the chat composer. */
   const suppressOnRoute =
     pathname.startsWith('/conversation') || pathname.startsWith('/login')
 
@@ -134,6 +180,8 @@ export function ToyNudgeHost() {
     }
   }, [nudge])
 
+  const timing = frequencyMs(prefs.nudgeFrequency ?? 'normal')
+
   useEffect(() => {
     if (!toy || !prefs.toyReminders || quiet || suppressOnRoute) return
 
@@ -144,38 +192,41 @@ export function ToyNudgeHost() {
       if (cancelled) return
       const now = Date.now()
       const last = loadLastAt()
-      if (now - last < MIN_GAP_MS) return
+      if (now - last < timing.minGap) return
 
       const vitality = getToyVitality(toy, entries)
       const hour = new Date().getHours()
-      const hasTravel = entries.some(
+      const travelEntries = entries.filter(
         (e) => e.toyId === toy.id && e.type === 'travel',
       )
+      const hasTravel = travelEntries.length > 0
+      const locationHint =
+        travelEntries[0]?.location || travelEntries[0]?.place?.displayName
+
       const pool = buildNudgePool(
         toy.name,
-        prefs.diaryPush,
+        prefs,
         vitality.line,
         vitality.energy,
         hour,
         hasTravel,
+        locationHint,
       )
       if (!pool.length) return
 
-      const pick = pool[Math.floor(Math.random() * pool.length)]
+      let pick = pool[Math.floor(Math.random() * pool.length)]
       if (pick.id === dismissedId) {
-        const alt = pool.find((p) => p.id !== dismissedId) ?? pick
-        setNudge({ ...alt, id: `${alt.id}_${now}` })
-      } else {
-        setNudge({ ...pick, id: `${pick.id}_${now}` })
+        pick = pool.find((p) => p.id !== dismissedId) ?? pick
       }
+      setNudge({ ...pick, id: `${pick.id}_${now}` })
       saveLastAt(now)
     }
 
     const firstDelay =
-      Date.now() - loadLastAt() < MIN_GAP_MS ? INTERVAL_MS : FIRST_DELAY_MS
+      Date.now() - loadLastAt() < timing.minGap ? timing.interval : timing.first
     const firstTimer = window.setTimeout(() => {
       fire()
-      intervalId = window.setInterval(fire, INTERVAL_MS)
+      intervalId = window.setInterval(fire, timing.interval)
     }, firstDelay)
 
     return () => {
@@ -185,12 +236,14 @@ export function ToyNudgeHost() {
     }
   }, [
     toy,
-    prefs.toyReminders,
-    prefs.diaryPush,
+    prefs,
     entries,
     quiet,
     dismissedId,
     suppressOnRoute,
+    timing.first,
+    timing.interval,
+    timing.minGap,
   ])
 
   if (!nudge || !toy || !prefs.toyReminders || suppressOnRoute) return null
@@ -222,7 +275,9 @@ export function ToyNudgeHost() {
             className="mt-0.5 h-11 w-11 shrink-0 rounded-2xl object-cover ring-1 ring-line/50"
           />
           <div className="min-w-0 flex-1">
-            <p className="text-[13px] leading-relaxed text-ink">{activeNudge.text}</p>
+            <p className="text-[13px] leading-relaxed text-ink">
+              {activeNudge.text}
+            </p>
             <div className="mt-2.5 flex flex-wrap items-center gap-2">
               <button
                 type="button"
