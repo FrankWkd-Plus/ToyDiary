@@ -46,17 +46,19 @@ export function TravelMapPage() {
   const toyIndex = toys.findIndex((t) => t.id === currentToy?.id)
   const avatar = toyAvatar(currentToy, toyIndex)
 
+  const toyId = currentToy?.id
+
   useEffect(() => {
     let cancelled = false
     ;(async () => {
-      if (!currentToy) {
+      if (!toyId) {
         setData(null)
         setLoading(false)
         return
       }
       setLoading(true)
       try {
-        const res = await api.getTravelMap(currentToy.id)
+        const res = await api.getTravelMap(toyId)
         if (!cancelled) {
           setData(res)
           setYear('all')
@@ -72,7 +74,7 @@ export function TravelMapPage() {
     return () => {
       cancelled = true
     }
-  }, [currentToy?.id, showToast])
+  }, [toyId, showToast])
 
   const filtered = useMemo(() => {
     const points = data?.points || []

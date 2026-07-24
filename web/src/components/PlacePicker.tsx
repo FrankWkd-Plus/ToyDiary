@@ -46,7 +46,7 @@ export function PlacePicker({
     }
   }
 
-  async function useCurrentLocation() {
+  async function locateCurrentPosition() {
     if (!navigator.geolocation) {
       setError('当前浏览器不支持定位')
       return
@@ -160,7 +160,7 @@ export function PlacePicker({
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
-          onClick={() => void useCurrentLocation()}
+          onClick={() => void locateCurrentPosition()}
           disabled={locating}
           className="flex items-center gap-1 rounded-full bg-cream px-3 py-1.5 text-[10px] text-ink-soft ring-1 ring-line/60"
         >
