@@ -1,18 +1,28 @@
 /**
  * Cloudflare Pages Function: POST /api/analyze-entry
  *
- * Secrets (Dashboard → Pages → toydairy → Settings → Environment variables):
+ * Env (Dashboard → Pages → toydiary → Settings → Environment variables):
  *   OPENAI_API_KEY   (Encrypt / secret)  — required
- *   OPENAI_BASE_URL  (plain or secret)   — optional, default https://api.openai.com/v1
- *   OPENAI_MODEL     (plain)             — optional, default gpt-4o-mini
+ *   OPENAI_BASE_URL  (plain or secret)   — optional
+ *   OPENAI_MODEL     (plain)             — optional
+ *   AI_PROVIDER      — optional: openai | anthropic | auto (default auto)
  *
  * Do NOT put the API key in any VITE_* variable (those are public in the browser).
  */
+
+import {
+  buildAuthMeta,
+  callChatModel,
+  resolveAiConfig,
+  type ChatMessage,
+  type ContentPart,
+} from '../_shared/aiProvider'
 
 type Env = {
   OPENAI_API_KEY?: string
   OPENAI_BASE_URL?: string
   OPENAI_MODEL?: string
+  AI_PROVIDER?: string
 }
 
 type AnalyzeBody = {
@@ -97,10 +107,6 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     .filter(Boolean)
     .join('\n')
 
-  type ContentPart =
-    | { type: 'text'; text: string }
-    | { type: 'image_url'; image_url: { url: string } }
-
   const userContent: ContentPart[] = [{ type: 'text', text: textBrief }]
   if (imageDataUrl?.startsWith('data:image/')) {
     userContent.push({
@@ -109,94 +115,65 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     })
   }
 
-  const configuredBaseUrl = env.OPENAI_BASE_URL?.trim()
-  const configuredModel = env.OPENAI_MODEL?.trim()
-  const baseUrl = (configuredBaseUrl || 'https://api.openai.com/v1').replace(
-    /\/$/,
-    '',
-  )
-  const model = configuredModel || 'gpt-4o-mini'
-  const authMeta = {
-    envKey: 'OPENAI_API_KEY',
-    projectHint: 'Cloudflare Pages project: toydiary (Production env vars)',
-    baseUrl,
-    model,
-    baseUrlSource: configuredBaseUrl ? 'env:OPENAI_BASE_URL' : 'default',
-    modelSource: configuredModel ? 'env:OPENAI_MODEL' : 'default',
-    keyConfigured: true as const,
-  }
+  const messages: ChatMessage[] = [
+    { role: 'system', content: system },
+    { role: 'user', content: userContent },
+  ]
 
-  let upstream: Response
-  try {
-    upstream = await fetch(`${baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model,
-        temperature: 0.8,
-        response_format: { type: 'json_object' },
-        messages: [
-          { role: 'system', content: system },
-          { role: 'user', content: userContent },
-        ],
-      }),
-    })
-  } catch (err) {
+  const config = resolveAiConfig(env)
+  const result = await callChatModel({
+    apiKey,
+    baseUrl: config.baseUrl,
+    model: config.model,
+    providerHint: env.AI_PROVIDER,
+    messages,
+    temperature: 0.8,
+    maxTokens: 900,
+    // Only applied on OpenAI path; Anthropic is instructed via system prompt.
+    jsonObject: true,
+  })
+
+  const auth = buildAuthMeta(config, result.endpoint, apiKey)
+  auth.provider = result.provider
+
+  if (!result.ok) {
     return json(
       {
-        error: 'Failed to reach AI provider',
-        detail: err instanceof Error ? err.message : String(err),
-        auth: authMeta,
+        error: result.error,
+        detail: result.detail,
+        auth,
+        hint: result.hint,
       },
       502,
     )
   }
 
-  if (!upstream.ok) {
-    const detail = await upstream.text().catch(() => '')
-    return json(
-      {
-        error: `AI provider HTTP ${upstream.status}`,
-        detail: detail.slice(0, 800),
-        auth: authMeta,
-        hint:
-          authMeta.baseUrlSource === 'default' ||
-          authMeta.modelSource === 'default'
-            ? 'OPENAI_BASE_URL / OPENAI_MODEL not set on Pages Production — using code defaults (api.openai.com + gpt-4o-mini). Set them under project toydiary → Settings → Environment variables (Production).'
-            : undefined,
-      },
-      502,
-    )
-  }
-
-  let rawContent = ''
-  try {
-    const data = (await upstream.json()) as {
-      choices?: { message?: { content?: string } }[]
-    }
-    rawContent = data.choices?.[0]?.message?.content?.trim() || ''
-  } catch {
-    return json({ error: 'Invalid AI provider response' }, 502)
-  }
-
-  if (!rawContent) {
-    return json({ error: 'Empty AI response' }, 502)
-  }
-
+  const rawContent = result.text
   let parsed: Record<string, unknown>
   try {
     parsed = JSON.parse(stripCodeFence(rawContent)) as Record<string, unknown>
   } catch {
-    return json({ error: 'AI response is not valid JSON', detail: rawContent.slice(0, 400) }, 502)
+    return json(
+      {
+        error: 'AI response is not valid JSON',
+        detail: rawContent.slice(0, 400),
+        auth,
+      },
+      502,
+    )
   }
 
   const title = String(parsed.title ?? '').trim()
   const aiDiary = String(parsed.aiDiary ?? '').trim()
   if (!title || !aiDiary) {
-    return json({ error: 'AI response missing title or aiDiary' }, 502)
+    return json(
+      {
+        error: 'AI response missing title or aiDiary',
+        detail: rawContent.slice(0, 400),
+        auth,
+      },
+      502,
+    )
   }
 
   const entryTypeRaw = String(parsed.entryType ?? 'daily')
@@ -220,6 +197,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     tags,
     imageAnalysis: String(parsed.imageAnalysis ?? '').trim(),
     entryType,
+    auth,
   })
 }
 

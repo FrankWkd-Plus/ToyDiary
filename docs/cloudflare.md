@@ -44,11 +44,12 @@ npx wrangler pages deploy ./dist --project-name=toydiary --branch=feature/foo
 
 | Variable | Type | Required | Meaning |
 |----------|------|----------|---------|
-| `OPENAI_API_KEY` | **Secret / Encrypt** | Yes | Provider API key (must match the base URL provider) |
-| `OPENAI_BASE_URL` | Text or Secret | No* | OpenAI-compatible base. If missing, code defaults to `https://api.openai.com/v1` |
-| `OPENAI_MODEL` | Text | No* | Model id. If missing, code defaults to `gpt-4o-mini` |
+| `OPENAI_API_KEY` | **Secret / Encrypt** | Yes | Provider API key (also used for Anthropic; name kept for compat) |
+| `OPENAI_BASE_URL` | Text or Secret | No* | API base. OpenAI default `https://api.openai.com/v1`; Anthropic default `https://api.anthropic.com/v1` |
+| `OPENAI_MODEL` | Text | No* | Model id. OpenAI default `gpt-4o-mini`; Anthropic default `claude-3-5-haiku-latest` |
+| `AI_PROVIDER` | Text | No | `openai` \| `anthropic` \| `auto` (default). Auto uses base URL / model name (e.g. `claude-*` → Anthropic Messages API) |
 
-\* If you use a third-party gateway (DeepSeek / OpenRouter / 中转站 etc.), **both** `OPENAI_BASE_URL` and a matching `OPENAI_API_KEY` must be set on the **same** Pages project (`toydiary`) and **Production** environment. Plain text vars and secrets are separate lists — setting only the key is not enough.
+\* Third-party / Claude gateways: set `OPENAI_BASE_URL` + matching `OPENAI_API_KEY` on **toydiary → Production**. If the model returns Anthropic-shaped JSON (`content: [{type,text}]`) but requests were OpenAI-shaped, set **`AI_PROVIDER=anthropic`** (or use a `claude-*` model id so auto-detect kicks in).
 
 Do **not** put the key in any `VITE_*` variable (Vite embeds those into the browser bundle).
 

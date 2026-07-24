@@ -10,9 +10,10 @@
   // Production branch: main · preview deploys: non-main branches
   //
   // AI env (Dashboard → Pages → toydiary → Settings → Environment variables):
-  //   OPENAI_API_KEY  — required secret (Encrypt)
-  //   OPENAI_BASE_URL — plain text recommended; if missing → api.openai.com/v1
-  //   OPENAI_MODEL    — plain text recommended; if missing → gpt-4o-mini
+  //   OPENAI_API_KEY  — required secret (Encrypt; also used for Anthropic)
+  //   OPENAI_BASE_URL — plain text; OpenAI or Anthropic-compatible base
+  //   OPENAI_MODEL    — plain text; e.g. gpt-4o-mini or claude-3-5-haiku-latest
+  //   AI_PROVIDER     — optional: openai | anthropic | auto (default auto)
   "kv_namespaces": [
     {
       "binding": "TOYDAIRY_KV",
