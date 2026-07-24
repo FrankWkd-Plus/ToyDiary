@@ -20,12 +20,16 @@ import {
   X,
 } from 'lucide-react'
 import { companionDays, toyAvatar } from '../archive/archiveUtils'
-import { chatToyReply, localPersonaReply } from '../ai/chatToyReply'
+import {
+  chatToyReply,
+  formatChatApiError,
+  localPersonaReply,
+} from '../ai/chatToyReply'
 import { useApp } from '../context/AppContext'
 import type { Entry, Toy } from '../types'
 
-type ChatRole = 'user' | 'toy'
-type ChatMessageKind = 'text' | 'image' | 'memory'
+type ChatRole = 'user' | 'toy' | 'system'
+type ChatMessageKind = 'text' | 'image' | 'memory' | 'error'
 
 interface ChatMessage {
   id: string
@@ -210,6 +214,7 @@ export function ConversationPage() {
       .filter((m) => m.text)
 
     let replyText = localPersonaReply(currentToy, userText, entries)
+    let errorMessage: ChatMessage | null = null
     try {
       const result = await chatToyReply({
         toy: currentToy,
@@ -219,8 +224,26 @@ export function ConversationPage() {
         quietMode,
       })
       replyText = result.reply
-    } catch {
-      // keep local fallback
+      if (result.apiError) {
+        errorMessage = {
+          id: uid('error'),
+          role: 'system',
+          kind: 'error',
+          text: formatChatApiError(result.apiError),
+          createdAt: new Date().toISOString(),
+        }
+      }
+    } catch (err) {
+      errorMessage = {
+        id: uid('error'),
+        role: 'system',
+        kind: 'error',
+        text: formatChatApiError({
+          status: 0,
+          body: err instanceof Error ? err.message : String(err),
+        }),
+        createdAt: new Date().toISOString(),
+      }
     }
 
     const reply: ChatMessage = {
@@ -242,7 +265,12 @@ export function ConversationPage() {
             createdAt: new Date().toISOString(),
           }
         : null
-    appendMessages(currentToy.id, memory ? [reply, memory] : [reply])
+    const outgoing = [
+      ...(errorMessage ? [errorMessage] : []),
+      reply,
+      ...(memory ? [memory] : []),
+    ]
+    appendMessages(currentToy.id, outgoing)
     setReplying(false)
   }
 
@@ -612,6 +640,21 @@ function MessageBubble({
   toyName: string
 }) {
   const mine = message.role === 'user'
+
+  if (message.kind === 'error') {
+    return (
+      <div className="px-1">
+        <div className="mx-auto max-w-[92%] overflow-hidden rounded-2xl border border-terra-deep/20 bg-mustard-soft/70 px-3.5 py-2.5 text-[11px] leading-relaxed text-terra-deep shadow-[var(--shadow-warm-sm)]">
+          <div className="mb-1 text-[9px] font-medium tracking-wide opacity-80">
+            API 请求返回
+          </div>
+          <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words font-mono text-[10px] leading-4 text-ink-soft [scrollbar-width:thin]">
+            {message.text}
+          </pre>
+        </div>
+      </div>
+    )
+  }
 
   if (message.kind === 'memory' && message.entryId) {
     return (
