@@ -1,0 +1,198 @@
+# ToyDairy / talk — Orange Pi 语音对话流水线配置
+# 路径：本地 hardware/talk 与板子 /home/talk 保持同步
+# 修改本文件后无需改代码即可切换音色、API、设备等
+
+# ---------------------------------------------------------------------------
+# 戒指（BLE）— 身份仅认 MAC
+# ---------------------------------------------------------------------------
+ring:
+  # 与 bluetooth 持久化一致；多枚 ring 时务必写唯一 MAC
+  mac: "D0:A4:FF:FC:9F:3E"
+  name: "ring"
+  # 等待用户长按录音并自动上报的超时（秒）
+  record_timeout_s: 120
+  # 连接失败时是否再扫描刷新（仍只连上面的 MAC）
+  rescan_on_connect: true
+  scan_seconds: 12
+
+# ---------------------------------------------------------------------------
+# 对话 API（对接 docs/api.md → POST /api/chat）
+# ---------------------------------------------------------------------------
+chat:
+  # 线上默认；也可改为本机/反代，例如 http://127.0.0.1:8787/api/chat
+  base_url: "https://toydiary.pages.dev"
+  path: "/api/chat"
+  # 完整 URL 优先于 base_url+path（非空则直接使用）
+  url: ""
+  timeout_s: 60
+  # 网络失败重试次数（手机热点/IPv6 抖动时建议 ≥3）
+  retries: 3
+  quiet_mode: false
+  # 本地保留的历史轮数（user+toy 合计上限）
+  history_limit: 12
+  # 玩偶人格（写入 /api/chat 的 toy 字段，对齐 docs/api.md）
+  toy:
+    name: "小棉"
+    role: "口袋里的旅行玩偶"
+    traits:
+      - "软萌"
+      - "好奇"
+      - "会撒娇"
+    bio: "喜欢被装进口袋到处走，会把路边的小发现讲成故事。"
+    monologue: "有我在，今天也要轻声说喜欢你。"
+  memories: []
+  # 无网络或 API 失败时的兜底回复
+  offline_reply: "我好像走神了…你再说一次好不好？"
+
+# ---------------------------------------------------------------------------
+# 语音识别 STT（开源，板端）
+# ---------------------------------------------------------------------------
+stt:
+  # vosk | whisper_cpp | external
+  engine: "vosk"
+  language: "zh"
+  # Vosk 中文小模型目录（相对 talk 根或绝对路径）
+  vosk_model_dir: "models/vosk-model-small-cn-0.22"
+  # whisper.cpp 可执行文件与模型（engine=whisper_cpp 时）
+  whisper:
+    bin: "whisper-cli"
+    model: "models/ggml-tiny.bin"
+    language: "zh"
+  # 识别前是否把 wav 重采样到 16k mono
+  force_16k_mono: true
+
+# ---------------------------------------------------------------------------
+# 语音合成 TTS（开源，板端）— 四种可爱玩偶向预设
+# ---------------------------------------------------------------------------
+tts:
+  # 当前启用的音色 id（见下方 voices）
+  active_voice: "girl_soft"
+  # piper | espeak | auto
+  # auto：有 piper 模型用 piper，否则 espeak-ng
+  engine: "auto"
+  # 播放：auto=优先蓝牙 bluealsa，失败再板载 aplay
+  # 可选: auto | bluealsa | aplay | paplay
+  player: "auto"
+  # 蓝牙音箱 MAC（空=自动从 /etc/toydairy-bluetooth/devices.json 选非 ring 设备）
+  bluetooth_mac: "52:5E:48:6A:8D:26"
+  # 强制 ALSA 设备；auto 时用 bluealsa:DEV=<mac>,PROFILE=a2dp
+  alsa_device: "auto"
+  piper:
+    bin: "piper"
+    # 合成 wav 采样率提示（播放侧）
+    length_scale: 1.0
+    noise_scale: 0.667
+    noise_w: 0.8
+  espeak:
+    bin: "espeak-ng"
+    # 中文
+    voice_prefix: "zh"
+  # 合成与播放的临时目录
+  output_dir: "audio/tts"
+  # ---- 音色预设（男女各二，偏玩偶/手帐陪伴感）----
+  voices:
+    # 女 · 软萌棉柔：慢一点、软一点，适合贴耳朵讲悄悄话
+    girl_soft:
+      label: "软萌小棉（女）"
+      gender: "female"
+      style: "soft"
+      engine: "auto"
+      piper:
+        # 下载脚本会拉取；没有模型时自动降级 espeak
+        model: "voices/zh_CN-huayan-medium.onnx"
+        config: "voices/zh_CN-huayan-medium.onnx.json"
+        length_scale: 1.08
+        noise_scale: 0.6
+      espeak:
+        voice: "zh"
+        speed: 145
+        pitch: 55
+        amplitude: 100
+
+    # 女 · 明亮雀跃：稍快、音调略高，像开心跳跳
+    girl_bright:
+      label: "雀跃小糖（女）"
+      gender: "female"
+      style: "bright"
+      engine: "auto"
+      piper:
+        model: "voices/zh_CN-huayan-medium.onnx"
+        config: "voices/zh_CN-huayan-medium.onnx.json"
+        length_scale: 0.95
+        noise_scale: 0.7
+      espeak:
+        voice: "zh"
+        speed: 165
+        pitch: 70
+        amplitude: 110
+
+    # 男 · 温柔少年：偏低沉但干净，像会脸红的男孩玩偶
+    boy_soft:
+      label: "温柔阿柚（男）"
+      gender: "male"
+      style: "soft"
+      engine: "auto"
+      piper:
+        # 若无单独男声中文 piper，可与女模共用并用 length 拉低语速；优先 espeak 男声
+        model: "voices/zh_CN-huayan-medium.onnx"
+        config: "voices/zh_CN-huayan-medium.onnx.json"
+        length_scale: 1.12
+        noise_scale: 0.55
+      espeak:
+        voice: "zh"
+        speed: 140
+        pitch: 28
+        amplitude: 100
+
+    # 男 · 元气少年：稍快、中高音，像背包旅行的小搭档
+    boy_bright:
+      label: "元气阿栗（男）"
+      gender: "male"
+      style: "bright"
+      engine: "auto"
+      piper:
+        model: "voices/zh_CN-huayan-medium.onnx"
+        config: "voices/zh_CN-huayan-medium.onnx.json"
+        length_scale: 0.98
+        noise_scale: 0.65
+      espeak:
+        voice: "zh"
+        speed: 160
+        pitch: 38
+        amplitude: 110
+
+# ---------------------------------------------------------------------------
+# 日志（触发与处理结果）
+# ---------------------------------------------------------------------------
+log:
+  enabled: true
+  level: "INFO"          # DEBUG / INFO / WARNING / ERROR
+  dir: "logs"
+  file: "talk.log"       # 完整路径: <talk>/logs/talk.log
+
+# ---------------------------------------------------------------------------
+# 流水线 / 路径
+# ---------------------------------------------------------------------------
+pipeline:
+  # 工作目录（空=脚本所在 talk 根目录）
+  root: ""
+  audio_dir: "audio"
+  history_file: "history/chat_history.json"
+  log_dir: "logs"
+  # 单次循环：wait_record | download_latest | once（测试用固定 wav）
+  mode: "wait_record"
+  # mode=once 时使用的测试 wav
+  test_wav: ""
+  # 是否在识别后打印文本
+  verbose: true
+  # 连续对话轮数上限；0=无限（Ctrl+C 结束）
+  max_turns: 0
+
+# ---------------------------------------------------------------------------
+# 依赖提示（不参与运行，仅文档）
+# ---------------------------------------------------------------------------
+# notes:
+#   STT: vosk + models/vosk-model-small-cn-0.22
+#   TTS: piper 或 espeak-ng
+#   戒指: bleak + ffmpeg（解码 Speex→WAV）
+#   安装: scripts/setup_pi.sh

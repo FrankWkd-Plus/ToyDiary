@@ -858,19 +858,21 @@ def prompt_yes_no(msg: str, default: bool = True) -> bool:
 
 def service_unit_content(script_path: Path, config_path: Path) -> str:
     python = which("python3") or "/usr/bin/python3"
+    # --config 在子命令 connect 之前；二次重试用 timer，避免 ExecStartPost 卡很久
     return f"""[Unit]
 Description=ToyDairy Bluetooth auto-connect (trusted devices)
-After=bluetooth.service network.target
+Documentation=file://{script_path}
+After=bluetooth.service network-online.target bluealsa.service
 Wants=bluetooth.service
-StartLimitIntervalSec=0
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStartPre=/bin/sleep 8
-ExecStart={python} {script_path} connect --config {config_path} --quiet-ok
+ExecStartPre=/bin/sleep 12
+ExecStart={python} {script_path} --config {config_path} connect --quiet-ok
 StandardOutput=journal
 StandardError=journal
+SuccessExitStatus=0 1
 
 [Install]
 WantedBy=multi-user.target
@@ -894,11 +896,29 @@ def install_service(config_path: Path) -> None:
 
     unit = service_unit_content(target_script, config_path)
     SERVICE_PATH.write_text(unit, encoding="utf-8")
+    timer_path = Path(f"/etc/systemd/system/{SERVICE_NAME}.timer")
+    timer_path.write_text(
+        f"""[Unit]
+Description=Retry {SERVICE_NAME} after boot
+After={SERVICE_NAME}.service
+
+[Timer]
+OnBootSec=2min
+AccuracySec=15s
+Unit={SERVICE_NAME}.service
+
+[Install]
+WantedBy=timers.target
+""",
+        encoding="utf-8",
+    )
     run(["systemctl", "daemon-reload"], timeout=30)
     run(["systemctl", "enable", SERVICE_NAME], timeout=30)
+    run(["systemctl", "enable", f"{SERVICE_NAME}.timer"], timeout=30)
     print(f"已安装并 enable 服务: {SERVICE_PATH}")
     print(f"  脚本: {target_script}")
     print(f"  配置: {config_path}")
+    print(f"  定时重试: {timer_path}")
     print(f"查看日志: journalctl -u {SERVICE_NAME} -b")
     print(f"立即执行: systemctl start {SERVICE_NAME}")
 
@@ -1143,7 +1163,12 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         description="Armbian 蓝牙设备选择连接与开机自动重连",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="默认无子命令时进入交互 setup。",
+        epilog=(
+            "默认无子命令时进入交互 setup。\n"
+            "全局参数 --config/--seconds/-y 建议写在子命令前，例如:\n"
+            "  bluetooth.py --config /etc/toydairy-bluetooth/devices.json connect\n"
+            "子命令后也可写（兼容旧 unit）。"
+        ),
     )
     p.add_argument(
         "--config",
@@ -1159,18 +1184,27 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("-y", "--yes", action="store_true", help="对确认项默认 yes")
 
+    # 挂到每个子命令，允许: connect --config PATH
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--config", type=Path, default=None, help=argparse.SUPPRESS)
+    common.add_argument("--seconds", type=int, default=None, help=argparse.SUPPRESS)
+    common.add_argument("-y", "--yes", action="store_true", default=False, help=argparse.SUPPRESS)
+
     sub = p.add_subparsers(dest="command")
 
-    sp = sub.add_parser("scan", help="扫描并列出设备")
+    def add_cmd(name: str, help_text: str):
+        return sub.add_parser(name, help=help_text, parents=[common])
+
+    sp = add_cmd("scan", "扫描并列出设备")
     sp.set_defaults(func=cmd_scan)
 
-    sp = sub.add_parser("status", help="适配器与已保存设备状态")
+    sp = add_cmd("status", "适配器与已保存设备状态")
     sp.set_defaults(func=cmd_status)
 
-    sp = sub.add_parser("list", help="列出已保存配置")
+    sp = add_cmd("list", "列出已保存配置")
     sp.set_defaults(func=cmd_list)
 
-    sp = sub.add_parser("connect", help="按配置重连（先扫描刷新缓存）")
+    sp = add_cmd("connect", "按配置重连（先扫描刷新缓存）")
     sp.add_argument("mac", nargs="?", help="只连接指定 MAC")
     sp.add_argument("--force", action="store_true", help="忽略 auto_connect=false")
     sp.add_argument("--no-scan", action="store_true", help="连接前不预扫描")
@@ -1181,20 +1215,20 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sp.set_defaults(func=cmd_connect)
 
-    sp = sub.add_parser("remove", help="取消配对并删除配置")
+    sp = add_cmd("remove", "取消配对并删除配置")
     sp.add_argument("mac", help="设备 MAC")
     sp.set_defaults(func=cmd_remove)
 
-    sp = sub.add_parser("install-service", help="安装开机自动连接服务")
+    sp = add_cmd("install-service", "安装开机自动连接服务")
     sp.set_defaults(func=cmd_install_service)
 
-    sp = sub.add_parser("uninstall-service", help="卸载开机自动连接服务")
+    sp = add_cmd("uninstall-service", "卸载开机自动连接服务")
     sp.set_defaults(func=cmd_uninstall_service)
 
-    sp = sub.add_parser("setup", help="交互扫描连接（默认）")
+    sp = add_cmd("setup", "交互扫描连接（默认）")
     sp.set_defaults(func=cmd_setup)
 
-    sp = sub.add_parser("help", help="显示说明")
+    sp = add_cmd("help", "显示说明")
     sp.set_defaults(func=cmd_help)
 
     return p
@@ -1206,6 +1240,9 @@ def main(argv: list[str] | None = None) -> int:
     if not args.command:
         args.command = "setup"
         args.func = cmd_setup
+    # 子命令上的 --seconds=None 时回落到默认
+    if getattr(args, "seconds", None) is None:
+        args.seconds = SCAN_SECONDS_DEFAULT
     try:
         return int(args.func(args))
     except KeyboardInterrupt:
