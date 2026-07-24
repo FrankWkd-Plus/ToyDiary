@@ -1,10 +1,17 @@
 import { useMemo, useRef, useState } from 'react'
-import { Check, ChevronLeft, ImagePlus, X } from 'lucide-react'
+import {
+  Check,
+  ChevronLeft,
+  Download,
+  ImagePlus,
+  Share2,
+  X,
+} from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { companionDayStatus } from '../archive/archiveUtils'
 import { broadcastDayCountStyle } from '../components/DayCountNumber'
 import { DayCountNumber } from '../components/DayCountNumber'
 import { useApp } from '../context/AppContext'
-import { companionDays } from '../archive/archiveUtils'
 import {
   DAY_COUNT_BGS,
   DAY_COUNT_FONTS,
@@ -16,6 +23,8 @@ import {
   type DayCountPalette,
   type DayCountStyle,
 } from '../daysmatter/dayCountTheme'
+import { renderDayCountCardPng } from '../share/renderDayCountCardPng'
+import { isMobileClient, shareOrDownloadFile } from '../share/shareHelpers'
 
 /**
  * 正数日样式工坊 — 配色 / 背景（含相册上传）/ 数字字体
@@ -24,21 +33,61 @@ import {
 export function DayCountStudioPage() {
   const navigate = useNavigate()
   const { currentToy, entries, toys, showToast } = useApp()
-  const [style, setStyle] = useState<DayCountStyle>(() => loadDayCountStyle())
+  // Site theme: palette / font / pattern only — never album photo
+  const [style, setStyle] = useState<DayCountStyle>(() => {
+    const s = loadDayCountStyle()
+    // Strip any previously-persisted album bg from site theme
+    if (s.bg === 'custom' || s.customBgUrl) {
+      const cleaned: DayCountStyle = {
+        ...s,
+        bg: s.bg === 'custom' ? 'mesh' : s.bg,
+        customBgUrl: undefined,
+      }
+      saveDayCountStyle(cleaned)
+      return cleaned
+    }
+    return s
+  })
+  /** Export-only album background — does NOT write to site daycount style */
+  const [exportBgUrl, setExportBgUrl] = useState<string | undefined>()
+  const [sharing, setSharing] = useState(false)
   const albumRef = useRef<HTMLInputElement>(null)
 
-  const previewDays = currentToy ? companionDays(currentToy) : 100
-  const photoUrl =
-    style.customBgUrl || entries.find((e) => e.imageUrl)?.imageUrl
+  const dayStatus = currentToy ? companionDayStatus(currentToy) : null
+  const previewDays = dayStatus
+    ? dayStatus.isFuture
+      ? dayStatus.daysUntil
+      : dayStatus.days
+    : 100
+  // Soft diary photo for site "照片晕" pattern only
+  const diaryPhotoUrl = entries.find((e) => e.imageUrl)?.imageUrl
+  // Export preview may use album OR diary photo blur
+  const exportPreviewStyle: DayCountStyle = {
+    ...style,
+    bg: exportBgUrl ? 'custom' : style.bg,
+    customBgUrl: exportBgUrl,
+  }
 
   const previewLabel = useMemo(
     () => (currentToy ? `和 ${currentToy.name} 相遇` : '正数日预览'),
     [currentToy],
   )
 
-  function patch(next: Partial<DayCountStyle>) {
+  function patchSite(next: Partial<DayCountStyle>) {
     setStyle((prev) => {
-      const merged = { ...prev, ...next }
+      const merged: DayCountStyle = {
+        ...prev,
+        ...next,
+        // Never persist album photo into site theme
+        customBgUrl: undefined,
+        bg:
+          next.bg === 'custom'
+            ? prev.bg === 'custom'
+              ? 'mesh'
+              : prev.bg
+            : (next.bg ?? prev.bg),
+      }
+      if (merged.bg === 'custom') merged.bg = 'mesh'
       saveDayCountStyle(merged)
       broadcastDayCountStyle()
       return merged
@@ -46,9 +95,65 @@ export function DayCountStudioPage() {
   }
 
   function persistAndToast(msg: string) {
-    saveDayCountStyle(style)
+    const cleaned: DayCountStyle = {
+      ...style,
+      customBgUrl: undefined,
+      bg: style.bg === 'custom' ? 'mesh' : style.bg,
+    }
+    saveDayCountStyle(cleaned)
     broadcastDayCountStyle()
     showToast(msg)
+  }
+
+  async function shareDayCountCard(mode: 'save' | 'share') {
+    if (!currentToy) {
+      showToast('请先选择一只玩偶')
+      return
+    }
+    if (sharing) return
+    setSharing(true)
+    try {
+      const status = companionDayStatus(currentToy)
+      const blob = await renderDayCountCardPng({
+        toy: currentToy,
+        days: status.days,
+        isFuture: status.isFuture,
+        daysUntil: status.daysUntil,
+        // Album / export-only background — never the site theme
+        backgroundUrl:
+          exportBgUrl ||
+          (style.bg === 'photo' ? diaryPhotoUrl : undefined),
+        palette: style.palette,
+        font: style.font,
+        title: `和 ${currentToy.name} 相遇`,
+      })
+      const filename = `Toy-Dairy-${status.days}-days.jpg`
+      const result = await shareOrDownloadFile({
+        blob,
+        filename,
+        title: `${status.days} DAYS 正数日`,
+        text: `我和 ${currentToy.name} 已经认识 ${status.days} 天了。`,
+      })
+      if (mode === 'share') {
+        showToast(
+          result === 'shared'
+            ? '已打开系统分享'
+            : isMobileClient()
+              ? '图片已下载'
+              : '正数日卡片已下载',
+        )
+      } else {
+        showToast(
+          result === 'shared'
+            ? '请在系统菜单选择「存储图像」保存到相册'
+            : '正数日卡片已下载',
+        )
+      }
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : '分享失败')
+    } finally {
+      setSharing(false)
+    }
   }
 
   function onAlbumPick(file: File | null) {
@@ -70,24 +175,21 @@ export function DayCountStudioPage() {
       }
       void compressDataUrl(dataUrl, 1280)
         .then((url) => {
-          patch({ bg: 'custom', customBgUrl: url })
-          showToast('已设置相册背景')
+          setExportBgUrl(url)
+          showToast('已设为导出卡片背景（不影响网站样式）')
         })
         .catch(() => {
-          patch({ bg: 'custom', customBgUrl: dataUrl })
-          showToast('已设置相册背景')
+          setExportBgUrl(dataUrl)
+          showToast('已设为导出卡片背景（不影响网站样式）')
         })
     }
     reader.onerror = () => showToast('读取图片失败')
     reader.readAsDataURL(file)
   }
 
-  function clearCustomBg() {
-    patch({
-      customBgUrl: undefined,
-      bg: style.bg === 'custom' ? 'mesh' : style.bg,
-    })
-    showToast('已清除自定义背景')
+  function clearExportBg() {
+    setExportBgUrl(undefined)
+    showToast('已清除导出背景')
   }
 
   return (
@@ -109,6 +211,16 @@ export function DayCountStudioPage() {
         </div>
         <button
           type="button"
+          disabled={sharing || !currentToy}
+          onClick={() => void shareDayCountCard('share')}
+          className="flex h-9 w-9 items-center justify-center rounded-full bg-cream text-matcha-deep disabled:opacity-40"
+          aria-label="分享正数日卡片"
+          title="分享"
+        >
+          <Share2 className="h-[18px] w-[18px]" />
+        </button>
+        <button
+          type="button"
           onClick={() => persistAndToast('正数日样式已保存')}
           className="rounded-full bg-matcha px-3 py-1.5 text-[11px] font-medium text-white"
         >
@@ -122,8 +234,9 @@ export function DayCountStudioPage() {
           label={previewLabel}
           unit="天"
           size="hero"
-          style={style}
-          photoUrl={photoUrl}
+          style={exportPreviewStyle}
+          photoUrl={diaryPhotoUrl}
+          allowExportBg
           sublabel={
             currentToy
               ? `目标日参照：${currentToy.birthDate} · 已相遇`
@@ -131,7 +244,37 @@ export function DayCountStudioPage() {
           }
         />
 
-        <Section title="选择背景图片">
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            disabled={sharing || !currentToy}
+            onClick={() => void shareDayCountCard('save')}
+            className="flex items-center justify-center gap-1.5 rounded-2xl bg-mist-soft py-3 text-xs font-semibold text-matcha-deep disabled:opacity-50"
+          >
+            <Download className="h-4 w-4" />
+            {sharing
+              ? '生成中…'
+              : isMobileClient()
+                ? '保存到相册'
+                : '下载卡片'}
+          </button>
+          <button
+            type="button"
+            disabled={sharing || !currentToy}
+            onClick={() => void shareDayCountCard('share')}
+            className="flex items-center justify-center gap-1.5 rounded-2xl bg-mustard-soft py-3 text-xs font-semibold text-terra-deep disabled:opacity-50"
+          >
+            <Share2 className="h-4 w-4" />
+            {sharing ? '生成中…' : '分享卡片'}
+          </button>
+        </div>
+        {!currentToy && (
+          <p className="text-center text-[10px] text-ink-muted">
+            选择玩偶后即可分享正数日卡片
+          </p>
+        )}
+
+        <Section title="导出卡片背景（仅保存/分享用）">
           <input
             ref={albumRef}
             type="file"
@@ -154,44 +297,38 @@ export function DayCountStudioPage() {
             <span className="min-w-0 flex-1">
               <strong className="block text-sm text-ink">从相册中选择照片</strong>
               <span className="mt-0.5 block text-[10px] text-ink-muted">
-                用作正数日卡片背景（本地保存）
+                只用于导出图片，不会改网站样式
               </span>
             </span>
           </button>
-          {style.customBgUrl && (
+          {exportBgUrl && (
             <div className="mt-2 flex items-center gap-2">
               <img
-                src={style.customBgUrl}
-                alt="自定义背景预览"
+                src={exportBgUrl}
+                alt="导出背景预览"
                 className="h-12 w-12 rounded-xl object-cover ring-1 ring-line/50"
               />
               <span className="min-w-0 flex-1 text-[11px] text-ink-muted">
-                已设置自定义背景
+                已设为导出背景（不影响网站）
               </span>
               <button
                 type="button"
-                onClick={clearCustomBg}
+                onClick={clearExportBg}
                 className="flex h-8 w-8 items-center justify-center rounded-full bg-cream text-ink-muted"
-                aria-label="清除背景"
+                aria-label="清除导出背景"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
           )}
           <div className="mt-2.5 flex flex-wrap gap-2">
-            {DAY_COUNT_BGS.map((b) => {
+            {DAY_COUNT_BGS.filter((b) => b.id !== 'custom').map((b) => {
               const active = style.bg === b.id
               return (
                 <button
                   key={b.id}
                   type="button"
-                  onClick={() => {
-                    if (b.id === 'custom' && !style.customBgUrl) {
-                      albumRef.current?.click()
-                      return
-                    }
-                    patch({ bg: b.id as DayCountBg })
-                  }}
+                  onClick={() => patchSite({ bg: b.id as DayCountBg })}
                   className={active ? 'chip chip-active' : 'chip'}
                 >
                   {b.label}
@@ -200,7 +337,7 @@ export function DayCountStudioPage() {
             })}
           </div>
           <p className="mt-2 text-[10px] text-ink-muted">
-            「照片晕」用最近日志图；「相册」用你上传的自定义图。
+            上方图案用于网站数字样式；相册照片仅出现在保存/分享的卡片里。
           </p>
         </Section>
 
@@ -212,7 +349,7 @@ export function DayCountStudioPage() {
                 <button
                   key={p.id}
                   type="button"
-                  onClick={() => patch({ palette: p.id as DayCountPalette })}
+                  onClick={() => patchSite({ palette: p.id as DayCountPalette })}
                   className={`relative overflow-hidden rounded-2xl px-2 py-3 text-center ring-1 transition-transform active:scale-95 ${
                     active
                       ? 'ring-2 ring-matcha shadow-[var(--shadow-warm-sm)]'
@@ -249,7 +386,7 @@ export function DayCountStudioPage() {
                 <button
                   key={f.id}
                   type="button"
-                  onClick={() => patch({ font: f.id as DayCountFont })}
+                  onClick={() => patchSite({ font: f.id as DayCountFont })}
                   className={`shrink-0 rounded-2xl px-3 py-2.5 ring-1 transition-transform active:scale-95 ${
                     active
                       ? 'bg-mist-soft ring-matcha'
@@ -278,7 +415,7 @@ export function DayCountStudioPage() {
             unit="篇"
             size="stat"
             style={style}
-            photoUrl={photoUrl}
+            photoUrl={style.bg === 'photo' ? diaryPhotoUrl : undefined}
           />
           <DayCountNumber
             value={toys.length}
@@ -286,7 +423,7 @@ export function DayCountStudioPage() {
             unit="只"
             size="stat"
             style={style}
-            photoUrl={photoUrl}
+            photoUrl={style.bg === 'photo' ? diaryPhotoUrl : undefined}
           />
           <DayCountNumber
             value={entries.filter((e) => e.imageUrl).length}
@@ -294,7 +431,7 @@ export function DayCountStudioPage() {
             unit="张"
             size="stat"
             style={style}
-            photoUrl={photoUrl}
+            photoUrl={style.bg === 'photo' ? diaryPhotoUrl : undefined}
           />
           <DayCountNumber
             value={previewDays}
@@ -302,12 +439,12 @@ export function DayCountStudioPage() {
             unit="天"
             size="stat"
             style={style}
-            photoUrl={photoUrl}
+            photoUrl={style.bg === 'photo' ? diaryPhotoUrl : undefined}
           />
         </div>
 
         <p className="pb-4 text-center text-[10px] text-ink-muted">
-          样式保存在本机，档案 / 我的 / 成长页的数字会同步更新。
+          配色与字体同步到网站；相册背景只用于导出卡片。
         </p>
       </div>
     </div>

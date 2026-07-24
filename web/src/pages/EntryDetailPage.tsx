@@ -3,12 +3,14 @@ import { createPortal } from 'react-dom'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import {
   Download,
+  Eye,
   MapPin,
   RefreshCw,
   Share2,
   UserRound,
   X,
 } from 'lucide-react'
+import { analyzeEntry } from '../ai/analyzeEntry'
 import { api } from '../api/client'
 import { LoadingBear } from '../components/LoadingBear'
 import { PageHeader } from '../components/PageHeader'
@@ -28,13 +30,11 @@ export function EntryDetailPage() {
   const location = useLocation()
   const fromState = (location.state as { from?: string } | null)?.from
   const backTo =
-    fromState === 'growth' ||
-    fromState === 'growth-timeline' ||
-    fromState === 'growth-stats'
-      ? fromState === 'growth-timeline'
-        ? '/growth/timeline'
-        : '/growth'
-      : '/archive'
+    fromState === 'growth-timeline'
+      ? '/growth/timeline'
+      : fromState === 'growth' || fromState === 'growth-stats'
+        ? '/growth'
+        : '/archive'
   const { showToast, refreshEntries, currentToy, toys } = useApp()
   const [entry, setEntry] = useState<Entry | null>(null)
   const [loading, setLoading] = useState(true)
@@ -42,6 +42,8 @@ export function EntryDetailPage() {
   const [ownerName, setOwnerName] = useState(() => loadProfileName())
   const [exportOpen, setExportOpen] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [previewing, setPreviewing] = useState(false)
+  const [previewUrl, setPreviewUrl] = useState<string>()
   const [layout, setLayout] = useState<DiaryCardLayout>('side')
   const [stickerFrame, setStickerFrame] = useState(true)
   const [showDayCount, setShowDayCount] = useState(true)
@@ -74,6 +76,65 @@ export function EntryDetailPage() {
     }
   }, [exportOpen])
 
+  // Live export preview — re-render when options change (debounced)
+  useEffect(() => {
+    if (!exportOpen || !entry) {
+      setPreviewUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev)
+        return undefined
+      })
+      setPreviewing(false)
+      return
+    }
+
+    let cancelled = false
+    const timer = window.setTimeout(() => {
+      setPreviewing(true)
+      const toy =
+        toys.find((t) => t.id === entry.toyId) ||
+        (currentToy?.id === entry.toyId ? currentToy : undefined)
+      void renderDiaryCardPng({
+        entry,
+        toy,
+        ownerName,
+        layout,
+        stickerFrame,
+        showDayCount,
+        showLocation,
+      })
+        .then((blob) => {
+          if (cancelled) return
+          const url = URL.createObjectURL(blob)
+          setPreviewUrl((prev) => {
+            if (prev) URL.revokeObjectURL(prev)
+            return url
+          })
+        })
+        .catch(() => {
+          if (!cancelled) showToast('预览生成失败')
+        })
+        .finally(() => {
+          if (!cancelled) setPreviewing(false)
+        })
+    }, 220)
+
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [
+    exportOpen,
+    entry,
+    toys,
+    currentToy,
+    ownerName,
+    layout,
+    stickerFrame,
+    showDayCount,
+    showLocation,
+    showToast,
+  ])
+
   useEffect(() => {
     if (!id) return
     let cancelled = false
@@ -97,13 +158,44 @@ export function EntryDetailPage() {
   }, [id, nav, showToast, backTo])
 
   async function onRegenerate() {
-    if (!entry) return
+    if (!entry || regen) return
     setRegen(true)
     try {
-      const next = await api.regenerateEntry(entry.id)
+      const toy =
+        toys.find((t) => t.id === entry.toyId) ||
+        (currentToy?.id === entry.toyId ? currentToy : undefined)
+      if (!toy) throw new Error('找不到关联玩偶')
+
+      // Client-side AI (Pages Function) with local template fallback
+      const analysis = await analyzeEntry({
+        toy,
+        date: entry.date,
+        location: entry.place?.displayName || entry.location,
+        userNote: entry.userNote,
+        imageUrl: entry.imageUrl,
+      })
+
+      const patch = {
+        aiDiary: analysis.aiDiary,
+        imageAnalysis: analysis.imageAnalysis || entry.imageAnalysis,
+        tags: analysis.tags?.length ? analysis.tags : entry.tags,
+        mood: entry.mood || analysis.mood,
+      }
+
+      let next: Entry
+      try {
+        next = await api.updateEntry(entry.id, patch)
+      } catch {
+        // Persist path unavailable — still show the rewrite in UI
+        next = { ...entry, ...patch }
+      }
       setEntry(next)
       if (currentToy) await refreshEntries(currentToy.id)
-      showToast('已重新生成日记')
+      showToast(
+        analysis.source === 'api'
+          ? '已用 AI 重新生成玩偶日记'
+          : '已重新生成（本地模板）',
+      )
     } catch (err) {
       showToast(err instanceof Error ? err.message : '生成失败')
     } finally {
@@ -298,6 +390,26 @@ export function EntryDetailPage() {
                 </button>
               </div>
 
+              <div className="mt-3 overflow-hidden rounded-2xl bg-cream ring-1 ring-line/50">
+                {previewUrl ? (
+                  <img
+                    src={previewUrl}
+                    alt="导出预览"
+                    className="max-h-64 w-full object-contain"
+                  />
+                ) : (
+                  <div className="flex h-40 flex-col items-center justify-center gap-1.5 px-4 text-center text-xs text-ink-muted">
+                    <Eye className="h-5 w-5 text-matcha-deep" />
+                    {previewing ? '正在生成预览…' : '预览将显示在这里'}
+                  </div>
+                )}
+                {previewing && previewUrl && (
+                  <p className="border-t border-line/40 bg-white/70 py-1 text-center text-[10px] text-ink-muted">
+                    更新预览中…
+                  </p>
+                )}
+              </div>
+
               <div className="mt-3">
                 <p className="text-[11px] font-medium text-ink-muted">排版</p>
                 <div className="mt-1.5 grid grid-cols-2 gap-2">
@@ -332,19 +444,55 @@ export function EntryDetailPage() {
                 />
               </div>
 
-              <button
-                type="button"
-                disabled={exporting}
-                onClick={() => void onExportCard()}
-                className="btn-primary mt-4 flex w-full items-center justify-center gap-2 py-3.5 text-sm disabled:opacity-60"
-              >
-                <Download className="h-4 w-4" />
-                {exporting
-                  ? '生成中…'
-                  : isMobileClient()
-                    ? '生成并保存到相册'
-                    : '生成并下载'}
-              </button>
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  disabled={exporting || previewing}
+                  onClick={() => {
+                    // Force re-preview by clearing then re-triggering via option touch
+                    if (!entry || previewing) return
+                    setPreviewing(true)
+                    const toyForPreview =
+                      toys.find((t) => t.id === entry.toyId) ||
+                      (currentToy?.id === entry.toyId ? currentToy : undefined)
+                    void renderDiaryCardPng({
+                      entry,
+                      toy: toyForPreview,
+                      ownerName,
+                      layout,
+                      stickerFrame,
+                      showDayCount,
+                      showLocation,
+                    })
+                      .then((blob) => {
+                        const url = URL.createObjectURL(blob)
+                        setPreviewUrl((prev) => {
+                          if (prev) URL.revokeObjectURL(prev)
+                          return url
+                        })
+                      })
+                      .catch(() => showToast('预览生成失败'))
+                      .finally(() => setPreviewing(false))
+                  }}
+                  className="btn-secondary flex items-center justify-center gap-1.5 py-3 text-xs disabled:opacity-50"
+                >
+                  <Eye className="h-4 w-4" />
+                  {previewing ? '预览中…' : '刷新预览'}
+                </button>
+                <button
+                  type="button"
+                  disabled={exporting || previewing}
+                  onClick={() => void onExportCard()}
+                  className="btn-primary flex items-center justify-center gap-1.5 py-3 text-xs disabled:opacity-60"
+                >
+                  <Download className="h-4 w-4" />
+                  {exporting
+                    ? '生成中…'
+                    : isMobileClient()
+                      ? '保存到相册'
+                      : '下载'}
+                </button>
+              </div>
             </div>
           </div>,
           document.body,

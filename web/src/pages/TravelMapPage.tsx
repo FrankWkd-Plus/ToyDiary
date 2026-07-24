@@ -23,13 +23,23 @@ import { useApp } from '../context/AppContext'
 import type { TravelMapPoint, TravelMapResponse } from '../types'
 import 'leaflet/dist/leaflet.css'
 
-function FitBounds({ points }: { points: TravelMapPoint[] }) {
+function FitBounds({
+  points,
+  active = true,
+  version = 0,
+}: {
+  points: TravelMapPoint[]
+  /** When false, do nothing (replay is driving the camera). */
+  active?: boolean
+  /** Bump to re-run fit (e.g. after replay ends). */
+  version?: number
+}) {
   const map = useMap()
   useEffect(() => {
-    if (!points.length) return
+    if (!active || !points.length) return
     const bounds = L.latLngBounds(points.map((p) => [p.place.lat, p.place.lng]))
     map.fitBounds(bounds.pad(0.22), { animate: true, maxZoom: 11 })
-  }, [map, points])
+  }, [map, points, active, version])
   return null
 }
 
@@ -88,7 +98,10 @@ export function TravelMapPage() {
   const [replaying, setReplaying] = useState(false)
   const [paused, setPaused] = useState(false)
   const [replayIndex, setReplayIndex] = useState(-1)
+  /** Increment to force overview fitBounds after replay ends */
+  const [overviewTick, setOverviewTick] = useState(0)
   const markerRefs = useRef<Record<string, L.Marker | null>>({})
+  const endHoldTimer = useRef<number | null>(null)
 
   const toyIndex = toys.findIndex((t) => t.id === currentToy?.id)
   const avatar = toyAvatar(currentToy, toyIndex)
@@ -159,21 +172,34 @@ export function TravelMapPage() {
   useEffect(() => {
     if (!replaying || paused) return
     if (!filtered.length) return
+
+    // Last stop reached: hold the close-up briefly, then overview + auto-stop
     if (replayIndex >= filtered.length - 1) {
-      // hold last stop then idle
-      return
+      if (endHoldTimer.current) window.clearTimeout(endHoldTimer.current)
+      endHoldTimer.current = window.setTimeout(() => {
+        setReplaying(false)
+        setPaused(false)
+        setReplayIndex(-1)
+        setOverviewTick((n) => n + 1)
+        showToast('重温结束 · 已回到全览')
+      }, 1800)
+      return () => {
+        if (endHoldTimer.current) window.clearTimeout(endHoldTimer.current)
+      }
     }
+
     const timer = window.setTimeout(() => {
       setReplayIndex((i) => Math.min(i + 1, filtered.length - 1))
     }, 2600)
     return () => window.clearTimeout(timer)
-  }, [replaying, paused, replayIndex, filtered.length])
+  }, [replaying, paused, replayIndex, filtered.length, showToast])
 
   function startReplay() {
     if (filtered.length < 1) {
       showToast('还没有可重播的足迹')
       return
     }
+    if (endHoldTimer.current) window.clearTimeout(endHoldTimer.current)
     setReplaying(true)
     setPaused(false)
     setReplayIndex(0)
@@ -181,9 +207,12 @@ export function TravelMapPage() {
   }
 
   function stopReplay() {
+    if (endHoldTimer.current) window.clearTimeout(endHoldTimer.current)
     setReplaying(false)
     setPaused(false)
     setReplayIndex(-1)
+    // Snap back to full route overview
+    setOverviewTick((n) => n + 1)
   }
 
   function togglePause() {
@@ -349,8 +378,12 @@ export function TravelMapPage() {
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
-            {!replaying && <FitBounds points={filtered} />}
-            <FlyToStop point={activePoint} active={replaying} />
+            <FitBounds
+              points={filtered}
+              active={!replaying}
+              version={overviewTick}
+            />
+            <FlyToStop point={activePoint} active={replaying && !paused} />
             {linePositions.length > 1 && (
               <Polyline
                 positions={linePositions}

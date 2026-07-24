@@ -160,23 +160,50 @@ export function ToyArchiveDetailPage() {
             <Camera className="h-4 w-4 text-terra-deep" />
           </div>
           <div className="grid grid-cols-3 gap-2">
-            {photos.slice(0, 3).map((photo, index) => (
-              <figure
-                key={`${photo.src}-${index}`}
-                className={`rounded-xl bg-white p-1.5 shadow-[var(--shadow-warm)] ${
-                  index === 0 ? '-rotate-2' : index === 2 ? 'rotate-2' : ''
-                }`}
-              >
+            {photos.slice(0, 3).map((photo, index) => {
+              const clickable = Boolean(photo.entryId)
+              const frameClass = `rounded-xl bg-white p-1.5 shadow-[var(--shadow-warm)] ${
+                index === 0 ? '-rotate-2' : index === 2 ? 'rotate-2' : ''
+              }${clickable ? ' active:scale-[0.98]' : ''}`
+              const image = (
                 <img
                   src={photo.src}
                   alt={photo.title}
                   className="aspect-square w-full rounded-lg object-cover"
                 />
-                <figcaption className="truncate px-1 pb-1 pt-1.5 text-center text-[8px] text-ink-muted">
-                  {photo.title}
-                </figcaption>
-              </figure>
-            ))}
+              )
+              const captionClass =
+                'truncate px-1 pb-1 pt-1.5 text-center text-[8px] text-ink-muted'
+
+              if (clickable) {
+                return (
+                  <button
+                    key={`${photo.src}-${photo.entryId || index}`}
+                    type="button"
+                    className={`${frameClass} w-full text-left`}
+                    onClick={() =>
+                      navigate(`/entries/${photo.entryId}`, {
+                        state: { from: 'archive' },
+                      })
+                    }
+                    aria-label={`查看「${photo.title}」的日记`}
+                  >
+                    {image}
+                    <span className={`block ${captionClass}`}>{photo.title}</span>
+                  </button>
+                )
+              }
+
+              return (
+                <figure
+                  key={`${photo.src}-${index}`}
+                  className={frameClass}
+                >
+                  {image}
+                  <figcaption className={captionClass}>{photo.title}</figcaption>
+                </figure>
+              )
+            })}
           </div>
         </section>
 

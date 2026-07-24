@@ -98,6 +98,23 @@ export const api = {
     return http(`/entries/${id}/regenerate`, { method: 'POST' })
   },
 
+  async updateEntry(
+    id: string,
+    patch: Partial<
+      Pick<
+        Entry,
+        'aiDiary' | 'title' | 'mood' | 'tags' | 'imageAnalysis' | 'userNote'
+      >
+    >,
+  ): Promise<Entry> {
+    if (USE_MOCK) return mockStore.updateEntry(id, patch)
+    return http(`/entries/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    })
+  },
+
   getCurrentToyId: () => mockStore.getCurrentToyId(),
   setCurrentToyId: (id: string | null) => mockStore.setCurrentToyId(id),
   resetDemo: () => {

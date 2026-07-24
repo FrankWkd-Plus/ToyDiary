@@ -78,6 +78,8 @@ export function archivePhotos(entries: Entry[]) {
       date: entry.date,
       location:
         entry.place?.displayName || entry.location || '我们的秘密地点',
+      /** Real diary entry id — used by 高光时刻 click-through */
+      entryId: entry.id as string | undefined,
     }))
 
   if (photos.length > 0) return photos
@@ -93,5 +95,6 @@ export function archivePhotos(entries: Entry[]) {
     ][index],
     date: ['2026-07-23', '2026-06-08', '2026-04-03'][index],
     location: ['蓝色海湾', '阳光海岸', '森林瀑布'][index],
+    entryId: undefined as string | undefined,
   }))
 }

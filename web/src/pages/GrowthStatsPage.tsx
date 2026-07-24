@@ -1,18 +1,22 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   ChevronLeft,
   ChevronRight,
   MapPin,
+  Share2,
   Sparkles,
 } from 'lucide-react'
-import { companionDays, toyAvatar } from '../archive/archiveUtils'
+import { companionDays, companionDayStatus, toyAvatar } from '../archive/archiveUtils'
 import { DayCountNumber } from '../components/DayCountNumber'
 import { useApp } from '../context/AppContext'
 import {
   placeCityKey,
   seedPlaceForLabel,
 } from '../places/placeUtils'
+import { loadDayCountStyle } from '../daysmatter/dayCountTheme'
+import { renderDayCountCardPng } from '../share/renderDayCountCardPng'
+import { isMobileClient, shareOrDownloadFile } from '../share/shareHelpers'
 import type { Entry, Place } from '../types'
 import { ENTRY_TYPE_LABEL } from '../types'
 
@@ -54,7 +58,8 @@ const META: Record<
 export function GrowthStatsPage() {
   const { kind } = useParams<{ kind: string }>()
   const navigate = useNavigate()
-  const { currentToy, entries, toys } = useApp()
+  const { currentToy, entries, toys, showToast } = useApp()
+  const [sharing, setSharing] = useState(false)
   const statKind = (
     ['companion', 'travel', 'cities', 'moments'] as const
   ).includes(kind as StatKind)
@@ -94,6 +99,44 @@ export function GrowthStatsPage() {
           ? cityGroups.length
           : momentEntries.length
 
+  async function shareCompanionCard() {
+    if (!currentToy || sharing) return
+    setSharing(true)
+    try {
+      const status = companionDayStatus(currentToy)
+      const style = loadDayCountStyle()
+      const blob = await renderDayCountCardPng({
+        toy: currentToy,
+        days: status.days,
+        isFuture: status.isFuture,
+        daysUntil: status.daysUntil,
+        // Export only — site daycount never uses album custom bg
+        backgroundUrl:
+          style.bg === 'photo' ? photoUrl : undefined,
+        palette: style.palette,
+        font: style.font,
+        title: `和 ${currentToy.name} 相遇`,
+      })
+      const result = await shareOrDownloadFile({
+        blob,
+        filename: `Toy-Dairy-${status.days}-days.jpg`,
+        title: `${status.days} DAYS 正数日`,
+        text: `我和 ${currentToy.name} 已经认识 ${status.days} 天了。`,
+      })
+      showToast(
+        result === 'shared'
+          ? isMobileClient()
+            ? '请在系统菜单选择「存储图像」保存到相册'
+            : '已打开系统分享'
+          : '正数日卡片已下载',
+      )
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : '分享失败')
+    } finally {
+      setSharing(false)
+    }
+  }
+
   return (
     <div className="min-h-full">
       <header className="sticky top-0 z-10 border-b border-line/60 bg-white/95 px-3 py-2.5 backdrop-blur">
@@ -114,6 +157,18 @@ export function GrowthStatsPage() {
               {currentToy.name} · {meta.subtitle(count)}
             </p>
           </div>
+          {statKind === 'companion' && (
+            <button
+              type="button"
+              disabled={sharing}
+              onClick={() => void shareCompanionCard()}
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-cream text-matcha-deep disabled:opacity-50"
+              aria-label="分享正数日"
+              title="分享正数日"
+            >
+              <Share2 className="h-[18px] w-[18px]" />
+            </button>
+          )}
         </div>
       </header>
 
@@ -161,6 +216,22 @@ export function GrowthStatsPage() {
           sublabel={meta.subtitle(count)}
           onClick={() => navigate('/days')}
         />
+
+        {statKind === 'companion' && (
+          <button
+            type="button"
+            disabled={sharing}
+            onClick={() => void shareCompanionCard()}
+            className="btn-primary flex w-full items-center justify-center gap-2 py-3 text-sm disabled:opacity-60"
+          >
+            <Share2 className="h-4 w-4" />
+            {sharing
+              ? '生成中…'
+              : isMobileClient()
+                ? '分享 / 保存正数日卡片'
+                : '分享 / 下载正数日卡片'}
+          </button>
+        )}
 
         {statKind === 'companion' && (
           <CompanionDetail

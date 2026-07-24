@@ -1069,6 +1069,47 @@ button:focus-visible {
   box-shadow: 2px 3px 0 color-mix(in srgb, var(--color-line) 82%, transparent);
 }
 
+.toy-polaroid--clickable {
+  cursor: pointer;
+}
+
+.toy-polaroid--1.toy-polaroid--clickable:active {
+  transform: rotate(-2.5deg) scale(0.97);
+}
+
+.toy-polaroid--2.toy-polaroid--clickable:active {
+  transform: translateY(2px) rotate(1.5deg) scale(0.97);
+}
+
+.toy-polaroid--3.toy-polaroid--clickable:active {
+  transform: rotate(-1deg) scale(0.97);
+}
+
+.toy-polaroid__hit {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.toy-polaroid__caption {
+  display: block;
+  overflow: hidden;
+  padding-top: 0.25rem;
+  color: var(--color-ink-muted);
+  font-size: 8px;
+  line-height: 1;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .toy-polaroid--1 {
   transform: rotate(-2.5deg);
 }

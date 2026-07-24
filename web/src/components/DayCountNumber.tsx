@@ -24,6 +24,8 @@ export function DayCountNumber({
   to,
   onClick,
   className = '',
+  /** Allow album custom bg only for export preview — never site chrome by default */
+  allowExportBg = false,
 }: {
   value: number | string
   label: string
@@ -35,6 +37,7 @@ export function DayCountNumber({
   to?: string
   onClick?: () => void
   className?: string
+  allowExportBg?: boolean
 }) {
   const [saved, setSaved] = useState(loadDayCountStyle)
   useEffect(() => {
@@ -52,6 +55,11 @@ export function DayCountNumber({
     ...saved,
     ...styleOverride,
   }
+  // Site-wide day-count never uses album custom photo; only pattern / photo-blur optional
+  const siteBg =
+    style.bg === 'custom' && !allowExportBg
+      ? 'mesh'
+      : style.bg
   const palette = getPalette(style.palette)
   const font = getFont(style.font)
   const display =
@@ -85,9 +93,10 @@ export function DayCountNumber({
       <div
         className="daycount__bg"
         style={bgLayerStyle(
-          style.bg,
-          photoUrl,
-          style.customBgUrl,
+          siteBg,
+          // diary photo blur only when bg === 'photo' and explicitly passed
+          siteBg === 'photo' ? photoUrl : undefined,
+          allowExportBg ? style.customBgUrl : undefined,
         )}
         aria-hidden
       />

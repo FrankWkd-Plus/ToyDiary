@@ -707,11 +707,40 @@ export const mockStore = {
     if (!entry) throw new Error('记录不存在')
     const toy = data.toys.find((t) => t.id === entry.toyId)
     if (!toy) throw new Error('玩偶不存在')
+    // Fresh copy each time (no identical timestamp-only append)
+    const stamp = new Date().toLocaleTimeString('zh-CN', {
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+    const variants = [
+      `我又把这一天从头看了一遍。${entry.location || '那个地方'}的味道还在，${toy.name} 想再和你走一次。`,
+      `重写这一页的时候，我发现自己记得的细节比上次还多一点。谢谢你愿意再听我说一遍。`,
+      `如果日记也能换一件衣服——这一版，我想说得更温柔一点。`,
+    ]
+    const extra = variants[Math.floor(Math.random() * variants.length)]
     entry.aiDiary =
-      mockDiary(toy, entry) +
-      `\n\n（重新生成于 ${new Date().toLocaleString('zh-CN')}）`
+      mockDiary(toy, entry) + `\n\n${extra}\n（${stamp} 重写）`
     save(data)
-    return entry
+    return { ...entry }
+  },
+
+  /** Patch an existing entry (used after client-side AI rewrite). */
+  async updateEntry(
+    id: string,
+    patch: Partial<
+      Pick<
+        Entry,
+        'aiDiary' | 'title' | 'mood' | 'tags' | 'imageAnalysis' | 'userNote'
+      >
+    >,
+  ): Promise<Entry> {
+    await delay(20)
+    const data = load()
+    const entry = data.entries.find((e) => e.id === id)
+    if (!entry) throw new Error('记录不存在')
+    Object.assign(entry, patch)
+    save(data)
+    return { ...entry }
   },
 
   getCurrentToyId(): string | null {

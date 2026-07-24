@@ -9,21 +9,31 @@ import { companionDays } from '../archive/archiveUtils'
 import { uniqueCities } from '../places/placeUtils'
 import type { Entry, Place, Toy } from '../types'
 
+export interface ToyHighlightShot {
+  src: string
+  /** Real diary entry — clickable when present */
+  entryId?: string
+  title?: string
+}
+
 export interface ToyCardPhotos {
   profile: string
-  highlights: [string, string, string]
+  highlights: [ToyHighlightShot, ToyHighlightShot, ToyHighlightShot]
 }
 
 export function ToyCard({
   toy,
   photos,
   onOpenConversation,
+  onOpenHighlight,
   chatPreview,
   entries,
 }: {
   toy: Toy
   photos: ToyCardPhotos
   onOpenConversation: () => void
+  /** Open a highlight photo's diary entry (if it has an entryId) */
+  onOpenHighlight?: (entryId: string) => void
   chatPreview: string
   entries: Entry[]
 }) {
@@ -33,6 +43,7 @@ export function ToyCard({
       .filter((place): place is Place => Boolean(place)),
   ).length
   const days = companionDays(toy)
+  const captions = ['出发', '看海', '收藏风景'] as const
 
   return (
     <article
@@ -132,23 +143,50 @@ export function ToyCard({
 
           <div className="toy-photo-line" aria-hidden="true" />
           <div className="toy-highlights">
-            {photos.highlights.map((photo, index) => (
-              <figure
-                key={photo}
-                className={`toy-polaroid toy-polaroid--${index + 1}`}
-              >
-                <span className="toy-photo-clip" aria-hidden="true" />
-                <div className="toy-polaroid__image">
-                  <img
-                    src={photo}
-                    alt={`${toy.name}的高光时刻 ${index + 1}`}
-                  />
-                </div>
-                <figcaption>
-                  {['出发', '看海', '收藏风景'][index]}
-                </figcaption>
-              </figure>
-            ))}
+            {photos.highlights.map((shot, index) => {
+              const clickable = Boolean(shot.entryId && onOpenHighlight)
+              const label =
+                shot.title?.trim() || captions[index] || `高光 ${index + 1}`
+              return (
+                <figure
+                  key={`${shot.src}-${shot.entryId || index}`}
+                  className={`toy-polaroid toy-polaroid--${index + 1}${
+                    clickable ? ' toy-polaroid--clickable' : ''
+                  }`}
+                >
+                  <span className="toy-photo-clip" aria-hidden="true" />
+                  {clickable ? (
+                    <button
+                      type="button"
+                      className="toy-polaroid__hit"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        onOpenHighlight?.(shot.entryId!)
+                      }}
+                      aria-label={`查看「${label}」的日记`}
+                    >
+                      <div className="toy-polaroid__image">
+                        <img
+                          src={shot.src}
+                          alt={`${toy.name}的高光时刻 · ${label}`}
+                        />
+                      </div>
+                      <span className="toy-polaroid__caption">{label}</span>
+                    </button>
+                  ) : (
+                    <>
+                      <div className="toy-polaroid__image">
+                        <img
+                          src={shot.src}
+                          alt={`${toy.name}的高光时刻 · ${label}`}
+                        />
+                      </div>
+                      <figcaption>{label}</figcaption>
+                    </>
+                  )}
+                </figure>
+              )
+            })}
           </div>
         </section>
 

@@ -1,13 +1,16 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   BookHeart,
+  CalendarHeart,
   Check,
   ChevronDown,
   ChevronRight,
   Flag,
   Globe2,
   History,
+  MapPinned,
+  PartyPopper,
 } from 'lucide-react'
 import { companionDays, toyAvatar } from '../archive/archiveUtils'
 import { DayCountNumber } from '../components/DayCountNumber'
@@ -195,7 +198,12 @@ export function GrowthPage() {
                 }}
                 className="flex w-full items-start gap-3 rounded-2xl bg-white px-3.5 py-3 text-left shadow-[var(--shadow-warm-sm)] ring-1 ring-line/50 active:scale-[0.99]"
               >
-                <span className="text-lg">{m.emoji}</span>
+                <span
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${m.tone}`}
+                  aria-hidden="true"
+                >
+                  {m.icon}
+                </span>
                 <div className="min-w-0 flex-1">
                   <strong className="block text-sm text-ink">{m.title}</strong>
                   <p className="mt-0.5 text-[11px] text-ink-muted">{m.desc}</p>
@@ -264,7 +272,8 @@ export function GrowthPage() {
 function buildMilestones(entries: Entry[], days: number) {
   const items: {
     id: string
-    emoji: string
+    icon: ReactNode
+    tone: string
     title: string
     desc: string
     entryId?: string
@@ -272,7 +281,8 @@ function buildMilestones(entries: Entry[], days: number) {
   }[] = []
   items.push({
     id: 'days',
-    emoji: '🧸',
+    icon: <CalendarHeart className="h-5 w-5" strokeWidth={1.8} />,
+    tone: 'bg-peach-soft text-rose-deep',
     title: `陪伴第 ${days} 天`,
     desc: '每一个普通日子，都算数。',
     path: '/growth/stats/companion',
@@ -281,7 +291,8 @@ function buildMilestones(entries: Entry[], days: number) {
   if (first) {
     items.push({
       id: 'first',
-      emoji: '📖',
+      icon: <BookHeart className="h-5 w-5" strokeWidth={1.8} />,
+      tone: 'bg-mustard-soft text-terra-deep',
       title: '第一篇日志',
       desc: `${first.date} · ${first.title || first.location || '开始的故事'}`,
       entryId: first.id,
@@ -293,7 +304,8 @@ function buildMilestones(entries: Entry[], days: number) {
   if (firstTravel) {
     items.push({
       id: 'travel',
-      emoji: '✈️',
+      icon: <MapPinned className="h-5 w-5" strokeWidth={1.8} />,
+      tone: 'bg-mist-soft text-matcha-deep',
       title: '第一次旅行记录',
       desc: `${firstTravel.date} · ${firstTravel.location || firstTravel.place?.displayName || '远方'}`,
       entryId: firstTravel.id,
@@ -302,7 +314,8 @@ function buildMilestones(entries: Entry[], days: number) {
   if (days >= 100) {
     items.push({
       id: '100',
-      emoji: '🎉',
+      icon: <PartyPopper className="h-5 w-5" strokeWidth={1.8} />,
+      tone: 'bg-lavender/60 text-matcha-deep',
       title: '百日纪念',
       desc: '一百个「今天也在一起」。',
       path: '/growth/stats/companion',

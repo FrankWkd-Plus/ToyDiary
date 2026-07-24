@@ -112,6 +112,9 @@ export function ComposePage() {
         setTitle(result.title)
         setAiDiary(result.aiDiary)
         setMood(result.mood)
+        if (result.source === 'local') {
+          showToast('AI 暂时不可用，已用本地模板生成')
+        }
       } else {
         const fallbackTitle =
           userNote.trim().slice(0, 18) ||
@@ -283,10 +286,10 @@ export function ComposePage() {
               type="button"
               onClick={() => void onAnalyze()}
               disabled={analyzing}
-              className="btn-secondary py-3 text-xs"
+              className="btn-secondary flex items-center justify-center gap-1.5 py-3 text-xs disabled:opacity-50"
             >
               <RefreshCw className={`h-4 w-4 ${analyzing ? 'animate-spin' : ''}`} />
-              重新生成
+              {analyzing ? '生成中…' : '重新生成'}
             </button>
           </div>
 

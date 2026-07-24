@@ -101,13 +101,13 @@ export const DAY_COUNT_PALETTES: {
 export const DAY_COUNT_FONTS: {
   id: DayCountFont
   label: string
-  /** CSS font-family stack */
+  /** CSS font-family stack (for DOM DayCountNumber) */
   family: string
 }[] = [
   {
     id: 'display',
     label: '手帐标题',
-    family: "var(--font-display), 'ZCOOL XiaoWei', serif",
+    family: "'ZCOOL XiaoWei', 'Noto Serif SC', Georgia, serif",
   },
   {
     id: 'rounded',
@@ -151,6 +151,11 @@ export function loadDayCountStyle(): DayCountStyle {
     const raw = localStorage.getItem(STYLE_KEY)
     if (!raw) return { ...DEFAULT_DAY_COUNT_STYLE }
     const parsed = JSON.parse(raw) as Partial<DayCountStyle>
+    // customBgUrl is export-only and must never drive site chrome
+    const bg =
+      DAY_COUNT_BGS.some((b) => b.id === parsed.bg) && parsed.bg !== 'custom'
+        ? (parsed.bg as DayCountBg)
+        : DEFAULT_DAY_COUNT_STYLE.bg
     return {
       palette: DAY_COUNT_PALETTES.some((p) => p.id === parsed.palette)
         ? (parsed.palette as DayCountPalette)
@@ -158,13 +163,9 @@ export function loadDayCountStyle(): DayCountStyle {
       font: DAY_COUNT_FONTS.some((f) => f.id === parsed.font)
         ? (parsed.font as DayCountFont)
         : DEFAULT_DAY_COUNT_STYLE.font,
-      bg: DAY_COUNT_BGS.some((b) => b.id === parsed.bg)
-        ? (parsed.bg as DayCountBg)
-        : DEFAULT_DAY_COUNT_STYLE.bg,
-      customBgUrl:
-        typeof parsed.customBgUrl === 'string' && parsed.customBgUrl.startsWith('data:')
-          ? parsed.customBgUrl
-          : undefined,
+      bg,
+      // Intentionally dropped — album photo is session/export-only
+      customBgUrl: undefined,
     }
   } catch {
     return { ...DEFAULT_DAY_COUNT_STYLE }
@@ -173,7 +174,13 @@ export function loadDayCountStyle(): DayCountStyle {
 
 export function saveDayCountStyle(style: DayCountStyle) {
   try {
-    localStorage.setItem(STYLE_KEY, JSON.stringify(style))
+    // Never persist album custom photo into site theme storage
+    const safe: DayCountStyle = {
+      palette: style.palette,
+      font: style.font,
+      bg: style.bg === 'custom' ? 'mesh' : style.bg,
+    }
+    localStorage.setItem(STYLE_KEY, JSON.stringify(safe))
   } catch {
     /* ignore */
   }

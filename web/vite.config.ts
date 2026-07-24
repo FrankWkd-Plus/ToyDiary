@@ -10,6 +10,15 @@ export default defineConfig({
     port: 5173,
     host: true,
     strictPort: true,
+    // Local dev: hit production Pages Functions so /api/analyze-entry & /api/chat work
+    // without needing wrangler pages dev. Override with VITE_AI_* env if needed.
+    proxy: {
+      '/api': {
+        target: 'https://toydairy.pages.dev',
+        changeOrigin: true,
+        secure: true,
+      },
+    },
   },
   preview: {
     port: 4173,

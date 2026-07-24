@@ -12,23 +12,51 @@ const FALLBACK_PHOTOS = [
   '/toy-cards/highlight-3.jpg',
 ] as const
 
+const FALLBACK_TITLES = ['出发', '看海', '收藏风景'] as const
+
 function photosForToy(
   toy: { avatarUrl?: string },
-  toyEntries: { imageUrl?: string }[],
+  toyEntries: Entry[],
   index: number,
 ): ToyCardPhotos {
-  const entryPhotos = toyEntries
-    .map((entry) => entry.imageUrl)
-    .filter((url): url is string => Boolean(url))
-  const highlights = [...entryPhotos, ...FALLBACK_PHOTOS]
-    .filter((url, photoIndex, all) => all.indexOf(url) === photoIndex)
-    .slice(0, 3) as [string, string, string]
+  // Prefer real diary photos (newest first) so highlights open the matching entry
+  const fromEntries = [...toyEntries]
+    .filter((entry) => Boolean(entry.imageUrl))
+    .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt))
+    .map((entry) => ({
+      src: entry.imageUrl as string,
+      entryId: entry.id,
+      title: entry.title || entry.location || '这一刻',
+    }))
+
+  const seen = new Set<string>()
+  const highlights: ToyCardPhotos['highlights'][number][] = []
+  for (const shot of fromEntries) {
+    if (seen.has(shot.src)) continue
+    seen.add(shot.src)
+    highlights.push(shot)
+    if (highlights.length >= 3) break
+  }
+  for (let i = 0; highlights.length < 3 && i < FALLBACK_PHOTOS.length * 2; i++) {
+    const src = FALLBACK_PHOTOS[i % FALLBACK_PHOTOS.length]
+    if (seen.has(src)) continue
+    seen.add(src)
+    highlights.push({ src, title: FALLBACK_TITLES[i % FALLBACK_TITLES.length] })
+  }
+  // Hard pad if still short (duplicate last real shot as non-clickable filler)
+  while (highlights.length < 3) {
+    const last = highlights[highlights.length - 1] || {
+      src: FALLBACK_PHOTOS[0],
+      title: FALLBACK_TITLES[0],
+    }
+    highlights.push({ src: last.src, title: last.title })
+  }
 
   return {
     profile:
       toy.avatarUrl ||
       (index === 0 ? '/toy-cards/profile.jpg' : FALLBACK_PHOTOS[index % 3]),
-    highlights,
+    highlights: highlights as ToyCardPhotos['highlights'],
   }
 }
 
@@ -112,6 +140,12 @@ export function ToyCardCarousel({
                 onOpenConversation={() => {
                   setCurrentToyId(toy.id)
                   navigate('/conversation')
+                }}
+                onOpenHighlight={(entryId) => {
+                  setCurrentToyId(toy.id)
+                  navigate(`/entries/${entryId}`, {
+                    state: { from: 'archive' },
+                  })
                 }}
               />
             </div>

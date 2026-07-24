@@ -26,13 +26,17 @@ interface ImageSignals {
   tags: string[]
 }
 
-const AI_ENDPOINT = import.meta.env.VITE_AI_ANALYZE_ENDPOINT as
-  | string
-  | undefined
+/** Default to Pages Function; override with VITE_AI_ANALYZE_ENDPOINT if needed. */
+const AI_ENDPOINT =
+  (import.meta.env.VITE_AI_ANALYZE_ENDPOINT as string | undefined)?.trim() ||
+  '/api/analyze-entry'
+
+const AI_TIMEOUT_MS = 28_000
 
 export async function analyzeEntry(
   input: AnalyzeEntryInput,
 ): Promise<EntryAnalysis> {
+  // blob: / data: are fine without CORS; remote http needs anonymous for canvas
   const processedImageUrl = input.imageUrl
     ? await compressImage(input.imageUrl).catch(() => input.imageUrl)
     : undefined
@@ -40,11 +44,15 @@ export async function analyzeEntry(
     ? await analyzeImagePalette(processedImageUrl).catch(() => undefined)
     : undefined
 
-  if (AI_ENDPOINT) {
+  try {
+    const controller = new AbortController()
+    const timeout = window.setTimeout(() => controller.abort(), AI_TIMEOUT_MS)
+    let response: Response
     try {
-      const response = await fetch(AI_ENDPOINT, {
+      response = await fetch(AI_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify({
           toy: {
             name: input.toy.name,
@@ -56,31 +64,48 @@ export async function analyzeEntry(
           date: input.date,
           location: input.location,
           userNote: input.userNote,
-          imageDataUrl: processedImageUrl,
+          // Prefer compressed data URL so the function can vision-read photos
+          imageDataUrl: processedImageUrl?.startsWith('data:')
+            ? processedImageUrl
+            : undefined,
+          imageUrl:
+            !processedImageUrl?.startsWith('data:') && input.imageUrl
+              ? input.imageUrl
+              : undefined,
         }),
       })
-      if (!response.ok) throw new Error(`AI HTTP ${response.status}`)
-      const result = (await response.json()) as Partial<EntryAnalysis>
-      if (!result.title?.trim() || !result.aiDiary?.trim()) {
-        throw new Error('AI response is incomplete')
-      }
-      return {
-        title: result.title.trim(),
-        aiDiary: result.aiDiary.trim(),
-        toyReply:
-          result.toyReply?.trim() ||
-          `我已经把这一刻写下来啦，会好好放进我们的成长里。`,
-        mood: result.mood?.trim() || '温柔',
-        tags: result.tags?.filter(Boolean).slice(0, 4) || [],
-        imageAnalysis:
-          result.imageAnalysis?.trim() || imageSignals?.description,
-        entryType: result.entryType || inferEntryType(input),
-        processedImageUrl,
-        source: 'api',
-      }
-    } catch {
-      // Keep the record flow usable if the remote model is unavailable.
+    } finally {
+      window.clearTimeout(timeout)
     }
+
+    if (!response.ok) {
+      const errText = await response.text().catch(() => '')
+      throw new Error(errText || `AI HTTP ${response.status}`)
+    }
+    const result = (await response.json()) as Partial<EntryAnalysis> & {
+      error?: string
+    }
+    if (result.error) throw new Error(result.error)
+    if (!result.title?.trim() || !result.aiDiary?.trim()) {
+      throw new Error('AI 返回内容不完整')
+    }
+    return {
+      title: result.title.trim(),
+      aiDiary: result.aiDiary.trim(),
+      toyReply:
+        result.toyReply?.trim() ||
+        `我已经把这一刻写下来啦，会好好放进我们的成长里。`,
+      mood: result.mood?.trim() || '温柔',
+      tags: result.tags?.filter(Boolean).slice(0, 4) || [],
+      imageAnalysis:
+        result.imageAnalysis?.trim() || imageSignals?.description,
+      entryType: result.entryType || inferEntryType(input),
+      processedImageUrl: processedImageUrl || input.imageUrl,
+      source: 'api',
+    }
+  } catch (err) {
+    // Local template keeps the flow usable offline / without keys / on timeout.
+    console.warn('[analyzeEntry] remote failed, using local:', err)
   }
 
   return generateLocalAnalysis(input, imageSignals, processedImageUrl)
@@ -342,6 +367,10 @@ async function compressImage(imageUrl: string) {
 function loadImage(src: string) {
   return new Promise<HTMLImageElement>((resolve, reject) => {
     const image = new Image()
+    // Remote URLs need CORS for canvas; blob/data do not.
+    if (!src.startsWith('data:') && !src.startsWith('blob:')) {
+      image.crossOrigin = 'anonymous'
+    }
     image.onload = () => resolve(image)
     image.onerror = () => reject(new Error('Image could not be loaded'))
     image.src = src
