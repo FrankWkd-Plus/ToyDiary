@@ -20,6 +20,7 @@ import {
   X,
 } from 'lucide-react'
 import { companionDays, toyAvatar } from '../archive/archiveUtils'
+import { chatToyReply, localPersonaReply } from '../ai/chatToyReply'
 import { useApp } from '../context/AppContext'
 import type { Entry, Toy } from '../types'
 
@@ -107,43 +108,6 @@ function getFeaturedMemory(entries: Entry[]) {
   )
 }
 
-function personaReply(toy: Toy, text: string, entries: Entry[]) {
-  const normalized = text.trim()
-  const recent = entries[0]
-  const travel = getFeaturedMemory(entries) ?? recent
-
-  if (/累|疲惫|难过|不开心|压力|烦/.test(normalized)) {
-    if (toy.traits.includes('活泼')) {
-      return '先把今天的大包袱放在这里吧，我替你看一会儿。等你有一点力气了，我们再慢慢往前走。'
-    }
-    if (toy.traits.includes('勇敢')) {
-      return '今天不去很远的地方了，我们就在这里进行一次小小的休息探险。你已经做得很好啦。'
-    }
-    return '辛苦啦。你不需要马上振作，我会安安静静陪你待一会儿。要不要告诉我，今天最累的是哪一刻？'
-  }
-
-  if (/旅行|回忆|记得|以前|去过/.test(normalized) && travel?.location) {
-    return `当然记得。我们在${travel.location}留下了「${travel.title || '一段小小的旅行'}」。我最舍不得忘记的，是那天你愿意带我一起看世界。`
-  }
-
-  if (/日记|记录|写下来|保存/.test(normalized)) {
-    return '好呀。你把今天发生的事告诉我，我来帮你整理成一篇属于我们的日记；写完以后还可以再慢慢修改。'
-  }
-
-  if (/照片|晚霞|天空|看到/.test(normalized)) {
-    return recent?.location
-      ? `听起来像一张值得收藏的照片。会不会有一点像我们在${recent.location}看到的颜色？`
-      : '我也想看看你眼中的这一刻。发给我吧，我们可以把它收藏进今天。'
-  }
-
-  if (/你好|在吗|想你|陪我/.test(normalized)) {
-    return `我一直都在呀。${toy.traits.includes('活泼') ? '快把今天的新鲜事分我一点！' : '可以靠近一点，慢慢说给我听。'}`
-  }
-
-  const trait = toy.traits[0] || '温柔'
-  return `我认真听到啦。作为一只${trait}的${toy.role}，我想把你刚刚说的这一刻好好接住。然后呢，还发生了什么？`
-}
-
 function fileToDataUrl(file: File) {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader()
@@ -171,7 +135,6 @@ export function ConversationPage() {
   )
   const [pendingImage, setPendingImage] = useState<string>()
   const [replying, setReplying] = useState(false)
-  const replyTimerRef = useRef<number | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
@@ -217,13 +180,6 @@ export function ConversationPage() {
     endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
   }, [messages.length, replying, pendingImage])
 
-  useEffect(
-    () => () => {
-      if (replyTimerRef.current) window.clearTimeout(replyTimerRef.current)
-    },
-    [],
-  )
-
   function appendMessages(toyId: string, nextMessages: ChatMessage[]) {
     setMessagesByToy((current) => {
       const next = {
@@ -235,33 +191,59 @@ export function ConversationPage() {
     })
   }
 
-  function sendToyReply(userText: string, includeMemory = false) {
+  async function sendToyReply(
+    userText: string,
+    options?: { includeMemory?: boolean; priorMessages?: ChatMessage[] },
+  ) {
     if (!currentToy) return
+    const includeMemory = options?.includeMemory ?? false
+    const priorMessages = options?.priorMessages ?? messages
+
     setReplying(true)
-    if (replyTimerRef.current) window.clearTimeout(replyTimerRef.current)
-    replyTimerRef.current = window.setTimeout(() => {
-      const reply: ChatMessage = {
-        id: uid('toy'),
-        role: 'toy',
-        kind: 'text',
-        text: personaReply(currentToy, userText, entries),
-        createdAt: new Date().toISOString(),
-      }
-      const memory: ChatMessage | null =
-        includeMemory && latestMemory
-          ? {
-              id: uid('memory'),
-              role: 'toy',
-              kind: 'memory',
-              text: latestMemory.title || '我们的共同记忆',
-              imageUrl: latestMemory.imageUrl,
-              entryId: latestMemory.id,
-              createdAt: new Date().toISOString(),
-            }
-          : null
-      appendMessages(currentToy.id, memory ? [reply, memory] : [reply])
-      setReplying(false)
-    }, 620)
+
+    const history = priorMessages
+      .filter((m) => m.kind === 'text' || m.kind === 'image')
+      .map((m) => ({
+        role: m.role,
+        text: (m.text || '').trim(),
+      }))
+      .filter((m) => m.text)
+
+    let replyText = localPersonaReply(currentToy, userText, entries)
+    try {
+      const result = await chatToyReply({
+        toy: currentToy,
+        message: userText,
+        history,
+        entries,
+        quietMode,
+      })
+      replyText = result.reply
+    } catch {
+      // keep local fallback
+    }
+
+    const reply: ChatMessage = {
+      id: uid('toy'),
+      role: 'toy',
+      kind: 'text',
+      text: replyText,
+      createdAt: new Date().toISOString(),
+    }
+    const memory: ChatMessage | null =
+      includeMemory && latestMemory
+        ? {
+            id: uid('memory'),
+            role: 'toy',
+            kind: 'memory',
+            text: latestMemory.title || '我们的共同记忆',
+            imageUrl: latestMemory.imageUrl,
+            entryId: latestMemory.id,
+            createdAt: new Date().toISOString(),
+          }
+        : null
+    appendMessages(currentToy.id, memory ? [reply, memory] : [reply])
+    setReplying(false)
   }
 
   function submitMessage(e?: FormEvent) {
@@ -270,6 +252,7 @@ export function ConversationPage() {
       showToast('请先创建一只玩偶')
       return
     }
+    if (replying) return
     const text = draft.trim()
     if (!text && !pendingImage) return
 
@@ -293,13 +276,14 @@ export function ConversationPage() {
       })
     }
 
+    const priorMessages = [...messages, ...userMessages]
     appendMessages(currentToy.id, userMessages)
     setDraft('')
     setPendingImage(undefined)
-    sendToyReply(
-      pendingImage ? `${text} 照片 晚霞` : text,
-      /旅行|回忆|记得|以前|去过/.test(text),
-    )
+    void sendToyReply(pendingImage ? `${text || '想把这一刻给你看看'}（附照片）` : text, {
+      includeMemory: /旅行|回忆|记得|以前|去过/.test(text),
+      priorMessages,
+    })
   }
 
   function chooseTopic(topic: (typeof QUICK_TOPICS)[number]) {
@@ -317,16 +301,19 @@ export function ConversationPage() {
       return
     }
 
-    appendMessages(currentToy.id, [
-      {
-        id: uid('topic'),
-        role: 'user',
-        kind: 'text',
-        text: topic,
-        createdAt: new Date().toISOString(),
-      },
-    ])
-    sendToyReply(topic, topic.includes('回忆') || topic.includes('记得'))
+    const topicMsg: ChatMessage = {
+      id: uid('topic'),
+      role: 'user',
+      kind: 'text',
+      text: topic,
+      createdAt: new Date().toISOString(),
+    }
+    const priorMessages = [...messages, topicMsg]
+    appendMessages(currentToy.id, [topicMsg])
+    void sendToyReply(topic, {
+      includeMemory: topic.includes('回忆') || topic.includes('记得'),
+      priorMessages,
+    })
   }
 
   async function onImagePicked(event: ChangeEvent<HTMLInputElement>) {
