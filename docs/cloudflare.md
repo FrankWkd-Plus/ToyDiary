@@ -4,8 +4,8 @@
 
 | Item | Value |
 |------|--------|
-| Project | `toydairy` |
-| Production URL | https://toydairy.pages.dev |
+| Project | `toydiary` |
+| Production URL | https://toydiary.pages.dev |
 | Production branch | `main` |
 | Preview deploys | non-`main` branches (via Git integration or `wrangler pages deploy --branch <name>`) |
 | Custom domain | none (default `*.pages.dev` only) |
@@ -17,13 +17,13 @@ cd web
 npm ci
 npm run build
 # Pages Functions live in web/functions — deploy with project root = web/
-npx wrangler pages deploy ./dist --project-name=toydairy --branch=main --commit-dirty=true
+npx wrangler pages deploy ./dist --project-name=toydiary --branch=main --commit-dirty=true
 ```
 
 Preview branch:
 
 ```bash
-npx wrangler pages deploy ./dist --project-name=toydairy --branch=feature/foo
+npx wrangler pages deploy ./dist --project-name=toydiary --branch=feature/foo
 ```
 
 ### SPA routing
@@ -40,22 +40,26 @@ npx wrangler pages deploy ./dist --project-name=toydairy --branch=feature/foo
 
 ### Secrets (set only in Cloudflare Dashboard)
 
-**Pages → toydairy → Settings → Environment variables**
+**Pages → toydiary → Settings → Environment variables → Production**
 
 | Variable | Type | Required | Meaning |
 |----------|------|----------|---------|
-| `OPENAI_API_KEY` | **Secret / Encrypt** | Yes | Provider API key |
-| `OPENAI_BASE_URL` | Text or Secret | No | OpenAI-compatible base, default `https://api.openai.com/v1` |
-| `OPENAI_MODEL` | Text | No | Default `gpt-4o-mini` |
+| `OPENAI_API_KEY` | **Secret / Encrypt** | Yes | Provider API key (must match the base URL provider) |
+| `OPENAI_BASE_URL` | Text or Secret | No* | OpenAI-compatible base. If missing, code defaults to `https://api.openai.com/v1` |
+| `OPENAI_MODEL` | Text | No* | Model id. If missing, code defaults to `gpt-4o-mini` |
+
+\* If you use a third-party gateway (DeepSeek / OpenRouter / 中转站 etc.), **both** `OPENAI_BASE_URL` and a matching `OPENAI_API_KEY` must be set on the **same** Pages project (`toydiary`) and **Production** environment. Plain text vars and secrets are separate lists — setting only the key is not enough.
 
 Do **not** put the key in any `VITE_*` variable (Vite embeds those into the browser bundle).
+
+After changing env vars, redeploy or trigger a new production deployment so Functions pick them up.
 
 Local Function secrets (optional): create `web/.dev.vars` (gitignored):
 
 ```
 OPENAI_API_KEY=sk-...
-OPENAI_BASE_URL=https://api.openai.com/v1
-OPENAI_MODEL=gpt-4o-mini
+OPENAI_BASE_URL=https://your-gateway.example/v1
+OPENAI_MODEL=your-model-id
 ```
 
 ## Storage (provisioned)

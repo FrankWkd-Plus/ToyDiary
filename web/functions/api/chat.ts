@@ -123,10 +123,24 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   }
   messages.push({ role: 'user', content: message })
 
-  const baseUrl = (
-    env.OPENAI_BASE_URL?.trim() || 'https://api.openai.com/v1'
-  ).replace(/\/$/, '')
-  const model = env.OPENAI_MODEL?.trim() || 'gpt-4o-mini'
+  const configuredBaseUrl = env.OPENAI_BASE_URL?.trim()
+  const configuredModel = env.OPENAI_MODEL?.trim()
+  const baseUrl = (configuredBaseUrl || 'https://api.openai.com/v1').replace(
+    /\/$/,
+    '',
+  )
+  const model = configuredModel || 'gpt-4o-mini'
+  const authMeta = {
+    envKey: 'OPENAI_API_KEY',
+    projectHint:
+      'Cloudflare Pages project: toydiary (Production env vars)',
+    baseUrl,
+    model,
+    baseUrlSource: configuredBaseUrl ? 'env:OPENAI_BASE_URL' : 'default',
+    modelSource: configuredModel ? 'env:OPENAI_MODEL' : 'default',
+    keyConfigured: true as const,
+    keyHint: maskKey(apiKey),
+  }
 
   let upstream: Response
   try {
@@ -148,6 +162,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       {
         error: 'Failed to reach AI provider',
         detail: err instanceof Error ? err.message : String(err),
+        auth: authMeta,
       },
       502,
     )
@@ -159,14 +174,14 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       {
         error: `AI provider HTTP ${upstream.status}`,
         detail: detail.slice(0, 800),
-        // Key is never returned — only which binding was used.
-        auth: {
-          env: 'OPENAI_API_KEY',
-          baseUrl,
-          model,
-          keyConfigured: true,
-          keyHint: maskKey(apiKey),
-        },
+        // Key is never returned — only which binding was used, and whether
+        // baseUrl/model came from env or code defaults.
+        auth: authMeta,
+        hint:
+          authMeta.baseUrlSource === 'default' ||
+          authMeta.modelSource === 'default'
+            ? 'OPENAI_BASE_URL / OPENAI_MODEL not set on Pages Production — using code defaults (api.openai.com + gpt-4o-mini). Set them under project toydiary → Settings → Environment variables (Production), then redeploy or wait for secret propagation.'
+            : undefined,
       },
       502,
     )
