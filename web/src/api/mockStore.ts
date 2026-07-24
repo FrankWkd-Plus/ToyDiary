@@ -1,6 +1,15 @@
-import type { CreateEntryInput, CreateToyInput, Entry, Toy } from '../types'
+import type {
+  CreateEntryInput,
+  CreateToyInput,
+  Entry,
+  Place,
+  Toy,
+  TravelMapResponse,
+} from '../types'
+import { seedPlaceForLabel } from '../places/placeUtils'
+import { uniqueCities } from '../places/placeUtils'
 
-const STORAGE_KEY = 'toydairy.mock.v2'
+const STORAGE_KEY = 'toydairy.mock.v3'
 
 function uid(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36).slice(-4)}`
@@ -38,11 +47,25 @@ export function zodiacFromDate(isoDate: string): string {
 }
 
 function mockProfile(input: CreateToyInput) {
-  const zodiac = zodiacFromDate(input.birthDate)
+  const zodiac = input.zodiac?.trim() || zodiacFromDate(input.birthDate)
   const traitStr = input.traits.join('、') || '温柔'
-  const bio = `${input.name}是一只${traitStr}的${input.role}，出生于${input.birthPlace}。作为${zodiac}，ta 总在小小的身体里装着大大的世界。`
-  const monologue = `我是${input.name}，最大的梦想是和主人一起把路上的光都记下来。`
+  const bio =
+    input.bio?.trim() ||
+    `${input.name}是一只${traitStr}的${input.role}，出生于${input.birthPlace}。作为${zodiac}，ta 总在小小的身体里装着大大的世界。`
+  const monologue =
+    input.monologue?.trim() ||
+    `我是${input.name}，最大的梦想是和主人一起把路上的光都记下来。`
   return { zodiac, bio, monologue }
+}
+
+function attachPlace(entry: Entry): Entry {
+  if (entry.place?.lat != null && entry.place?.lng != null) return entry
+  const fromLabel = seedPlaceForLabel(entry.location)
+  if (fromLabel) {
+    entry.place = fromLabel
+    if (!entry.location) entry.location = fromLabel.displayName
+  }
+  return entry
 }
 
 function mockDiary(toy: Toy, entry: Pick<Entry, 'date' | 'location' | 'userNote' | 'mood' | 'type' | 'title'>) {
@@ -189,6 +212,7 @@ function applyDemoUpdates(data: StoreData) {
       if (narration.userNote) entry.userNote = narration.userNote
       if (narration.aiDiary) entry.aiDiary = narration.aiDiary
     }
+    attachPlace(entry)
   })
   return data
 }
@@ -565,7 +589,12 @@ export const mockStore = {
     const profile = mockProfile(input)
     const toy: Toy = {
       id: uid('toy'),
-      ...input,
+      name: input.name,
+      birthDate: input.birthDate,
+      birthPlace: input.birthPlace,
+      role: input.role,
+      traits: input.traits,
+      avatarUrl: input.avatarUrl,
       ...profile,
       createdAt: new Date().toISOString(),
     }
@@ -590,12 +619,14 @@ export const mockStore = {
     await delay()
     return load()
       .entries.filter((e) => e.toyId === toyId)
+      .map((e) => attachPlace({ ...e }))
       .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
   },
 
   async getEntry(id: string): Promise<Entry | undefined> {
     await delay()
-    return load().entries.find((e) => e.id === id)
+    const entry = load().entries.find((e) => e.id === id)
+    return entry ? attachPlace({ ...entry }) : undefined
   },
 
   async createEntry(toyId: string, input: CreateEntryInput): Promise<Entry> {
@@ -603,16 +634,50 @@ export const mockStore = {
     const data = load()
     const toy = data.toys.find((t) => t.id === toyId)
     if (!toy) throw new Error('玩偶不存在')
+    const place: Place | undefined =
+      input.place ||
+      seedPlaceForLabel(input.location) ||
+      undefined
     const entry: Entry = {
       id: uid('entry'),
       toyId,
       ...input,
-      aiDiary: input.aiDiary || mockDiary(toy, input),
+      location: input.location || place?.displayName,
+      place,
+      aiDiary: input.aiDiary || mockDiary(toy, { ...input, location: input.location || place?.displayName }),
       createdAt: new Date().toISOString(),
     }
     data.entries.unshift(entry)
     save(data)
     return entry
+  },
+
+  /** Equivalent of GET /api/toys/:toyId/travel-map */
+  async getTravelMap(toyId: string): Promise<TravelMapResponse> {
+    await delay(120)
+    const entries = load()
+      .entries.filter((e) => e.toyId === toyId)
+      .map(attachPlace)
+      .filter((e) => e.place && Number.isFinite(e.place.lat) && Number.isFinite(e.place.lng))
+      .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
+
+    const points = entries.map((e) => ({
+      entryId: e.id,
+      toyId: e.toyId,
+      date: e.date,
+      title: e.title,
+      mood: e.mood,
+      imageUrl: e.imageUrl,
+      aiDiary: e.aiDiary,
+      userNote: e.userNote,
+      place: e.place as Place,
+    }))
+    const years = [
+      ...new Set(points.map((p) => Number(p.date.slice(0, 4))).filter(Boolean)),
+    ].sort((a, b) => b - a)
+    const travelCount = entries.filter((e) => e.type === 'travel').length
+    const cityCount = uniqueCities(points.map((p) => p.place)).length
+    return { toyId, points, years, cityCount, travelCount }
   },
 
   async regenerateEntry(id: string): Promise<Entry> {

@@ -1,5 +1,7 @@
-import { useState, type FormEvent, type ReactNode } from 'react'
+import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Camera, Sparkles } from 'lucide-react'
+import { zodiacFromDate } from '../api/mockStore'
 import { api } from '../api/client'
 import { PageHeader } from '../components/PageHeader'
 import { useApp } from '../context/AppContext'
@@ -11,16 +13,38 @@ export function NewToyPage() {
   const nav = useNavigate()
   const { refreshToys, showToast } = useApp()
   const [name, setName] = useState('')
-  const [birthDate, setBirthDate] = useState('2026-07-23')
+  const [birthDate, setBirthDate] = useState(() =>
+    new Date().toISOString().slice(0, 10),
+  )
   const [birthPlace, setBirthPlace] = useState('')
   const [role, setRole] = useState(ROLE_OPTIONS[0])
   const [traits, setTraits] = useState<string[]>(['温柔', '好奇'])
+  const [bio, setBio] = useState('')
+  const [monologue, setMonologue] = useState('')
+  const [avatarUrl, setAvatarUrl] = useState<string>()
   const [submitting, setSubmitting] = useState(false)
+
+  const zodiac = useMemo(() => zodiacFromDate(birthDate), [birthDate])
 
   function toggleTrait(t: string) {
     setTraits((prev) =>
       prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t].slice(0, 4),
     )
+  }
+
+  function onPickAvatar(file: File | null) {
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      showToast('请选择图片')
+      return
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      showToast('头像请小于 8MB')
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => setAvatarUrl(String(reader.result))
+    reader.readAsDataURL(file)
   }
 
   async function onSubmit(e: FormEvent) {
@@ -41,10 +65,14 @@ export function NewToyPage() {
         birthPlace: birthPlace.trim(),
         role,
         traits,
+        bio: bio.trim() || undefined,
+        monologue: monologue.trim() || undefined,
+        avatarUrl,
+        zodiac,
       })
       await refreshToys()
-      showToast(`${toy.name} 的身份卡已生成`)
-      nav('/toys')
+      showToast(`${toy.name} 的档案已生成`)
+      nav(`/archive/toys/${toy.id}`)
     } catch (err) {
       showToast(err instanceof Error ? err.message : '创建失败')
     } finally {
@@ -54,14 +82,29 @@ export function NewToyPage() {
 
   return (
     <>
-      <PageHeader title="新建玩偶" back soft />
+      <PageHeader title="新增玩偶" back="/archive" soft />
       <form onSubmit={onSubmit} className="space-y-4 px-4 py-4">
-        <div className="card-paper flex items-center gap-3.5 p-4">
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-mustard-soft to-peach-soft text-3xl shadow-[var(--shadow-warm-sm)]">
-            🐻
-          </span>
-          <p className="text-sm leading-relaxed text-ink-soft">
-            填写基本信息后，会生成身份卡（星座 · 简介 · 独白）。
+        <div className="card-paper flex flex-col items-center gap-3 p-5 text-center">
+          <label className="relative cursor-pointer">
+            <span className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-[1.5rem] border-2 border-dashed border-line bg-cream text-4xl shadow-[var(--shadow-warm-sm)]">
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="头像预览" className="h-full w-full object-cover" />
+              ) : (
+                '🧸'
+              )}
+            </span>
+            <span className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full bg-matcha text-white shadow-md">
+              <Camera className="h-4 w-4" />
+            </span>
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => onPickAvatar(e.target.files?.[0] ?? null)}
+            />
+          </label>
+          <p className="text-xs leading-relaxed text-ink-soft">
+            上传照片，填写档案信息。星座会根据出生日期自动生成。
           </p>
         </div>
 
@@ -82,6 +125,10 @@ export function NewToyPage() {
             onChange={(e) => setBirthDate(e.target.value)}
           />
         </Field>
+        <div className="rounded-2xl bg-mustard-soft/70 px-3.5 py-2.5 text-xs text-terra-deep">
+          <Sparkles className="mr-1 inline h-3.5 w-3.5" />
+          AI 星座：<strong>{zodiac}</strong>
+        </div>
         <Field label="出生地">
           <input
             className="input !rounded-2xl"
@@ -122,13 +169,31 @@ export function NewToyPage() {
             })}
           </div>
         </Field>
+        <Field label="人设简介（可选）">
+          <textarea
+            className="input min-h-[72px] resize-none !rounded-2xl"
+            placeholder="不写的话会根据性格自动生成"
+            value={bio}
+            onChange={(e) => setBio(e.target.value)}
+            maxLength={160}
+          />
+        </Field>
+        <Field label="AI 独白（可选）">
+          <textarea
+            className="input min-h-[64px] resize-none !rounded-2xl"
+            placeholder="例如：今天也想和你一起出门～"
+            value={monologue}
+            onChange={(e) => setMonologue(e.target.value)}
+            maxLength={80}
+          />
+        </Field>
 
         <button
           type="submit"
           disabled={submitting}
           className="btn-primary w-full py-3.5 text-sm"
         >
-          {submitting ? '生成身份卡中…' : '创建并生成身份卡'}
+          {submitting ? '生成档案中…' : '保存并生成档案'}
         </button>
       </form>
     </>
@@ -138,9 +203,7 @@ export function NewToyPage() {
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block text-xs font-medium text-ink-soft">
-        {label}
-      </span>
+      <span className="mb-1.5 block text-xs font-medium text-ink-soft">{label}</span>
       {children}
     </label>
   )

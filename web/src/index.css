@@ -1342,3 +1342,102 @@ button:focus-visible {
     opacity: 1;
   }
 }
+
+/* —— Growth globe + travel map (Leaflet) —— */
+.growth-globe-spin {
+  animation: globe-spin 12s linear infinite;
+}
+
+@keyframes globe-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.toy-map-marker {
+  background: transparent !important;
+  border: none !important;
+}
+
+.toy-map-marker__bubble {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border-radius: 9999px;
+  overflow: hidden;
+  border: 2px solid #fff;
+  box-shadow: 0 4px 12px rgb(74 67 60 / 0.22);
+  background: #fff6e0;
+}
+
+.toy-map-marker__bubble img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.toy-map-marker__pin {
+  position: absolute;
+  left: 50%;
+  bottom: -7px;
+  width: 10px;
+  height: 10px;
+  margin-left: -5px;
+  background: #9a8758;
+  transform: rotate(45deg);
+  border-radius: 1px;
+  box-shadow: 0 1px 2px rgb(74 67 60 / 0.2);
+}
+
+.leaflet-container {
+  font: inherit;
+  background: #e8efe3;
+}
+
+.leaflet-popup-content-wrapper {
+  border-radius: 1rem;
+  padding: 0;
+  overflow: hidden;
+  box-shadow: 0 12px 28px rgb(74 67 60 / 0.16);
+}
+
+.leaflet-popup-content {
+  margin: 0;
+  min-width: 180px;
+}
+
+.polaroid-card {
+  width: 200px;
+  background: #fff;
+  padding: 0.55rem 0.55rem 0.7rem;
+}
+
+.polaroid-card__photo {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 0.35rem;
+  background: #f3f8ee;
+  display: block;
+}
+
+.polaroid-card__photo--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+}
+
+.polaroid-card__body {
+  margin-top: 0.45rem;
+  padding: 0 0.15rem;
+}
+
+.leaflet-control-attribution {
+  font-size: 9px !important;
+  background: rgb(255 255 255 / 0.85) !important;
+}

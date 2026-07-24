@@ -12,6 +12,7 @@ import { SettingsPage } from './pages/SettingsPage'
 import { TimelinePage } from './pages/TimelinePage'
 import { ToyArchiveDetailPage } from './pages/ToyArchiveDetailPage'
 import { ToysPage } from './pages/ToysPage'
+import { TravelMapPage } from './pages/TravelMapPage'
 import { ThemeProvider } from './theme/ThemeProvider'
 
 export default function App() {
@@ -27,6 +28,7 @@ export default function App() {
               <Route path="memories/:id" element={<MemoryHallPage />} />
               <Route path="timeline" element={<Navigate to="/archive" replace />} />
               <Route path="growth" element={<GrowthPage />} />
+              <Route path="growth/travel-map" element={<TravelMapPage />} />
               <Route path="compose" element={<ComposePage />} />
               <Route path="conversation" element={<ConversationPage />} />
               <Route
