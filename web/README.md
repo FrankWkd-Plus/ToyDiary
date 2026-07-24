@@ -1,18 +1,19 @@
 # Toy Dairy · Web（前端）
 
-对齐仓库根目录 [`plan.md`](../plan.md) 的 B 角色产出：React + TypeScript + Vite + Tailwind。
+React + TypeScript + Vite + Tailwind。数据默认 **localStorage Mock**；智能记录可走 Cloudflare Pages Function（密钥不在前端）。
 
-当前数据存储为纯前端 Mock（`localStorage`）。智能记录支持本地场景/文字分析，并可通过安全后端接口升级为真实多模态 AI。
+更完整的仓库说明与 **部署流程** 见根目录 [`readme.md`](../readme.md) 与 [`docs/cloudflare.md`](../docs/cloudflare.md)。
 
 ## 启动
 
 ```bash
 cd web
 npm install
+cp .env.example .env.local   # 可选
 npm run dev
 ```
 
-浏览器打开终端提示的地址（默认 `http://localhost:5173`）。桌面端会居中 390px 手机框。
+浏览器打开终端提示的地址（默认 `http://localhost:5173`）。桌面端会居中约 390px 手机框。
 
 ## 可交互路径
 
@@ -26,23 +27,34 @@ npm run dev
 | 身份卡 / 切换玩偶 | 「档案」或「我的」 |
 | 重置演示数据 | 「我的」 |
 
-## 多模态 AI 接口
+## 环境变量
 
-复制 `.env.example` 为 `.env.local`，将 `VITE_AI_ANALYZE_ENDPOINT` 指向你自己的后端接口。前端会向该接口发送玩偶人格、用户文字和压缩后的图片，并接收：
+见 [`.env.example`](./.env.example)：
 
-```json
-{
-  "title": "陪你看日落的傍晚",
-  "aiDiary": "玩偶第一视角正文",
-  "toyReply": "保存前对用户说的话",
-  "mood": "温柔",
-  "tags": ["日落", "陪伴"],
-  "imageAnalysis": "照片场景说明",
-  "entryType": "daily"
-}
+| 变量 | 说明 |
+|------|------|
+| `VITE_AI_ANALYZE_ENDPOINT` | AI 接口，默认 `/api/analyze-entry` |
+| `VITE_API_BASE` | 将来真 REST（`USE_MOCK = false` 时） |
+
+**不要**把 OpenAI 等厂商 API Key 写进 `VITE_*`。
+
+密钥在 **Cloudflare Pages → Settings → Environment variables**：
+
+- `OPENAI_API_KEY`（Secret，必填）
+- `OPENAI_BASE_URL`（可选）
+- `OPENAI_MODEL`（可选）
+
+服务端实现：[`functions/api/analyze-entry.ts`](./functions/api/analyze-entry.ts)。
+
+## 部署（摘要）
+
+```bash
+cd web
+npm ci && npm run build
+npx wrangler pages deploy ./dist --project-name=toydairy --branch=main --commit-dirty=true
 ```
 
-AI 服务不可用时会自动回退到浏览器内的本地生成。不要把 OpenAI 或其他模型服务的 API Key 写进 `VITE_*` 变量。
+改完 Dashboard 机密后必须 **重新部署**。完整步骤见根 [`readme.md`](../readme.md#部署流程cloudflare-pages)。
 
 ## 脚本
 
@@ -56,9 +68,14 @@ AI 服务不可用时会自动回退到浏览器内的本地生成。不要把 O
 
 ```
 src/
-  api/        # client + mockStore（契约）
-  components/ # 底栏、身份卡、日志卡片…
-  context/    # 全局状态
-  pages/      # 页面
-  types.ts    # 与 plan 对齐的类型
+  ai/         # analyzeEntry（前端调用 + 本地兜底）
+  api/        # client + mockStore
+  components/
+  context/
+  pages/
+  types.ts
+functions/
+  api/analyze-entry.ts   # Pages Function（持有 OPENAI_* 机密）
+public/
+  _redirects             # SPA + /api 例外
 ```

@@ -8,6 +8,11 @@
   // Provisioned for future Workers API (currently SPA is mock-first).
   // Production Pages project: toydairy (https://toydairy.pages.dev)
   // Production branch: main · preview deploys: non-main branches
+  //
+  // AI secrets (Dashboard only, never commit):
+  //   OPENAI_API_KEY  — required secret
+  //   OPENAI_BASE_URL — optional, default https://api.openai.com/v1
+  //   OPENAI_MODEL    — optional, default gpt-4o-mini
   "kv_namespaces": [
     {
       "binding": "TOYDAIRY_KV",

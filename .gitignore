@@ -22,10 +22,16 @@ Desktop.ini
 **/.wrangler/
 
 # Env & secrets (never commit)
+# pre-push hook blocks paths matching (^|/)\.env($|\.) including .env.example
 .env
 .env.*
-!.env.example
-!.env*.example
+**/.env
+**/.env.*
+web/.env
+web/.env.*
+web/.dev.vars
+.dev.vars
+**/.dev.vars
 *.pem
 *.key
 credentials.json
@@ -64,4 +70,3 @@ temp/
 # Optional OS / backup
 *~
 *.bak
-web/.env.example

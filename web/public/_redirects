@@ -1,4 +1,7 @@
 # Cloudflare Pages SPA routing
-# See: https://developers.cloudflare.com/pages/configuration/serving-pages/#single-page-application-spa-rendering
+# Keep API Functions outside SPA rewrite.
+# https://developers.cloudflare.com/pages/configuration/serving-pages/#single-page-application-spa-rendering
+/api/*
+  /api/:splat
 /*
   /index.html  200
