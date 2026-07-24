@@ -140,7 +140,7 @@ body {
   -webkit-overflow-scrolling: touch;
   padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
   scrollbar-width: none;
-  animation: page-in 0.35s ease-out;
+  animation: page-in 0.18s ease-out;
 }
 
 /* Conversation fills the frame: only the message list scrolls. */

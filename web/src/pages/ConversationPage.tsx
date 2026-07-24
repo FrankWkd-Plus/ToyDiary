@@ -17,6 +17,7 @@ import {
   Mic,
   Send,
   Sparkles,
+  Trash2,
   X,
 } from 'lucide-react'
 import { companionDays, toyAvatar } from '../archive/archiveUtils'
@@ -139,6 +140,7 @@ export function ConversationPage() {
   )
   const [pendingImage, setPendingImage] = useState<string>()
   const [replying, setReplying] = useState(false)
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false)
   const endRef = useRef<HTMLDivElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
@@ -389,6 +391,24 @@ export function ConversationPage() {
     showToast(next ? '已开启安静模式，不再主动提醒' : '已恢复温柔提醒')
   }
 
+  function clearConversation() {
+    if (!currentToy) return
+    const opening = createOpeningMessage(currentToy, entries)
+    setMessagesByToy((current) => {
+      const next = {
+        ...current,
+        [currentToy.id]: [opening],
+      }
+      saveChats(next)
+      return next
+    })
+    setDraft('')
+    setPendingImage(undefined)
+    setReplying(false)
+    setClearConfirmOpen(false)
+    showToast('已删除聊天记录与上下文')
+  }
+
   if (!currentToy) {
     return (
       <div className="flex min-h-[70vh] flex-col items-center justify-center px-8 text-center">
@@ -438,6 +458,15 @@ export function ConversationPage() {
           </button>
 
           <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setClearConfirmOpen(true)}
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-cream text-ink-muted transition-transform active:scale-95"
+              aria-label="删除聊天记录"
+              title="删除聊天记录"
+            >
+              <Trash2 className="h-[17px] w-[17px]" />
+            </button>
             <button
               type="button"
               onClick={toggleQuietMode}
@@ -644,6 +673,48 @@ export function ConversationPage() {
           onChange={onImagePicked}
         />
       </section>
+
+      {clearConfirmOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 px-6 backdrop-blur-[2px]"
+          role="presentation"
+          onClick={() => setClearConfirmOpen(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="确认删除聊天记录"
+            className="w-full max-w-[320px] rounded-[1.5rem] bg-white p-5 shadow-[var(--shadow-elevated)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-peach-soft text-rose-deep">
+              <Trash2 className="h-5 w-5" />
+            </div>
+            <h2 className="mt-3 text-center font-display text-lg text-ink">
+              删除聊天记录？
+            </h2>
+            <p className="mt-2 text-center text-xs leading-relaxed text-ink-muted">
+              将清空与「{currentToy.name}」的全部对话与上下文，并重新开始一段开场白。此操作不可撤销。
+            </p>
+            <div className="mt-5 grid grid-cols-2 gap-2.5">
+              <button
+                type="button"
+                onClick={() => setClearConfirmOpen(false)}
+                className="btn-secondary py-2.5 text-sm"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={clearConversation}
+                className="rounded-full bg-rose-deep py-2.5 text-sm font-medium text-white transition-transform active:scale-95"
+              >
+                确认删除
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

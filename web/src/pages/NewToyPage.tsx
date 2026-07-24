@@ -1,14 +1,19 @@
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Camera, Sparkles } from 'lucide-react'
+import { Sparkles } from 'lucide-react'
 import { zodiacFromDate } from '../api/mockStore'
 import { api } from '../api/client'
 import { PageHeader } from '../components/PageHeader'
+import { ToyAvatarStudio } from '../components/ToyAvatarStudio'
 import { useApp } from '../context/AppContext'
 
 const ROLE_OPTIONS = ['旅行搭子', '童年伙伴', '治愈小宠', '冒险伙伴']
 const TRAIT_OPTIONS = ['温柔', '胆小', '好奇', '活泼', '话多', '安静', '勇敢', '爱吃']
 
+/**
+ * Create-toy flow:
+ * photo → local AI cutout sticker → name / birthday / traits → save archive
+ */
 export function NewToyPage() {
   const nav = useNavigate()
   const { refreshToys, showToast } = useApp()
@@ -22,6 +27,7 @@ export function NewToyPage() {
   const [bio, setBio] = useState('')
   const [monologue, setMonologue] = useState('')
   const [avatarUrl, setAvatarUrl] = useState<string>()
+  const [avatarConfirmed, setAvatarConfirmed] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
   const zodiac = useMemo(() => zodiacFromDate(birthDate), [birthDate])
@@ -32,23 +38,12 @@ export function NewToyPage() {
     )
   }
 
-  function onPickAvatar(file: File | null) {
-    if (!file) return
-    if (!file.type.startsWith('image/')) {
-      showToast('请选择图片')
-      return
-    }
-    if (file.size > 8 * 1024 * 1024) {
-      showToast('头像请小于 8MB')
-      return
-    }
-    const reader = new FileReader()
-    reader.onload = () => setAvatarUrl(String(reader.result))
-    reader.readAsDataURL(file)
-  }
-
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
+    if (!avatarConfirmed || !avatarUrl) {
+      showToast('请先确认玩偶贴纸头像')
+      return
+    }
     if (!name.trim() || !birthPlace.trim()) {
       showToast('请填写名称和出生地')
       return
@@ -59,6 +54,8 @@ export function NewToyPage() {
     }
     setSubmitting(true)
     try {
+      // MVP: avatarUrl is a compressed Data URL.
+      // REPLACE_WITH_BACKEND: upload blob to R2/S3, store public URL only.
       const toy = await api.createToy({
         name: name.trim(),
         birthDate,
@@ -84,29 +81,27 @@ export function NewToyPage() {
     <>
       <PageHeader title="新增玩偶" back="/archive" soft />
       <form onSubmit={onSubmit} className="space-y-4 px-4 py-4">
-        <div className="card-paper flex flex-col items-center gap-3 p-5 text-center">
-          <label className="relative cursor-pointer">
-            <span className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-[1.5rem] border-2 border-dashed border-line bg-cream text-4xl shadow-[var(--shadow-warm-sm)]">
-              {avatarUrl ? (
-                <img src={avatarUrl} alt="头像预览" className="h-full w-full object-cover" />
-              ) : (
-                '🧸'
-              )}
-            </span>
-            <span className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full bg-matcha text-white shadow-md">
-              <Camera className="h-4 w-4" />
-            </span>
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => onPickAvatar(e.target.files?.[0] ?? null)}
+        <ToyAvatarStudio
+          value={avatarUrl}
+          onToast={showToast}
+          onConfirm={(url) => {
+            setAvatarUrl(url)
+            setAvatarConfirmed(true)
+          }}
+        />
+
+        {avatarConfirmed && avatarUrl && (
+          <div className="flex items-center gap-3 rounded-2xl bg-mist-soft px-3 py-2.5 text-xs text-matcha-deep">
+            <img
+              src={avatarUrl}
+              alt="已确认头像"
+              className="h-12 w-12 rounded-2xl bg-white object-contain shadow-sm ring-1 ring-line/40"
             />
-          </label>
-          <p className="text-xs leading-relaxed text-ink-soft">
-            上传照片，填写档案信息。星座会根据出生日期自动生成。
-          </p>
-        </div>
+            <span className="min-w-0 flex-1">
+              贴纸头像已就绪，继续填写档案信息吧。
+            </span>
+          </div>
+        )}
 
         <Field label="玩偶名称">
           <input
@@ -190,10 +185,14 @@ export function NewToyPage() {
 
         <button
           type="submit"
-          disabled={submitting}
-          className="btn-primary w-full py-3.5 text-sm"
+          disabled={submitting || !avatarConfirmed}
+          className="btn-primary w-full py-3.5 text-sm disabled:opacity-60"
         >
-          {submitting ? '生成档案中…' : '保存并生成档案'}
+          {submitting
+            ? '生成档案中…'
+            : avatarConfirmed
+              ? '保存并生成档案'
+              : '请先确认贴纸头像'}
         </button>
       </form>
     </>

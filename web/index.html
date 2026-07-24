@@ -12,12 +12,44 @@
     />
     <meta name="theme-color" content="#d4ecc8" />
     <title>Toy Dairy · 玩偶日记</title>
+    <!-- Non-blocking fonts: text renders immediately with system fallback -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
+      rel="preload"
+      as="style"
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=ZCOOL+XiaoWei&display=swap"
+    />
+    <link
       href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=ZCOOL+XiaoWei&display=swap"
       rel="stylesheet"
+      media="print"
+      onload="this.media='all'"
     />
+    <noscript>
+      <link
+        href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=ZCOOL+XiaoWei&display=swap"
+        rel="stylesheet"
+      />
+    </noscript>
+    <style>
+      /* Instant first paint while React boots */
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        background: #e8efe3;
+        font-family:
+          'Noto Sans SC',
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          sans-serif;
+      }
+      #root {
+        min-height: 100%;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>

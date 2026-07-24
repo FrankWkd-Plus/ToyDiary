@@ -109,6 +109,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const refreshToys = useCallback(async () => {
+    // listToys is localStorage-backed; no need for artificial waiting.
     const list = await api.listToys()
     setToys(list)
     const saved = api.getCurrentToyId()
@@ -149,11 +150,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false
+    // Bootstrap from localStorage as fast as possible (no min splash delay).
     ;(async () => {
       setLoading(true)
       try {
         await refreshToys()
-        refreshCommunity()
+        if (!cancelled) refreshCommunity()
       } finally {
         if (!cancelled) setLoading(false)
       }

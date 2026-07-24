@@ -15,7 +15,9 @@ function uid(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36).slice(-4)}`
 }
 
-function delay(ms = 280) {
+/** Artificial latency for demo “API feel”. Keep tiny so cold reload stays snappy. */
+function delay(ms = 0) {
+  if (ms <= 0) return Promise.resolve()
   return new Promise((r) => setTimeout(r, ms))
 }
 
@@ -584,7 +586,7 @@ export const mockStore = {
   },
 
   async createToy(input: CreateToyInput): Promise<Toy> {
-    await delay(400)
+    await delay(40)
     const data = load()
     const profile = mockProfile(input)
     const toy: Toy = {
@@ -605,7 +607,7 @@ export const mockStore = {
   },
 
   async generateProfile(id: string): Promise<Toy> {
-    await delay(500)
+    await delay(40)
     const data = load()
     const toy = data.toys.find((t) => t.id === id)
     if (!toy) throw new Error('玩偶不存在')
@@ -630,7 +632,7 @@ export const mockStore = {
   },
 
   async createEntry(toyId: string, input: CreateEntryInput): Promise<Entry> {
-    await delay(500)
+    await delay(40)
     const data = load()
     const toy = data.toys.find((t) => t.id === toyId)
     if (!toy) throw new Error('玩偶不存在')
@@ -654,7 +656,7 @@ export const mockStore = {
 
   /** Equivalent of GET /api/toys/:toyId/travel-map */
   async getTravelMap(toyId: string): Promise<TravelMapResponse> {
-    await delay(120)
+    await delay()
     const entries = load()
       .entries.filter((e) => e.toyId === toyId)
       .map(attachPlace)
@@ -681,7 +683,7 @@ export const mockStore = {
   },
 
   async regenerateEntry(id: string): Promise<Entry> {
-    await delay(450)
+    await delay(40)
     const data = load()
     const entry = data.entries.find((e) => e.id === id)
     if (!entry) throw new Error('记录不存在')
