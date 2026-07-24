@@ -21,7 +21,7 @@ export function SettingsPage() {
 
   return (
     <>
-      <PageHeader title="设置" back="/me" soft />
+      <PageHeader title="个人资料设置" back="/me" soft />
       <div className="space-y-3 px-4 py-4">
         <section className="card-paper overflow-hidden">
           <SectionTitle>

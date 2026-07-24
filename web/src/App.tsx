@@ -5,6 +5,8 @@ import { ComposePage } from './pages/ComposePage'
 import { ConversationPage } from './pages/ConversationPage'
 import { EntryDetailPage } from './pages/EntryDetailPage'
 import { GrowthPage } from './pages/GrowthPage'
+import { GrowthStatsPage } from './pages/GrowthStatsPage'
+import { GrowthTimelinePage } from './pages/GrowthTimelinePage'
 import { MePage } from './pages/MePage'
 import { MemoryHallPage } from './pages/MemoryHallPage'
 import { NewToyPage } from './pages/NewToyPage'
@@ -29,6 +31,8 @@ export default function App() {
               <Route path="timeline" element={<Navigate to="/archive" replace />} />
               <Route path="growth" element={<GrowthPage />} />
               <Route path="growth/travel-map" element={<TravelMapPage />} />
+              <Route path="growth/timeline" element={<GrowthTimelinePage />} />
+              <Route path="growth/stats/:kind" element={<GrowthStatsPage />} />
               <Route path="compose" element={<ComposePage />} />
               <Route path="conversation" element={<ConversationPage />} />
               <Route

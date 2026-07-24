@@ -170,10 +170,7 @@ export function TimelinePage() {
                   <Stat label="城市" value={String(cityCount)} />
                   <Stat label="陪伴" value={`${days}天`} />
                 </div>
-                <div className="flex items-center justify-between pt-0.5">
-                  <span className="text-[10px] text-ink-muted">
-                    左右滑动切换 · 点击进入完整档案
-                  </span>
+                <div className="flex items-center justify-end pt-0.5">
                   <span className="flex items-center gap-1 text-[10px] font-semibold text-matcha-deep">
                     <BookOpen className="h-3.5 w-3.5" />
                     打开档案

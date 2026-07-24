@@ -15,6 +15,7 @@ import {
   Pencil,
   Settings,
   Shield,
+  UserRound,
   X,
 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
@@ -164,10 +165,12 @@ export function MePage() {
           </div>
           <Link
             to="/me/settings"
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-paper text-matcha-deep shadow-[var(--shadow-warm-sm)] ring-1 ring-line/40 transition-transform active:scale-95"
-            aria-label="设置"
+            className="flex h-10 items-center gap-1 rounded-full bg-paper px-2.5 text-matcha-deep shadow-[var(--shadow-warm-sm)] ring-1 ring-line/40 transition-transform active:scale-95"
+            aria-label="个人资料设置"
+            title="个人资料设置"
           >
-            <Settings className="h-5 w-5" />
+            <UserRound className="h-4.5 w-4.5 h-[18px] w-[18px]" />
+            <span className="text-[10px] font-medium">资料</span>
           </Link>
         </div>
       </div>
@@ -181,15 +184,21 @@ export function MePage() {
               to="/toys"
               highlight
             />
-            <Stat label="日记" value={String(entries.length)} />
+            <Stat
+              label="日记"
+              value={String(entries.length)}
+              to={currentToy ? '/growth/timeline' : '/growth'}
+            />
             <Stat
               label="照片"
               value={String(entries.filter((e) => e.imageUrl).length)}
+              to={currentToy ? '/growth/stats/moments' : '/growth'}
             />
             <Stat
               label="当前"
               value={currentToy ? '1' : '0'}
               sub={currentToy?.name}
+              to={currentToy ? `/archive/toys/${currentToy.id}` : '/toys/new'}
             />
           </div>
         </div>
@@ -258,7 +267,11 @@ function Stat({
   highlight?: boolean
 }) {
   const body = (
-    <div className={highlight ? 'rounded-2xl bg-mist-soft py-2' : 'py-2'}>
+    <div
+      className={`py-2 transition-colors ${
+        highlight ? 'rounded-2xl bg-mist-soft' : 'rounded-2xl active:bg-cream'
+      }`}
+    >
       <div className="font-display truncate px-1 text-xl text-matcha-deep">
         {sub ? (
           <span className="text-sm leading-7 text-ink">{sub}</span>
@@ -272,7 +285,11 @@ function Stat({
 
   if (to) {
     return (
-      <Link to={to} className="block px-1 active:scale-95 transition-transform">
+      <Link
+        to={to}
+        className="block px-1 transition-transform active:scale-95"
+        aria-label={`查看${label}`}
+      >
         {body}
       </Link>
     )
