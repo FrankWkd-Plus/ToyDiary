@@ -18,32 +18,25 @@ import {
   X,
 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
+import {
+  loadProfileAvatar,
+  loadProfileName,
+  saveProfileAvatar,
+  saveProfileName,
+} from '../profile/profileStorage'
 import { useTheme } from '../theme/ThemeProvider'
 
-const PROFILE_NAME_KEY = 'toydairy.profile.name'
-const PROFILE_AVATAR_KEY = 'toydairy.profile.avatar'
-const DEFAULT_NAME = '今天不睡觉'
 const DEFAULT_AVATAR = '/profile/default-avatar.jpg'
-
-function loadProfileValue(key: string, fallback: string) {
-  try {
-    return localStorage.getItem(key) || fallback
-  } catch {
-    return fallback
-  }
-}
 
 export function MePage() {
   const { toys, entries, currentToy, resetDemo, showToast } = useApp()
   const { theme } = useTheme()
   const avatarInputRef = useRef<HTMLInputElement>(null)
-  const [profileName, setProfileName] = useState(() =>
-    loadProfileValue(PROFILE_NAME_KEY, DEFAULT_NAME),
-  )
+  const [profileName, setProfileName] = useState(() => loadProfileName())
   const [draftName, setDraftName] = useState(profileName)
   const [editingName, setEditingName] = useState(false)
   const [avatarUrl, setAvatarUrl] = useState(() =>
-    loadProfileValue(PROFILE_AVATAR_KEY, DEFAULT_AVATAR),
+    loadProfileAvatar(DEFAULT_AVATAR),
   )
 
   function saveName() {
@@ -55,11 +48,7 @@ export function MePage() {
     setProfileName(nextName)
     setDraftName(nextName)
     setEditingName(false)
-    try {
-      localStorage.setItem(PROFILE_NAME_KEY, nextName)
-    } catch {
-      /* localStorage may be unavailable */
-    }
+    saveProfileName(nextName)
     showToast('昵称已更新')
   }
 
@@ -89,7 +78,7 @@ export function MePage() {
       if (typeof reader.result !== 'string') return
       setAvatarUrl(reader.result)
       try {
-        localStorage.setItem(PROFILE_AVATAR_KEY, reader.result)
+        saveProfileAvatar(reader.result)
       } catch {
         showToast('图片较大，头像可能无法长期保存')
         return
