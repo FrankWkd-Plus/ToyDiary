@@ -70,28 +70,96 @@ const LUNA_DEMO_UPDATES: Record<string, Partial<Entry>> = {
     location: '蓝色海湾',
     title: '海风吹过的下午',
     userNote:
-      '第一次一起坐船出发，我戴上小草帽，把蓝色的海和风都收进了今天。',
+      '第一次一起坐船出发。我给 Luna 戴上小草帽，海风把帽檐掀起来，又被我按回去。我想把这一整片蓝色都装进今天。',
     imageUrl: '/toy-cards/highlight-1.jpg',
     aiDiary:
-      '2026年7月23日，蓝色海湾。\n\n第一次一起坐船出发，我戴上小草帽，看海风从我们身边跑过去。蓝色的海很大，但你的手心刚刚好。',
+      '2026年7月23日，蓝色海湾。\n\n主人给我戴上小草帽，海风从我们身边跑过去，帽檐一抖一抖的。蓝色的海很大，可是主人的手心刚刚好。\n\n如果以后有人问我最喜欢哪一天——就是今天，第一次一起坐船的今天。',
   },
   entry_luna_hangzhou: {
     location: '阳光海岸',
     title: '把浪花装进口袋',
     userNote:
-      '海水一次次跑上沙滩，我们把阳光、浪花和想念都收藏在了这张照片里。',
+      '海水一次次跑上沙滩，又退回去。我踩着湿脚印，把 Luna 举高，让浪花刚好碰到脚底。阳光、浪花和一点点想念，都想收进这张照片。',
     imageUrl: '/toy-cards/highlight-2.jpg',
     aiDiary:
-      '2026年6月8日，阳光海岸。\n\n海水一次次跑上沙滩，我们把阳光、浪花和想念都收藏在了这张照片里。以后看到蓝色，我就会想起今天。',
+      '2026年6月8日，阳光海岸。\n\n海水一次次跑上沙滩，我的脚毛都沾上细沙。主人把我举高，浪花轻轻咬了咬我的脚底——痒痒的，却很安心。\n\n以后看到蓝色，我就会想起今天：阳光、浪花，还有你。',
   },
   entry_gulangyu: {
     location: '森林瀑布',
     title: '藏在绿意里的瀑布',
     userNote:
-      '我们一起穿过绿色的小路，终于找到了藏在森林深处的瀑布。',
+      '我们沿着潮湿的石阶往里走，绿叶子擦过肩膀。转过弯才听见水声——藏在森林深处的瀑布，像一份迟到的礼物。',
     imageUrl: '/toy-cards/highlight-3.jpg',
     aiDiary:
-      '2026年4月3日，森林瀑布。\n\n我们一起穿过绿色的小路，终于找到了藏在森林深处的瀑布。水声很响，可是被你拿在手里时，我一点也不害怕。',
+      '2026年4月3日，森林瀑布。\n\n绿色的小路有点滑，我紧紧贴着主人的手臂。转过弯，水声突然很大——原来是瀑布在等我们。\n\n水雾打在脸上凉凉的。被你拿在手里时，再大的水声我也不害怕。',
+  },
+  entry_daily1: {
+    location: '家',
+    title: '窗台的光',
+    userNote:
+      '午后什么也不想干。我把 Luna 放在窗台那一小块阳光里，自己也靠着沙发打了个盹。醒来时光还在，人也还在。',
+    mood: '温柔',
+    aiDiary:
+      '2026年5月12日，家。\n\n窗台有一小块阳光，刚好够我躺下。主人说今天什么也不做，我也跟着什么都不想。\n\n原来「什么都不做」也是一种很满的一天。醒来时，光还在，你还在。',
+  },
+  entry_bean1: {
+    location: '大理',
+    title: '风很大',
+    userNote:
+      '洱海边的风大得像要把人吹走。我把围巾给豆豆围了两圈，又给自己围一圈，两个人变成会走路的小粽子。',
+    mood: '兴奋',
+    aiDiary:
+      '2026年3月1日，大理。\n\n风把围巾吹成一面小旗，我整只熊几乎要起飞。主人说「抓紧我」——我抓紧了。\n\n再大的风也吹不走我们的脚印。后来我们去吃了烤乳扇，我假装自己也咬了一口。',
+  },
+  entry_bean_chengdu: {
+    location: '成都',
+    title: '火锅店门口',
+    userNote:
+      '情人节不搞仪式，就在火锅店门口排队。辣香从门缝钻出来，我和豆豆都眼睛发亮——当然，豆豆只能闻。',
+    mood: '开心',
+    aiDiary:
+      '2026年2月14日，成都。\n\n火锅的香气从门缝里钻出来，我的绒毛都要变成花椒味了。主人说「豆豆不能吃辣」——可是看着你们哈哈大笑，我已经吃得很饱了。\n\n原来节日的味道，不一定要进嘴巴。',
+  },
+  entry_bean_text: {
+    location: '火车上',
+    title: '写给口袋的信',
+    userNote:
+      '座位晃晃悠悠，耳机里放着随便的歌。我把豆豆塞进外套口袋，只露出半个脑袋看窗外——下一座城还没到，已经开始期待。',
+    mood: '好奇',
+    aiDiary:
+      '2026年4月20日，火车上。\n\n车窗外的电线杆一棵一棵往后跑。我数到 87 就睡着了。醒来时主人还在，风景换成了新的——这大概就是旅行最好的部分。\n\n口袋很暖和，像一座会移动的小房子。',
+  },
+}
+
+/** Rich dual-perspective text for older localStorage seeds (owner + toy). */
+const ENTRY_NARRATION_UPDATES: Record<string, Pick<Entry, 'userNote' | 'aiDiary'>> = {
+  entry_luna_disney: {
+    userNote: LUNA_DEMO_UPDATES.entry_luna_disney.userNote!,
+    aiDiary: LUNA_DEMO_UPDATES.entry_luna_disney.aiDiary!,
+  },
+  entry_luna_hangzhou: {
+    userNote: LUNA_DEMO_UPDATES.entry_luna_hangzhou.userNote!,
+    aiDiary: LUNA_DEMO_UPDATES.entry_luna_hangzhou.aiDiary!,
+  },
+  entry_gulangyu: {
+    userNote: LUNA_DEMO_UPDATES.entry_gulangyu.userNote!,
+    aiDiary: LUNA_DEMO_UPDATES.entry_gulangyu.aiDiary!,
+  },
+  entry_daily1: {
+    userNote: LUNA_DEMO_UPDATES.entry_daily1.userNote!,
+    aiDiary: LUNA_DEMO_UPDATES.entry_daily1.aiDiary!,
+  },
+  entry_bean1: {
+    userNote: LUNA_DEMO_UPDATES.entry_bean1.userNote!,
+    aiDiary: LUNA_DEMO_UPDATES.entry_bean1.aiDiary!,
+  },
+  entry_bean_chengdu: {
+    userNote: LUNA_DEMO_UPDATES.entry_bean_chengdu.userNote!,
+    aiDiary: LUNA_DEMO_UPDATES.entry_bean_chengdu.aiDiary!,
+  },
+  entry_bean_text: {
+    userNote: LUNA_DEMO_UPDATES.entry_bean_text.userNote!,
+    aiDiary: LUNA_DEMO_UPDATES.entry_bean_text.aiDiary!,
   },
 }
 
@@ -115,6 +183,12 @@ function applyDemoUpdates(data: StoreData) {
   data.entries.forEach((entry) => {
     const update = LUNA_DEMO_UPDATES[entry.id]
     if (update) Object.assign(entry, update)
+    const narration = ENTRY_NARRATION_UPDATES[entry.id]
+    if (narration) {
+      // Always refresh demo seed copy so dual-perspective UI has full text.
+      if (narration.userNote) entry.userNote = narration.userNote
+      if (narration.aiDiary) entry.aiDiary = narration.aiDiary
+    }
   })
   return data
 }
@@ -198,11 +272,12 @@ function seed(): StoreData {
       date: '2026-04-03',
       location: '森林瀑布',
       title: '藏在绿意里的瀑布',
-      userNote: '我们一起穿过绿色的小路，终于找到了藏在森林深处的瀑布。',
+      userNote:
+        '我们沿着潮湿的石阶往里走，绿叶子擦过肩膀。转过弯才听见水声——藏在森林深处的瀑布，像一份迟到的礼物。',
       mood: '平静',
       imageUrl: '/toy-cards/highlight-3.jpg',
       aiDiary:
-        '2026年4月3日，森林瀑布。\n\n我们一起穿过绿色的小路，终于找到了藏在森林深处的瀑布。水声很响，可是被你拿在手里时，我一点也不害怕。',
+        '2026年4月3日，森林瀑布。\n\n绿色的小路有点滑，我紧紧贴着主人的手臂。转过弯，水声突然很大——原来是瀑布在等我们。\n\n水雾打在脸上凉凉的。被你拿在手里时，再大的水声我也不害怕。',
       createdAt: '2026-04-03T18:30:00.000Z',
     },
     {
@@ -212,10 +287,11 @@ function seed(): StoreData {
       date: '2026-05-12',
       location: '家',
       title: '窗台的光',
-      userNote: '午睡',
+      userNote:
+        '午后什么也不想干。我把 Luna 放在窗台那一小块阳光里，自己也靠着沙发打了个盹。醒来时光还在，人也还在。',
       mood: '温柔',
       aiDiary:
-        '2026年5月12日，家。\n\n窗台有一小块阳光，刚好够我躺下。主人说今天什么也不做，我也跟着什么都不想。\n\n原来「什么都不做」也是一种很满的一天。',
+        '2026年5月12日，家。\n\n窗台有一小块阳光，刚好够我躺下。主人说今天什么也不做，我也跟着什么都不想。\n\n原来「什么都不做」也是一种很满的一天。醒来时，光还在，你还在。',
       createdAt: '2026-05-12T14:00:00.000Z',
     },
     {
@@ -225,11 +301,12 @@ function seed(): StoreData {
       date: '2026-07-23',
       location: '蓝色海湾',
       title: '海风吹过的下午',
-      userNote: '第一次一起坐船出发，我戴上小草帽，把蓝色的海和风都收进了今天。',
+      userNote:
+        '第一次一起坐船出发。我给 Luna 戴上小草帽，海风把帽檐掀起来，又被我按回去。我想把这一整片蓝色都装进今天。',
       mood: '开心',
       imageUrl: '/toy-cards/highlight-1.jpg',
       aiDiary:
-        '2026年7月23日，蓝色海湾。\n\n第一次一起坐船出发，我戴上小草帽，看海风从我们身边跑过去。蓝色的海很大，但你的手心刚刚好。',
+        '2026年7月23日，蓝色海湾。\n\n主人给我戴上小草帽，海风从我们身边跑过去，帽檐一抖一抖的。蓝色的海很大，可是主人的手心刚刚好。\n\n如果以后有人问我最喜欢哪一天——就是今天，第一次一起坐船的今天。',
       createdAt: '2026-07-23T20:00:00.000Z',
     },
     {
@@ -239,12 +316,27 @@ function seed(): StoreData {
       date: '2026-06-08',
       location: '阳光海岸',
       title: '把浪花装进口袋',
-      userNote: '海水一次次跑上沙滩，我们把阳光、浪花和想念都收藏在了这张照片里。',
+      userNote:
+        '海水一次次跑上沙滩，又退回去。我踩着湿脚印，把 Luna 举高，让浪花刚好碰到脚底。阳光、浪花和一点点想念，都想收进这张照片。',
       mood: '平静',
       imageUrl: '/toy-cards/highlight-2.jpg',
       aiDiary:
-        '2026年6月8日，阳光海岸。\n\n海水一次次跑上沙滩，我们把阳光、浪花和想念都收藏在了这张照片里。以后看到蓝色，我就会想起今天。',
+        '2026年6月8日，阳光海岸。\n\n海水一次次跑上沙滩，我的脚毛都沾上细沙。主人把我举高，浪花轻轻咬了咬我的脚底——痒痒的，却很安心。\n\n以后看到蓝色，我就会想起今天：阳光、浪花，还有你。',
       createdAt: '2026-06-08T11:20:00.000Z',
+    },
+    {
+      id: 'entry_luna_night',
+      toyId: lunaId,
+      type: 'daily',
+      date: '2026-07-10',
+      location: '家',
+      title: '台灯下的悄悄话',
+      userNote:
+        '睡前把 Luna 放在枕头边，说了今天遇到的两件小事。房间只剩台灯，世界忽然变得很近。',
+      mood: '温柔',
+      aiDiary:
+        '2026年7月10日，家。\n\n台灯把主人的影子拉得很长。我听完两件小事，又听了一句「明天见」。\n\n我把这句话收进绒毛里——比任何旅行纪念都沉。',
+      createdAt: '2026-07-10T22:15:00.000Z',
     },
     // —— 豆豆 ——
     {
@@ -254,11 +346,13 @@ function seed(): StoreData {
       date: '2026-03-01',
       location: '大理',
       title: '风很大',
+      userNote:
+        '洱海边的风大得像要把人吹走。我把围巾给豆豆围了两圈，又给自己围一圈，两个人变成会走路的小粽子。',
       mood: '兴奋',
       imageUrl:
         'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&q=80',
       aiDiary:
-        '2026年3月1日，大理。\n\n风把我的围巾吹成一面小旗。我告诉主人：再大的风也吹不走我们的脚印。\n\n然后我们去吃了烤乳扇，我假装自己也咬了一口。',
+        '2026年3月1日，大理。\n\n风把围巾吹成一面小旗，我整只熊几乎要起飞。主人说「抓紧我」——我抓紧了。\n\n再大的风也吹不走我们的脚印。后来我们去吃了烤乳扇，我假装自己也咬了一口。',
       createdAt: '2026-03-01T12:00:00.000Z',
     },
     {
@@ -268,12 +362,13 @@ function seed(): StoreData {
       date: '2026-02-14',
       location: '成都',
       title: '火锅店门口',
-      userNote: '辣！',
+      userNote:
+        '情人节不搞仪式，就在火锅店门口排队。辣香从门缝钻出来，我和豆豆都眼睛发亮——当然，豆豆只能闻。',
       mood: '开心',
       imageUrl:
         'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=800&q=80',
       aiDiary:
-        '2026年2月14日，成都。\n\n火锅的香气从门缝里钻出来，我的绒毛都要变成花椒味了。\n\n主人说「豆豆不能吃辣」——可是看着你们哈哈大笑，我已经吃得很饱了。',
+        '2026年2月14日，成都。\n\n火锅的香气从门缝里钻出来，我的绒毛都要变成花椒味了。主人说「豆豆不能吃辣」——可是看着你们哈哈大笑，我已经吃得很饱了。\n\n原来节日的味道，不一定要进嘴巴。',
       createdAt: '2026-02-14T19:40:00.000Z',
     },
     {
@@ -283,13 +378,28 @@ function seed(): StoreData {
       date: '2026-04-20',
       location: '火车上',
       title: '写给口袋的信',
-      userNote: '晃晃悠悠去下一城',
+      userNote:
+        '座位晃晃悠悠，耳机里放着随便的歌。我把豆豆塞进外套口袋，只露出半个脑袋看窗外——下一座城还没到，已经开始期待。',
       mood: '好奇',
       aiDiary:
-        '2026年4月20日，火车上。\n\n车窗外的电线杆一棵一棵往后跑。我数到 87 就睡着了。\n\n醒来时主人还在，风景换成了新的——这大概就是旅行最好的部分。',
+        '2026年4月20日，火车上。\n\n车窗外的电线杆一棵一棵往后跑。我数到 87 就睡着了。醒来时主人还在，风景换成了新的——这大概就是旅行最好的部分。\n\n口袋很暖和，像一座会移动的小房子。',
       createdAt: '2026-04-20T15:10:00.000Z',
     },
-    // —— 摩卡 ——
+    {
+      id: 'entry_bean_park',
+      toyId: beanId,
+      type: 'daily',
+      date: '2026-06-02',
+      location: '人民公园',
+      title: '长椅上的半小时',
+      userNote:
+        '下班绕路去公园。长椅有点旧，树荫刚好。豆豆坐在我腿上，我们什么也不做，只听蝉叫。',
+      mood: '平静',
+      aiDiary:
+        '2026年6月2日，人民公园。\n\n蝉声一层一层的，像夏天在说话。主人什么也没说，我也没有——有些陪伴不需要台词。\n\n半小时很短，却够我记住树荫的形状。',
+      createdAt: '2026-06-02T18:40:00.000Z',
+    },
+    // —— 摩卡 / 雪球 / 皮皮（seed 仍保留；applyDemoUpdates 会按需过滤）——
     {
       id: 'entry_moka_kyoto',
       toyId: mokaId,
@@ -297,7 +407,8 @@ function seed(): StoreData {
       date: '2025-11-03',
       location: '京都',
       title: '红叶与咖啡',
-      userNote: '清水坂',
+      userNote:
+        '清水坂的石阶有点陡。我捧着摩卡，红叶一片片落在肩上，像谁在给我们撒糖。咖啡馆的拿铁很甜，人也很软。',
       mood: '平静',
       imageUrl:
         'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?w=800&q=80',
@@ -312,6 +423,8 @@ function seed(): StoreData {
       date: '2026-01-18',
       location: '家',
       title: '听雨的下午',
+      userNote:
+        '雨把世界关小了一点。我在书桌前写东西，摩卡靠在毯子上发呆。谁也没有开灯，靠窗边那点灰白就够了。',
       mood: '温柔',
       aiDiary:
         '2026年1月18日，家。\n\n雨声把世界关小了一点。主人在写东西，我在毯子上发呆。\n\n有时候治愈不是说话，是两个人都愿意安静。',
@@ -324,15 +437,15 @@ function seed(): StoreData {
       date: '2026-03-22',
       location: '上海武康路',
       title: '旧书店',
-      userNote: '翻了很久的诗集',
+      userNote:
+        '在武康路拐进一家旧书店，纸页味道比咖啡还让人安心。我翻了很久的诗集，给摩卡念了一首——ta 应该一个字都没听懂。',
       mood: '平静',
       imageUrl:
         'https://images.unsplash.com/photo-1481627834876-b7833e8f5570?w=800&q=80',
       aiDiary:
-        '2026年3月22日，上海武康路。\n\n书页的味道比咖啡还让我安心。主人读了一首诗给我听，我一个字都没听懂，但听懂了声音的温度。',
+        '2026年3月22日，上海武康路。\n\n书页的味道比咖啡还让我安心。主人读了一首诗给我听，我一个字都没听懂，但听懂了声音的温度。\n\n书店很旧，这一天却很新。',
       createdAt: '2026-03-22T13:15:00.000Z',
     },
-    // —— 雪球 ——
     {
       id: 'entry_yuki_snow',
       toyId: yukiId,
@@ -340,11 +453,13 @@ function seed(): StoreData {
       date: '2025-02-05',
       location: '札幌',
       title: '第一次滚雪球',
+      userNote:
+        '雪地比雪球还白。我把雪球埋进雪里又挖出来，手套湿透了，笑声却干干净净。冷是真的，开心也是真的。',
       mood: '兴奋',
       imageUrl:
         'https://images.unsplash.com/photo-1491002052546-bf38f186af56?w=800&q=80',
       aiDiary:
-        '2025年2月5日，札幌。\n\n雪地比我还白！主人把我埋进雪里又挖出来，我们笑成一团。\n\n冷是真的，开心也是真的。',
+        '2025年2月5日，札幌。\n\n雪地比我还白！主人把我埋进雪里又挖出来，我们笑成一团。\n\n冷是真的，开心也是真的。如果可以，我想把今天的雪装一瓶带回家。',
       createdAt: '2025-02-05T10:00:00.000Z',
     },
     {
@@ -354,15 +469,15 @@ function seed(): StoreData {
       date: '2026-01-01',
       location: '哈尔滨',
       title: '冰灯之夜',
-      userNote: '跨年',
+      userNote:
+        '跨年在冰灯旁。蓝色和粉色把夜空染成游戏场景。我对雪球许愿：明年再看一场雪。',
       mood: '开心',
       imageUrl:
         'https://images.unsplash.com/photo-1483664852095-d6cc467e59f0?w=800&q=80',
       aiDiary:
-        '2026年1月1日，哈尔滨。\n\n冰灯把夜空染成蓝色和粉色。我对主人说：新年愿望很简单——再带我看一场雪。\n\n主人说好。我记住了。',
+        '2026年1月1日，哈尔滨。\n\n冰灯把夜空染成蓝色和粉色。我对主人说：新年愿望很简单——再带我看一场雪。\n\n主人说好。我记住了。跨年的烟火在很远的地方响，我们这边只有灯。',
       createdAt: '2026-01-01T23:50:00.000Z',
     },
-    // —— 皮皮 ——
     {
       id: 'entry_pipi_xiamen',
       toyId: pipiId,
@@ -370,12 +485,13 @@ function seed(): StoreData {
       date: '2025-08-20',
       location: '厦门',
       title: '海边炸鱿鱼',
-      userNote: '沙很烫',
+      userNote:
+        '沙子烫脚，海风咸咸的。街角炸鱿鱼的香味拐过来，皮皮差点从包里探出去。我们又逛了三家小吃，路线依然完美。',
       mood: '兴奋',
       imageUrl:
         'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&q=80&sat=-20',
       aiDiary:
-        '2025年8月20日，厦门。\n\n沙子烫脚，海风咸咸的，炸鱿鱼的香味从街角拐过来。\n\n主人说「再逛一家」——我已经标记了五家小吃，路线完美。',
+        '2025年8月20日，厦门。\n\n沙子烫脚，海风咸咸的，炸鱿鱼的香味从街角拐过来。\n\n主人说「再逛一家」——我已经标记了五家小吃，路线完美。胃是假的，心是真的饱。',
       createdAt: '2025-08-20T17:00:00.000Z',
     },
     {
@@ -385,11 +501,13 @@ function seed(): StoreData {
       date: '2026-05-01',
       location: '重庆',
       title: '夜景像游戏',
+      userNote:
+        '夜景密得像游戏地图。缆车从头顶过去时我有点慌，下了山立刻找酸梅汤——甜到把害怕冲掉。',
       mood: '好奇',
       imageUrl:
         'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=800&q=80',
       aiDiary:
-        '2026年5月1日，重庆。\n\n灯海比游戏里的地图还密。缆车从我们头顶过去，我紧张地抓紧主人的包带。\n\n下山后我们喝了酸梅汤——甜到我忘记害怕。',
+        '2026年5月1日，重庆。\n\n灯海比游戏里的地图还密。缆车从我们头顶过去，我紧张地抓紧主人的包带。\n\n下山后我们喝了酸梅汤——甜到我忘记害怕。夜景可以很大，陪伴可以很小。',
       createdAt: '2026-05-01T21:10:00.000Z',
     },
     {
@@ -398,7 +516,8 @@ function seed(): StoreData {
       type: 'text',
       date: '2026-07-01',
       title: '给未来的自己',
-      userNote: '还要去很多地方',
+      userNote:
+        '写给以后的我们：还要去很多地方，也要记得偶尔什么都不去，只在家把零食摊开。',
       mood: '温柔',
       aiDiary:
         '2026年7月1日。\n\n如果以后的皮皮读到这封信：记得继续当第一个冲向小吃摊的那个。\n\n也记得，主人选你，不是因为你会走，是因为你愿意一起走。',

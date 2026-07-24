@@ -144,6 +144,7 @@ function TimelineItem({ entry, isFirst }: { entry: Entry; isFirst: boolean }) {
 
       <Link
         to={`/entries/${entry.id}`}
+        state={{ from: 'growth' }}
         className={`growth-entry-card ${imageOnly ? 'growth-entry-card--image-only' : ''}`}
       >
         {hasImage && (
