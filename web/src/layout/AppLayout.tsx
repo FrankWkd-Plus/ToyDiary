@@ -9,6 +9,7 @@ export function AppLayout() {
   const { loading } = useApp()
   const { pathname } = useLocation()
   const scrollRef = useRef<HTMLDivElement>(null)
+  const lockPageScroll = pathname.startsWith('/conversation')
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: 0 })
@@ -42,7 +43,10 @@ export function AppLayout() {
           </div>
         ) : (
           <>
-            <div ref={scrollRef} className="page-scroll">
+            <div
+              ref={scrollRef}
+              className={`page-scroll${lockPageScroll ? ' page-scroll--locked' : ''}`}
+            >
               <Outlet />
             </div>
             <BottomNav />

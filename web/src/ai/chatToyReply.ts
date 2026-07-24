@@ -90,11 +90,48 @@ export function formatChatApiError(error: ChatApiError): string {
   if (!raw) return `${header}\n（无返回内容）`
 
   try {
-    const parsed = JSON.parse(raw) as unknown
-    return `${header}\n${JSON.stringify(parsed, null, 2)}`
+    const parsed = JSON.parse(raw) as Record<string, unknown>
+    // Prefer a short human line first (from our Pages Function or OpenAI-style payload).
+    const summary =
+      pickErrorSummary(parsed) ||
+      (typeof parsed.detail === 'string' ? parsed.detail : undefined)
+    const pretty = JSON.stringify(parsed, null, 2)
+    return summary
+      ? `${header}\n${summary}\n\n${pretty}`
+      : `${header}\n${pretty}`
   } catch {
     return `${header}\n${raw}`
   }
+}
+
+function pickErrorSummary(parsed: Record<string, unknown>): string | undefined {
+  if (typeof parsed.error === 'string' && parsed.error.trim()) {
+    return parsed.error.trim()
+  }
+  const nested = parsed.error
+  if (nested && typeof nested === 'object') {
+    const errObj = nested as { message?: unknown; code?: unknown; type?: unknown }
+    const parts = [errObj.message, errObj.code, errObj.type]
+      .filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
+      .map((v) => v.trim())
+    if (parts.length) return parts.join(' · ')
+  }
+  if (typeof parsed.message === 'string' && parsed.message.trim()) {
+    return parsed.message.trim()
+  }
+  if (typeof parsed.detail === 'string' && parsed.detail.trim()) {
+    // detail may itself be a JSON string from the upstream provider
+    const detail = parsed.detail.trim()
+    try {
+      const inner = JSON.parse(detail) as Record<string, unknown>
+      const innerSummary = pickErrorSummary(inner)
+      if (innerSummary) return innerSummary
+    } catch {
+      // keep raw detail below
+    }
+    return detail.slice(0, 240)
+  }
+  return undefined
 }
 
 /**

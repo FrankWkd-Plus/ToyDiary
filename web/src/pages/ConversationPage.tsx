@@ -229,25 +229,38 @@ export function ConversationPage() {
       })
       replyText = result.reply
       if (result.apiError) {
+        const errorText = formatChatApiError(result.apiError)
         errorMessage = {
           id: uid('error'),
           role: 'system',
           kind: 'error',
-          text: formatChatApiError(result.apiError),
+          text: errorText,
           createdAt: new Date().toISOString(),
         }
+        // Toast is always visible even if chat history is scrolled away.
+        const toastLine =
+          errorText
+            .split('\n')
+            .map((line) => line.trim())
+            .find((line) => line && !line.startsWith('AI 调用失败')) ||
+          'AI 调用失败'
+        showToast(toastLine.slice(0, 120))
+        console.warn('[chatToyReply] API failed', result.apiError)
       }
     } catch (err) {
+      const errorText = formatChatApiError({
+        status: 0,
+        body: err instanceof Error ? err.message : String(err),
+      })
       errorMessage = {
         id: uid('error'),
         role: 'system',
         kind: 'error',
-        text: formatChatApiError({
-          status: 0,
-          body: err instanceof Error ? err.message : String(err),
-        }),
+        text: errorText,
         createdAt: new Date().toISOString(),
       }
+      showToast((err instanceof Error ? err.message : 'AI 调用失败').slice(0, 120))
+      console.warn('[chatToyReply] request threw', err)
     }
 
     const reply: ChatMessage = {
@@ -269,9 +282,10 @@ export function ConversationPage() {
             createdAt: new Date().toISOString(),
           }
         : null
+    // Put the API error after the toy bubble so auto-scroll lands on it.
     const outgoing = [
-      ...(errorMessage ? [errorMessage] : []),
       reply,
+      ...(errorMessage ? [errorMessage] : []),
       ...(memory ? [memory] : []),
     ]
     appendMessages(currentToy.id, outgoing)
@@ -391,8 +405,8 @@ export function ConversationPage() {
   }
 
   return (
-    <div className="conversation-page flex h-[calc(100dvh-5.5rem)] flex-col overflow-hidden">
-      <header className="sticky top-0 z-20 border-b border-line/60 bg-white/92 px-4 pb-3 pt-3 backdrop-blur-xl">
+    <div className="conversation-page">
+      <header className="relative z-20 shrink-0 border-b border-line/60 bg-white/92 px-4 pb-3 pt-3 backdrop-blur-xl">
         <div className="flex items-center justify-between gap-3">
           <button
             type="button"
@@ -648,11 +662,12 @@ function MessageBubble({
   if (message.kind === 'error') {
     return (
       <div className="px-1">
-        <div className="mx-auto max-w-[92%] overflow-hidden rounded-2xl border border-terra-deep/20 bg-mustard-soft/70 px-3.5 py-2.5 text-[11px] leading-relaxed text-terra-deep shadow-[var(--shadow-warm-sm)]">
-          <div className="mb-1 text-[9px] font-medium tracking-wide opacity-80">
+        <div className="mx-auto max-w-[94%] overflow-hidden rounded-2xl border border-terra-deep/30 bg-[#fff8e8] px-3.5 py-2.5 text-[11px] leading-relaxed text-terra-deep shadow-[var(--shadow-warm-sm)]">
+          <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold tracking-wide text-terra-deep">
+            <span aria-hidden="true">⚠️</span>
             API 请求返回
           </div>
-          <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words font-mono text-[10px] leading-4 text-ink-soft [scrollbar-width:thin]">
+          <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words font-mono text-[10px] leading-4 text-ink [scrollbar-width:thin]">
             {message.text}
           </pre>
         </div>

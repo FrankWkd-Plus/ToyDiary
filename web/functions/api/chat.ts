@@ -48,7 +48,11 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     return json(
       {
         error:
-          'OPENAI_API_KEY is not configured. Set it as a secret in Cloudflare Pages.',
+          'OPENAI_API_KEY is not configured. Set it as a secret in Cloudflare Pages → Settings → Environment variables (Production).',
+        auth: {
+          env: 'OPENAI_API_KEY',
+          keyConfigured: false,
+        },
       },
       500,
     )
@@ -155,6 +159,14 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       {
         error: `AI provider HTTP ${upstream.status}`,
         detail: detail.slice(0, 800),
+        // Key is never returned — only which binding was used.
+        auth: {
+          env: 'OPENAI_API_KEY',
+          baseUrl,
+          model,
+          keyConfigured: true,
+          keyHint: maskKey(apiKey),
+        },
       },
       502,
     )
@@ -185,4 +197,11 @@ function json(data: unknown, status = 200) {
       ...CORS,
     },
   })
+}
+
+/** Show only enough of the key to identify which secret is set (never full value). */
+function maskKey(key: string) {
+  const trimmed = key.trim()
+  if (trimmed.length <= 8) return '********'
+  return `${trimmed.slice(0, 4)}…${trimmed.slice(-4)} (len ${trimmed.length})`
 }
