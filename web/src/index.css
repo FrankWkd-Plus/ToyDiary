@@ -1441,3 +1441,14 @@ button:focus-visible {
   font-size: 9px !important;
   background: rgb(255 255 255 / 0.85) !important;
 }
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

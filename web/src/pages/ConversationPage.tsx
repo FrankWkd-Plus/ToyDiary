@@ -20,12 +20,16 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
-import { companionDays, toyAvatar } from '../archive/archiveUtils'
 import {
   chatToyReply,
   formatChatApiError,
   localPersonaReply,
 } from '../ai/chatToyReply'
+import { companionDays, toyAvatar } from '../archive/archiveUtils'
+import {
+  getToyVitality,
+  vitalityStatusLine,
+} from '../archive/toyVitality'
 import { useApp } from '../context/AppContext'
 import type { Entry, Toy } from '../types'
 
@@ -96,15 +100,6 @@ function createOpeningMessage(toy: Toy, entries: Entry[]): ChatMessage {
   }
 }
 
-function getToyStatus(toy: Toy, entries: Entry[]) {
-  const hour = new Date().getHours()
-  if (hour >= 22 || hour < 6) return '换上睡衣，想听你说晚安'
-  if (entries[0]?.location) return `正在回想${entries[0].location}`
-  if (toy.traits.includes('活泼')) return '今天很想和你聊天'
-  if (toy.traits.includes('好奇')) return '想看看你眼中的今天'
-  return '安静地等你回来'
-}
-
 function getFeaturedMemory(entries: Entry[]) {
   return (
     entries.find((entry) => entry.type === 'travel' && entry.imageUrl) ??
@@ -152,7 +147,12 @@ export function ConversationPage() {
     ? messagesByToy[currentToy.id] ?? EMPTY_MESSAGES
     : EMPTY_MESSAGES
   const latestMemory = getFeaturedMemory(entries)
-  const status = currentToy ? getToyStatus(currentToy, entries) : ''
+  const vitality = currentToy
+    ? getToyVitality(currentToy, entries)
+    : null
+  const status = currentToy && vitality
+    ? vitalityStatusLine(vitality, currentToy.name)
+    : ''
 
   const conversationDraft = useMemo(
     () =>
@@ -434,13 +434,20 @@ export function ConversationPage() {
             className="flex min-w-0 flex-1 items-center gap-3 text-left"
             aria-label={`查看${currentToy.name}的身份卡`}
           >
-            <span className="relative h-11 w-11 shrink-0 overflow-hidden rounded-[1rem] border-2 border-white bg-cream shadow-[var(--shadow-warm-sm)] ring-1 ring-line/50">
-              <img
-                src={avatar}
-                alt={currentToy.name}
-                className="h-full w-full object-cover"
-              />
-              <i className="absolute bottom-0.5 right-0.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-mint-deep" />
+            <span className="relative h-11 w-11 shrink-0">
+              <span className="block h-full w-full overflow-hidden rounded-[1rem] border-2 border-white bg-cream shadow-[var(--shadow-warm-sm)] ring-1 ring-line/50">
+                <img
+                  src={avatar}
+                  alt={currentToy.name}
+                  className="h-full w-full object-cover"
+                />
+              </span>
+              <span
+                className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border border-white bg-paper text-[11px] shadow-sm"
+                aria-hidden="true"
+              >
+                {vitality?.emoji ?? '🟢'}
+              </span>
             </span>
             <span className="min-w-0">
               <span className="flex items-center gap-1.5">
@@ -450,6 +457,11 @@ export function ConversationPage() {
                 <span className="rounded-full bg-mustard-soft px-2 py-0.5 text-[9px] text-terra-deep">
                   {days} 天
                 </span>
+                {vitality && !quietMode && (
+                  <span className="hidden rounded-full bg-peach-soft px-1.5 py-0.5 text-[9px] text-rose-deep min-[360px]:inline">
+                    {vitality.label}
+                  </span>
+                )}
               </span>
               <span className="mt-0.5 block truncate text-[10px] text-ink-muted">
                 {quietMode ? '安静陪伴中' : status}

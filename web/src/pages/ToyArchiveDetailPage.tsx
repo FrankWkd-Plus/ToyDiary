@@ -13,6 +13,7 @@ import {
   companionDays,
   toyAvatar,
 } from '../archive/archiveUtils'
+import { getToyVitality } from '../archive/toyVitality'
 import { PageHeader } from '../components/PageHeader'
 import { useApp } from '../context/AppContext'
 
@@ -50,6 +51,7 @@ export function ToyArchiveDetailPage() {
       : [],
   )
   const entryCount = ready ? entries.length : 0
+  const vitality = getToyVitality(toy, ready ? entries : [])
 
   return (
     <>
@@ -68,17 +70,34 @@ export function ToyArchiveDetailPage() {
           </div>
           <div className="p-4">
             <div className="flex gap-4">
-              <div className="h-28 w-28 shrink-0 overflow-hidden rounded-[1.3rem] border-[5px] border-white bg-cream shadow-md">
-                <img
-                  src={toyAvatar(toy, toyIndex)}
-                  alt={toy.name}
-                  className="h-full w-full object-cover"
-                />
+              <div className="relative h-28 w-28 shrink-0">
+                <div className="h-full w-full overflow-hidden rounded-[1.3rem] border-[5px] border-white bg-cream shadow-md">
+                  <img
+                    src={toyAvatar(toy, toyIndex)}
+                    alt={toy.name}
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+                <span
+                  className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-paper text-base shadow-sm"
+                  title={`${vitality.label} · 电量 ${vitality.energy}`}
+                  aria-label={`状态 ${vitality.label}`}
+                >
+                  {vitality.emoji}
+                </span>
               </div>
               <div className="min-w-0 flex-1 pt-1">
-                <span className="rounded-full bg-mist-soft px-2 py-1 text-[10px] font-semibold text-matcha-deep">
-                  {toy.role}
-                </span>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="rounded-full bg-mist-soft px-2 py-1 text-[10px] font-semibold text-matcha-deep">
+                    {toy.role}
+                  </span>
+                  <span className="rounded-full bg-peach-soft px-2 py-1 text-[10px] font-medium text-rose-deep">
+                    {vitality.emoji} {vitality.label}
+                  </span>
+                  <span className="rounded-full bg-cream px-2 py-1 text-[10px] text-ink-muted">
+                    电量 {vitality.energy}
+                  </span>
+                </div>
                 <h1 className="mt-2 font-display text-2xl text-ink">{toy.name}</h1>
                 <p className="mt-1 text-[11px] leading-relaxed text-ink-muted">
                   出生于 {toy.birthPlace}
@@ -88,7 +107,10 @@ export function ToyArchiveDetailPage() {
               </div>
             </div>
             <div className="my-4 h-px bg-line/80" />
-            <p className="text-xs font-semibold text-ink">玩偶独白</p>
+            <p className="text-xs font-medium text-matcha-deep">
+              {vitality.emoji} {vitality.line}
+            </p>
+            <p className="mt-3 text-xs font-semibold text-ink">玩偶独白</p>
             <p className="mt-1.5 text-xs leading-6 text-ink-soft">
               “{toy.monologue || '谢谢你，让我的每一天都有了名字。'}”
             </p>

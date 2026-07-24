@@ -17,17 +17,23 @@ import {
   companionDays,
   toyAvatar,
 } from '../archive/archiveUtils'
+import { useAuth } from '../auth/AuthContext'
 import { PageHeader } from '../components/PageHeader'
 import { useApp } from '../context/AppContext'
 
 export function MemoryHallPage() {
   const { id } = useParams()
   const { toys, currentToy, entries, setCurrentToyId, showToast } = useApp()
+  const { prefs, updatePrefs } = useAuth()
   const toy = toys.find((item) => item.id === id)
   const [slide, setSlide] = useState(0)
   const [playing, setPlaying] = useState(true)
-  const [musicOn, setMusicOn] = useState(true)
+  const [musicOn, setMusicOn] = useState(() => prefs.memorySound)
   const [shareOpen, setShareOpen] = useState(false)
+
+  useEffect(() => {
+    setMusicOn(prefs.memorySound)
+  }, [prefs.memorySound])
   // Wait until currentToy matches route id so we don't flash another toy's photos.
   const ready = Boolean(toy && currentToy?.id === toy.id)
   const photos = useMemo(
@@ -150,15 +156,25 @@ export function MemoryHallPage() {
             </span>
             <button
               type="button"
-              onClick={() => setMusicOn((value) => !value)}
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-black/25 text-white backdrop-blur-sm"
+              onClick={() => {
+                setMusicOn((value) => {
+                  const next = !value
+                  updatePrefs({ memorySound: next })
+                  showToast(next ? '已开启回忆展厅声音' : '已关闭回忆展厅声音')
+                  return next
+                })
+              }}
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-black/25 text-white backdrop-blur-sm"
               aria-label={musicOn ? '关闭背景音乐' : '开启背景音乐'}
             >
               {musicOn ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
             </button>
           </div>
           <div className="absolute inset-x-0 bottom-0 z-[2] p-4 text-white">
-            <p className="text-[10px] text-white/75">{currentPhoto.date} · {currentPhoto.location}</p>
+            <p className="text-[10px] text-white/75">
+              {currentPhoto.date} · {currentPhoto.location}
+              {musicOn ? ' · ♪ 声音开' : ' · 静音'}
+            </p>
             <h2 className="mt-1 font-display text-xl">{currentPhoto.title}</h2>
             <p className="mt-1.5 line-clamp-2 text-[11px] leading-relaxed text-white/90">
               {currentPhoto.narration}

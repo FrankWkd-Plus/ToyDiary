@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { Check, Plus } from 'lucide-react'
+import { useAuth } from '../auth/AuthContext'
 import { EmptyState } from '../components/EmptyState'
 import { PageHeader } from '../components/PageHeader'
 import { ToyCard, type ToyCardPhotos } from '../components/ToyCard'
@@ -23,8 +24,19 @@ const PHOTO_SETS: [ToyCardPhotos, ToyCardPhotos] = [
 ]
 
 export function ToysPage() {
-  const { toys, currentToy, setCurrentToyId, showToast } = useApp()
+  const navigate = useNavigate()
+  const { isLoggedIn } = useAuth()
+  const { toys, currentToy, entries, setCurrentToyId, showToast } = useApp()
   const displayToys = toys
+
+  function goNewToy() {
+    if (!isLoggedIn) {
+      showToast('创建玩偶档案需要先登录')
+      navigate('/login')
+      return
+    }
+    navigate('/toys/new')
+  }
   const [visibleToyId, setVisibleToyId] = useState<string | null>(
     displayToys.find((toy) => toy.id === currentToy?.id)?.id ??
       displayToys[0]?.id ??
@@ -50,14 +62,15 @@ export function ToysPage() {
         subtitle={`${displayToys.length} 位陪伴伙伴`}
         soft
         right={
-          <Link
-            to="/toys/new"
+          <button
+            type="button"
+            onClick={goNewToy}
             className="btn-primary h-9 w-9"
             aria-label="新增玩偶"
             title="新增玩偶"
           >
             <Plus className="h-5 w-5" strokeWidth={2.4} />
-          </Link>
+          </button>
         }
       />
 
@@ -65,11 +78,19 @@ export function ToysPage() {
         {displayToys.length === 0 ? (
           <EmptyState
             title="还没有玩偶"
-            desc="创建第一只玩偶，生成身份卡吧。"
+            desc={
+              isLoggedIn
+                ? '创建第一只玩偶，生成身份卡吧。'
+                : '游客可浏览演示数据；创建档案需登录。'
+            }
             action={
-              <Link to="/toys/new" className="btn-primary px-6 py-2.5 text-sm">
-                新建玩偶
-              </Link>
+              <button
+                type="button"
+                onClick={goNewToy}
+                className="btn-primary px-6 py-2.5 text-sm"
+              >
+                {isLoggedIn ? '新建玩偶' : '去登录'}
+              </button>
             }
           />
         ) : (
@@ -102,6 +123,7 @@ export function ToysPage() {
                   toy={visibleToy}
                   photos={PHOTO_SETS[visibleIndex % PHOTO_SETS.length]}
                   active={currentToy?.id === visibleToy.id}
+                  entries={entries.filter((e) => e.toyId === visibleToy.id)}
                   onSelect={() => {
                     setCurrentToyId(visibleToy.id)
                     showToast(`已切换到 ${visibleToy.name}`)

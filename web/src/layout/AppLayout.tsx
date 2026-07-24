@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import { BottomNav } from '../components/BottomNav'
 import { LoadingBear } from '../components/LoadingBear'
-import { Toast } from '../components/Toast'
+import { ToyNudgeHost } from '../components/ToyNudgeHost'
 import { useApp } from '../context/AppContext'
 
 export function AppLayout() {
@@ -50,7 +50,7 @@ export function AppLayout() {
               <Outlet />
             </div>
             <BottomNav />
-            <Toast />
+            <ToyNudgeHost />
           </>
         )}
       </div>

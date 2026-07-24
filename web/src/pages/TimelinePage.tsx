@@ -10,6 +10,8 @@ import {
   Sparkles,
 } from 'lucide-react'
 import { companionDays, toyAvatar } from '../archive/archiveUtils'
+import { getToyVitality } from '../archive/toyVitality'
+import { useAuth } from '../auth/AuthContext'
 import { useApp } from '../context/AppContext'
 import { uniqueCities } from '../places/placeUtils'
 import { seedPlaceForLabel } from '../places/placeUtils'
@@ -17,6 +19,7 @@ import { seedPlaceForLabel } from '../places/placeUtils'
 export function TimelinePage() {
   const navigate = useNavigate()
   const { currentToy, toys, entries, setCurrentToyId, showToast } = useApp()
+  const { isLoggedIn } = useAuth()
   const [cardIndex, setCardIndex] = useState(() => {
     const i = toys.findIndex((t) => t.id === currentToy?.id)
     return i >= 0 ? i : 0
@@ -39,9 +42,7 @@ export function TimelinePage() {
     .map((e) => e.place || seedPlaceForLabel(e.location))
     .filter((p): p is NonNullable<typeof p> => Boolean(p))
   const cityCount = uniqueCities(places).length
-  const latestMood =
-    entries.find((e) => e.mood)?.mood ||
-    (toy?.traits.includes('活泼') ? '开心' : '温柔')
+  const vitality = toy ? getToyVitality(toy, entries) : null
 
   function selectIndex(next: number) {
     if (!toys.length) return
@@ -97,8 +98,15 @@ export function TimelinePage() {
         </div>
         <button
           type="button"
-          onClick={() => navigate('/toys/new')}
-          className="flex items-center gap-1 rounded-full bg-mustard-soft px-3 py-2 text-[11px] font-semibold text-matcha-deep shadow-[var(--shadow-warm-sm)] ring-1 ring-line/30 transition-transform active:scale-95"
+          onClick={() => {
+            if (!isLoggedIn) {
+              showToast('创建玩偶档案需要先登录')
+              navigate('/login')
+              return
+            }
+            navigate('/toys/new')
+          }}
+          className="flex min-h-9 items-center gap-1 rounded-full bg-mustard-soft px-3 py-2 text-[11px] font-semibold text-matcha-deep shadow-[var(--shadow-warm-sm)] ring-1 ring-line/30 transition-transform active:scale-95"
         >
           <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
           新增玩偶
@@ -120,12 +128,23 @@ export function TimelinePage() {
             >
               <div className="archive-toy-card__accent" />
               <div className="relative flex gap-3.5 p-4">
-                <div className="h-[5.6rem] w-[5.6rem] shrink-0 overflow-hidden rounded-[1.25rem] border-2 border-white bg-cream shadow-md">
-                  <img
-                    src={avatar}
-                    alt={toy.name}
-                    className="h-full w-full object-cover"
-                  />
+                <div className="relative h-[5.6rem] w-[5.6rem] shrink-0">
+                  <div className="h-full w-full overflow-hidden rounded-[1.25rem] border-2 border-white bg-cream shadow-md">
+                    <img
+                      src={avatar}
+                      alt={toy.name}
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
+                  {vitality && (
+                    <span
+                      className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-paper text-sm shadow-sm"
+                      title={`${vitality.label} · 电量 ${vitality.energy}`}
+                      aria-label={`状态 ${vitality.label}`}
+                    >
+                      {vitality.emoji}
+                    </span>
+                  )}
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-start justify-between gap-2">
@@ -150,9 +169,12 @@ export function TimelinePage() {
                         {toy.zodiac}
                       </span>
                     )}
-                    <span className="rounded-full bg-peach-soft px-2 py-0.5 text-[9px] text-rose-deep">
-                      心情 · {latestMood}
-                    </span>
+                    {vitality && (
+                      <span className="rounded-full bg-peach-soft px-2 py-0.5 text-[9px] text-rose-deep">
+                        {vitality.emoji} {vitality.label}
+                        <span className="ml-1 text-ink-muted">·{vitality.energy}</span>
+                      </span>
+                    )}
                   </div>
                   <p className="mt-1.5 flex items-center gap-1 text-[11px] text-ink-muted">
                     <MapPin className="h-3.5 w-3.5 text-matcha-deep" />
@@ -162,6 +184,11 @@ export function TimelinePage() {
               </div>
 
               <div className="relative space-y-2.5 border-t border-white/75 px-4 py-3">
+                {vitality && (
+                  <p className="text-[11px] font-medium text-matcha-deep">
+                    {vitality.emoji} {vitality.line}
+                  </p>
+                )}
                 <p className="line-clamp-2 text-xs leading-relaxed text-ink-soft">
                   “{toy.monologue || '今天也想和你一起收藏生活。'}”
                 </p>
@@ -218,11 +245,21 @@ export function TimelinePage() {
         ) : (
           <button
             type="button"
-            onClick={() => navigate('/toys/new')}
+            onClick={() => {
+              if (!isLoggedIn) {
+                showToast('创建玩偶档案需要先登录')
+                navigate('/login')
+                return
+              }
+              navigate('/toys/new')
+            }}
             className="card-paper w-full p-6 text-center"
           >
             <span className="text-3xl">🧸</span>
             <p className="mt-2 text-sm font-medium text-ink">先创建一只玩偶</p>
+            {!isLoggedIn && (
+              <p className="mt-1 text-[11px] text-ink-muted">游客模式请先登录</p>
+            )}
           </button>
         )}
 

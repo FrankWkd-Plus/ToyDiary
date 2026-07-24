@@ -5,19 +5,24 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import {
+  Bell,
   Camera,
   Check,
   ChevronRight,
+  FileText,
+  HelpCircle,
   Info,
+  LayoutGrid,
+  LogOut,
   Palette,
   Pencil,
-  Settings,
-  Shield,
+  Share2,
   UserRound,
   X,
 } from 'lucide-react'
+import { useAuth } from '../auth/AuthContext'
 import { useApp } from '../context/AppContext'
 import {
   loadProfileAvatar,
@@ -25,12 +30,15 @@ import {
   saveProfileAvatar,
   saveProfileName,
 } from '../profile/profileStorage'
+import { getToyVitality } from '../archive/toyVitality'
 import { useTheme } from '../theme/ThemeProvider'
 
 const DEFAULT_AVATAR = '/profile/default-avatar.jpg'
 
 export function MePage() {
-  const { toys, entries, currentToy, resetDemo, showToast } = useApp()
+  const navigate = useNavigate()
+  const { toys, entries, currentToy, showToast } = useApp()
+  const { session, isLoggedIn, isGuest, logout } = useAuth()
   const { theme } = useTheme()
   const avatarInputRef = useRef<HTMLInputElement>(null)
   const [profileName, setProfileName] = useState(() => loadProfileName())
@@ -89,14 +97,50 @@ export function MePage() {
     reader.readAsDataURL(file)
   }
 
+  function exportGrowth() {
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      toys,
+      entries,
+      currentToyId: currentToy?.id ?? null,
+    }
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: 'application/json',
+    })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `toydairy-growth-${new Date().toISOString().slice(0, 10)}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+    showToast('已导出成长轨迹 JSON')
+  }
+
+  function onLogout() {
+    logout()
+    showToast(isGuest ? '已退出随便看看' : '已退出登录')
+    navigate('/login', { replace: true })
+  }
+
+  const displayId =
+    session?.mode === 'user'
+      ? session.account || '已登录'
+      : isGuest
+        ? '游客 · 随便看看'
+        : '未登录'
+
+  const currentVitality = currentToy
+    ? getToyVitality(currentToy, entries)
+    : null
+
   return (
     <div className="min-h-full">
-      <div className="header-band pattern-soft px-4 pb-5 pt-4">
-        <div className="flex items-center gap-3.5">
+      <div className="header-band pattern-soft px-4 pb-5 pt-4 sm:pb-6">
+        <div className="mx-auto flex w-full max-w-lg items-center gap-3 sm:gap-4">
           <button
             type="button"
             onClick={() => avatarInputRef.current?.click()}
-            className="avatar-ring group relative h-[4.25rem] w-[4.25rem] shrink-0 rounded-full bg-gradient-to-br from-mustard-soft to-peach-soft transition-transform active:scale-95"
+            className="avatar-ring group relative h-[4.25rem] w-[4.25rem] shrink-0 rounded-full bg-gradient-to-br from-mustard-soft to-peach-soft transition-transform active:scale-95 sm:h-[4.5rem] sm:w-[4.5rem]"
             aria-label="修改头像"
           >
             <img
@@ -160,30 +204,28 @@ export function MePage() {
               </button>
             )}
             <p className="mt-0.5 text-xs text-ink-muted">
-              ID: demo@toydairy · {theme.name}
+              {displayId} · {theme.name}
             </p>
           </div>
           <Link
-            to="/me/settings"
-            className="flex h-10 items-center gap-1 rounded-full bg-paper px-2.5 text-matcha-deep shadow-[var(--shadow-warm-sm)] ring-1 ring-line/40 transition-transform active:scale-95"
-            aria-label="个人资料设置"
-            title="个人资料设置"
+            to="/me/profile"
+            className="flex h-10 min-w-10 shrink-0 items-center justify-center gap-1 rounded-full bg-paper px-2.5 text-matcha-deep shadow-[var(--shadow-warm-sm)] ring-1 ring-line/40 transition-transform active:scale-95 sm:px-3"
+            aria-label="资料"
+            title="资料"
           >
-            <UserRound className="h-4.5 w-4.5 h-[18px] w-[18px]" />
-            <span className="text-[10px] font-medium">资料</span>
+            <UserRound className="h-[18px] w-[18px]" />
+            <span className="hidden text-[10px] font-medium min-[360px]:inline">
+              资料
+            </span>
           </Link>
         </div>
       </div>
 
-      <div className="space-y-3 px-4 pb-4 -mt-1">
-        <div className="card-paper px-2 py-4">
-          <div className="grid grid-cols-4 text-center">
-            <Stat
-              label="玩偶"
-              value={String(toys.length)}
-              to="/toys"
-              highlight
-            />
+      {/* Stats banner — extra top space so it doesn't crowd the avatar */}
+      <div className="mx-auto w-full max-w-lg space-y-3 px-4 pb-6 pt-6 sm:pt-7">
+        <div className="card-paper px-1.5 py-4 shadow-[var(--shadow-warm)] sm:px-2 sm:py-5">
+          <div className="grid grid-cols-4 gap-y-1 text-center">
+            <Stat label="玩偶" value={String(toys.length)} to="/toys" highlight />
             <Stat
               label="日记"
               value={String(entries.length)}
@@ -197,59 +239,129 @@ export function MePage() {
             <Stat
               label="当前"
               value={currentToy ? '1' : '0'}
-              sub={currentToy?.name}
-              to={currentToy ? `/archive/toys/${currentToy.id}` : '/toys/new'}
+              sub={
+                currentToy
+                  ? `${currentVitality?.emoji ?? ''} ${currentToy.name}`.trim()
+                  : undefined
+              }
+              to={
+                isLoggedIn
+                  ? currentToy
+                    ? `/archive/toys/${currentToy.id}`
+                    : '/toys/new'
+                  : '/login'
+              }
             />
           </div>
         </div>
 
-        <div className="card-paper overflow-hidden">
+        {/* A 快捷操作 */}
+        <SectionCard title="快捷操作">
           <LinkRow
-            to="/me/settings"
+            to="/me/theme"
             icon={<Palette className="h-4 w-4" />}
             label="切换配色"
             hint={theme.name}
           />
-          <LinkRow
-            to="/me/settings"
-            icon={<Settings className="h-4 w-4" />}
-            label="设置"
-          />
-          <LinkRow
-            to="/me/settings"
-            icon={<Shield className="h-4 w-4" />}
-            label="隐私设置"
-          />
-          <div className="flex items-center gap-3 px-4 py-3.5">
+          <button
+            type="button"
+            onClick={() => showToast('iOS 小组件即将开放')}
+            className="flex min-h-12 w-full items-center gap-3 border-b border-line/70 px-4 py-3.5 text-left active:bg-cream"
+          >
             <span className="text-matcha-deep">
-              <Info className="h-4 w-4" />
+              <LayoutGrid className="h-4 w-4" />
             </span>
-            <span className="flex-1 text-sm text-ink">关于我们</span>
-            <span className="text-xs text-ink-muted">Toy Dairy MVP</span>
-          </div>
-        </div>
+            <span className="flex-1 text-sm text-ink">iOS 小组件</span>
+            <span className="text-[10px] text-ink-muted">即将支持</span>
+            <ChevronRight className="h-4 w-4 text-ink-muted" />
+          </button>
+          <button
+            type="button"
+            onClick={exportGrowth}
+            className="flex min-h-12 w-full items-center gap-3 px-4 py-3.5 text-left active:bg-cream"
+          >
+            <span className="text-matcha-deep">
+              <Share2 className="h-4 w-4" />
+            </span>
+            <span className="flex-1 text-sm text-ink">导出玩偶成长轨迹</span>
+            <ChevronRight className="h-4 w-4 text-ink-muted" />
+          </button>
+        </SectionCard>
 
-        <div className="card-paper p-4 text-sm text-ink-soft">
-          <p className="font-medium text-ink">前端 Mock 说明</p>
-          <ul className="mt-2 list-disc space-y-1 pl-4 text-xs text-ink-muted">
-            <li>数据存在浏览器 localStorage</li>
-            <li>接口对齐 plan.md</li>
-            <li>图片仅本地预览，未接 R2</li>
-          </ul>
-        </div>
+        {/* B 通知与声音 */}
+        <SectionCard title="通知与声音">
+          <LinkRow
+            to="/me/notify"
+            icon={<Bell className="h-4 w-4" />}
+            label="玩偶提醒 / 日记 / 声音"
+            hint="推送与回忆展厅"
+          />
+        </SectionCard>
+
+        {/* C 版本信息 */}
+        <SectionCard title="版本信息">
+          <LinkRow
+            to="/me/version"
+            icon={<Info className="h-4 w-4" />}
+            label="版本更新与介绍"
+            hint="v0.1.0"
+          />
+        </SectionCard>
+
+        {/* D 帮助中心 */}
+        <SectionCard title="帮助中心">
+          <LinkRow
+            to="/help/docs"
+            icon={<FileText className="h-4 w-4" />}
+            label="使用文档"
+          />
+          <LinkRow
+            to="/help/support"
+            icon={<HelpCircle className="h-4 w-4" />}
+            label="帮助与客服"
+          />
+          <LinkRow
+            to="/help/about"
+            icon={<Info className="h-4 w-4" />}
+            label="关于我们"
+            last
+          />
+        </SectionCard>
 
         <button
           type="button"
-          onClick={async () => {
-            await resetDemo()
-            showToast('演示数据已重置')
-          }}
-          className="btn-secondary w-full py-3 text-sm"
+          onClick={onLogout}
+          className="flex w-full items-center justify-center gap-2 rounded-full border border-rose-deep/30 bg-peach-soft/60 py-3.5 text-sm font-medium text-rose-deep transition-transform active:scale-[0.99]"
         >
-          重置演示数据
+          <LogOut className="h-4 w-4" />
+          退出登录
         </button>
+        <p className="pb-2 text-center text-[10px] text-ink-muted">
+          {isGuest
+            ? '游客模式 · 退出后将回到登录页'
+            : isLoggedIn
+              ? '退出后需重新验证码登录'
+              : '返回登录页'}
+        </p>
       </div>
     </div>
+  )
+}
+
+function SectionCard({
+  title,
+  children,
+}: {
+  title: string
+  children: ReactNode
+}) {
+  return (
+    <section className="card-paper overflow-hidden">
+      <div className="border-b border-line/70 px-4 py-2.5 text-xs font-medium text-ink-muted">
+        {title}
+      </div>
+      {children}
+    </section>
   )
 }
 
@@ -268,18 +380,18 @@ function Stat({
 }) {
   const body = (
     <div
-      className={`py-2 transition-colors ${
+      className={`py-2.5 transition-colors sm:py-3 ${
         highlight ? 'rounded-2xl bg-mist-soft' : 'rounded-2xl active:bg-cream'
       }`}
     >
-      <div className="font-display truncate px-1 text-xl text-matcha-deep">
+      <div className="font-display truncate px-1 text-xl leading-none text-matcha-deep">
         {sub ? (
           <span className="text-sm leading-7 text-ink">{sub}</span>
         ) : (
           value
         )}
       </div>
-      <div className="mt-0.5 text-[11px] text-ink-muted">{label}</div>
+      <div className="mt-1 text-[11px] text-ink-muted">{label}</div>
     </div>
   )
 
@@ -303,21 +415,29 @@ function LinkRow({
   icon,
   label,
   hint,
+  last,
 }: {
   to: string
   icon: ReactNode
   label: string
   hint?: string
+  last?: boolean
 }) {
   return (
     <Link
       to={to}
-      className="flex items-center gap-3 border-b border-line/70 px-4 py-3.5 active:bg-cream"
+      className={`flex min-h-12 items-center gap-3 px-4 py-3.5 active:bg-cream ${
+        last ? '' : 'border-b border-line/70'
+      }`}
     >
       <span className="text-matcha-deep">{icon}</span>
-      <span className="flex-1 text-sm text-ink">{label}</span>
-      {hint && <span className="text-xs text-ink-muted">{hint}</span>}
-      <ChevronRight className="h-4 w-4 text-ink-muted" />
+      <span className="min-w-0 flex-1 truncate text-sm text-ink">{label}</span>
+      {hint && (
+        <span className="max-w-[40%] shrink-0 truncate text-xs text-ink-muted">
+          {hint}
+        </span>
+      )}
+      <ChevronRight className="h-4 w-4 shrink-0 text-ink-muted" />
     </Link>
   )
 }
