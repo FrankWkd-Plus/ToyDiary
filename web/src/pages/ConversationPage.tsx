@@ -206,7 +206,11 @@ export function ConversationPage() {
     setReplying(true)
 
     const history = priorMessages
-      .filter((m) => m.kind === 'text' || m.kind === 'image')
+      .filter(
+        (m): m is ChatMessage & { role: 'user' | 'toy' } =>
+          (m.kind === 'text' || m.kind === 'image') &&
+          (m.role === 'user' || m.role === 'toy'),
+      )
       .map((m) => ({
         role: m.role,
         text: (m.text || '').trim(),
