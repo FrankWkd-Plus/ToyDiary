@@ -175,7 +175,7 @@ export function ComposePage() {
       })
       await refreshEntries(currentToy.id)
       showToast(`${currentToy.name} 已把这一刻放进成长轨迹`)
-      nav(place ? `/growth/travel-map` : '/growth')
+      nav(place ? '/growth?tab=map' : '/growth')
     } catch (error) {
       showToast(error instanceof Error ? error.message : '保存失败')
     } finally {

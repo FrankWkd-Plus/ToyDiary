@@ -89,7 +89,15 @@ function makeAvatarIcon(avatarUrl: string, label: string, active: boolean) {
   })
 }
 
+/** Standalone route — redirects conceptually to growth map tab, keeps deep links. */
 export function TravelMapPage() {
+  return <TravelMapView embedded={false} />
+}
+
+/**
+ * Travel map body. When `embedded`, omits the back header (used inside Growth tabs).
+ */
+export function TravelMapView({ embedded = false }: { embedded?: boolean }) {
   const navigate = useNavigate()
   const { currentToy, toys, showToast } = useApp()
   const [data, setData] = useState<TravelMapResponse | null>(null)
@@ -222,35 +230,57 @@ export function TravelMapPage() {
 
   if (!currentToy) {
     return (
-      <div className="flex min-h-[60vh] flex-col items-center justify-center px-6 text-center">
+      <div className="flex min-h-[40vh] flex-col items-center justify-center px-6 text-center">
         <p className="text-sm text-ink-muted">请先选择一只玩偶</p>
-        <button
-          type="button"
-          className="btn-primary mt-4 px-4 py-2 text-sm"
-          onClick={() => navigate('/archive')}
-        >
-          返回档案
-        </button>
+        {!embedded && (
+          <button
+            type="button"
+            className="btn-primary mt-4 px-4 py-2 text-sm"
+            onClick={() => navigate('/archive')}
+          >
+            返回档案
+          </button>
+        )}
       </div>
     )
   }
 
+  const shellClass = embedded
+    ? 'flex h-[calc(100dvh-14.5rem)] min-h-[22rem] flex-col overflow-hidden bg-cream'
+    : 'flex h-[calc(100dvh-5.5rem)] flex-col overflow-hidden bg-cream'
+
   return (
-    <div className="flex h-[calc(100dvh-5.5rem)] flex-col overflow-hidden bg-cream">
-      <header className="z-20 flex items-center gap-2 border-b border-line/60 bg-white/95 px-3 py-2.5 backdrop-blur">
-        <button
-          type="button"
-          onClick={() => navigate('/growth')}
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-cream text-ink-soft"
-          aria-label="返回成长"
-        >
-          <ChevronLeft className="h-5 w-5" />
-        </button>
-        <div className="min-w-0 flex-1">
-          <h1 className="truncate font-display text-base text-ink">
-            {currentToy.name} 的旅行轨迹
-          </h1>
-          <p className="text-[10px] text-ink-muted">
+    <div className={shellClass}>
+      {!embedded && (
+        <header className="z-20 flex items-center gap-2 border-b border-line/60 bg-white/95 px-3 py-2.5 backdrop-blur">
+          <button
+            type="button"
+            onClick={() => navigate('/growth?tab=map')}
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-cream text-ink-soft"
+            aria-label="返回成长"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-base font-semibold text-ink">
+              {currentToy.name} 的旅行轨迹
+            </h1>
+            <p className="text-[10px] text-ink-muted">
+              {filtered.length} 个足迹
+              {data ? ` · ${data.cityCount} 座城市` : ''}
+              {replaying
+                ? ` · 重温 ${Math.max(replayIndex + 1, 0)}/${filtered.length}`
+                : ''}
+            </p>
+          </div>
+        </header>
+      )}
+
+      {embedded && (
+        <div className="z-20 border-b border-line/40 bg-white/90 px-3.5 py-2">
+          <p className="text-[11px] text-ink-muted">
+            <span className="font-medium text-ink-soft">{currentToy.name}</span>
+            {' · '}
             {filtered.length} 个足迹
             {data ? ` · ${data.cityCount} 座城市` : ''}
             {replaying
@@ -258,7 +288,7 @@ export function TravelMapPage() {
               : ''}
           </p>
         </div>
-      </header>
+      )}
 
       <div className="z-20 flex gap-2 overflow-x-auto border-b border-line/40 bg-white/90 px-3 py-2 [scrollbar-width:none]">
         <YearChip

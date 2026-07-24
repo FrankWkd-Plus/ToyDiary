@@ -1,28 +1,59 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   BookHeart,
   CalendarHeart,
   Check,
   ChevronDown,
-  ChevronRight,
   Flag,
   Globe2,
   History,
+  MapPin,
   MapPinned,
   PartyPopper,
+  Sparkles,
 } from 'lucide-react'
 import { companionDays, toyAvatar } from '../archive/archiveUtils'
-import { DayCountNumber } from '../components/DayCountNumber'
 import { PageHeader } from '../components/PageHeader'
 import { useApp } from '../context/AppContext'
-import { seedPlaceForLabel, uniqueCities } from '../places/placeUtils'
 import type { Entry } from '../types'
 
+const TravelMapView = lazy(() =>
+  import('./TravelMapPage').then((m) => ({ default: m.TravelMapView })),
+)
+
+type GrowthTab = 'timeline' | 'map'
+
+type TimelineItem =
+  | {
+      kind: 'milestone'
+      id: string
+      date: string
+      title: string
+      desc: string
+      tone: string
+      icon: ReactNode
+      entryId?: string
+      path?: string
+    }
+  | {
+      kind: 'entry'
+      id: string
+      date: string
+      entry: Entry
+    }
+
+/**
+ * Growth hub: timeline (default) + travel map, switched via prominent tabs.
+ */
 export function GrowthPage() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { currentToy, entries, toys, setCurrentToyId, showToast } = useApp()
   const [pickerOpen, setPickerOpen] = useState(false)
+
+  const tab: GrowthTab =
+    searchParams.get('tab') === 'map' ? 'map' : 'timeline'
 
   useEffect(() => {
     if (toys.length > 0 && !toys.some((toy) => toy.id === currentToy?.id)) {
@@ -30,63 +61,53 @@ export function GrowthPage() {
     }
   }, [currentToy?.id, toys, setCurrentToyId])
 
-  const sortedEntries = useMemo(
-    () =>
-      [...entries].sort(
-        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
-      ),
-    [entries],
-  )
-
-  const days = currentToy ? companionDays(currentToy) : 0
-  const travelCount = entries.filter((e) => e.type === 'travel').length
-  const places = entries
-    .map((e) => e.place || seedPlaceForLabel(e.location))
-    .filter((p): p is NonNullable<typeof p> => Boolean(p))
-  const cityCount = uniqueCities(places).length
-  const photoMemories = sortedEntries.filter((e) => e.imageUrl).slice(0, 6)
-  const milestones = buildMilestones(sortedEntries, days)
   const toyIndex = toys.findIndex((t) => t.id === currentToy?.id)
+  const days = currentToy ? companionDays(currentToy) : 0
 
-  function requireToy(path: string) {
-    if (!currentToy) {
-      showToast('请先选择玩偶')
-      return
+  const items = useMemo(() => {
+    const list: TimelineItem[] = entries.map((entry) => ({
+      kind: 'entry' as const,
+      id: `entry-${entry.id}`,
+      date: entry.date,
+      entry,
+    }))
+
+    for (const m of buildMilestones(entries, days, currentToy?.birthDate)) {
+      list.push({
+        kind: 'milestone',
+        id: m.id,
+        date: m.date,
+        title: m.title,
+        desc: m.desc,
+        tone: m.tone,
+        icon: m.icon,
+        entryId: m.entryId,
+        path: m.path,
+      })
     }
-    navigate(path)
+
+    return list.sort((a, b) => {
+      const byDate = b.date.localeCompare(a.date)
+      if (byDate !== 0) return byDate
+      if (a.kind !== b.kind) return a.kind === 'milestone' ? -1 : 1
+      return 0
+    })
+  }, [entries, days, currentToy?.birthDate])
+
+  function setTab(next: GrowthTab) {
+    if (next === 'timeline') {
+      // Default — keep URL clean
+      setSearchParams({}, { replace: true })
+    } else {
+      setSearchParams({ tab: 'map' }, { replace: true })
+    }
   }
 
   return (
-    <>
-      <PageHeader
-        title="成长"
-        subtitle="和玩偶一起走过的日子"
-        soft
-        right={
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => requireToy('/growth/travel-map')}
-              className="flex h-9 items-center gap-1 rounded-full bg-paper/95 px-2.5 text-[10px] font-medium text-matcha-deep shadow-[var(--shadow-warm-sm)] ring-1 ring-line/40"
-              aria-label="旅行轨迹地图"
-            >
-              <Globe2 className="h-3.5 w-3.5" />
-              地图
-            </button>
-            <button
-              type="button"
-              onClick={() => requireToy('/growth/timeline')}
-              className="flex h-9 items-center gap-1 rounded-full bg-paper/95 px-2.5 text-[10px] font-medium text-matcha-deep shadow-[var(--shadow-warm-sm)] ring-1 ring-line/40"
-              aria-label="成长时间线"
-            >
-              <History className="h-3.5 w-3.5" />
-              时间线
-            </button>
-          </div>
-        }
-      />
+    <div className={tab === 'map' ? 'flex min-h-full flex-col' : 'min-h-full'}>
+      <PageHeader title="成长" subtitle="和玩偶一起走过的日子" soft />
 
-      <div className="px-3.5 pb-5 pt-3">
+      <div className="relative z-20 px-3.5 pt-3">
         <div className="relative mb-3">
           <div className="growth-toy-bubble min-w-0 w-full !max-w-none justify-between pr-1.5">
             <div className="flex min-w-0 items-center gap-2.5">
@@ -116,7 +137,7 @@ export function GrowthPage() {
           </div>
 
           {pickerOpen && (
-            <div className="absolute inset-x-0 top-[calc(100%+0.35rem)] z-20 overflow-hidden rounded-2xl border border-line bg-white p-1.5 shadow-[var(--shadow-elevated)]">
+            <div className="absolute inset-x-0 top-[calc(100%+0.35rem)] z-30 overflow-hidden rounded-2xl border border-line bg-white p-1.5 shadow-[var(--shadow-elevated)]">
               {toys.map((toy) => {
                 const selected = toy.id === currentToy?.id
                 return (
@@ -148,130 +169,200 @@ export function GrowthPage() {
           )}
         </div>
 
-        <section className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <DayCountNumber
-            value={days}
-            label="陪伴"
-            unit="天"
-            size="stat"
-            onClick={() => requireToy('/growth/stats/companion')}
-          />
-          <DayCountNumber
-            value={travelCount}
-            label="旅行"
-            unit="次"
-            size="stat"
-            onClick={() => requireToy('/growth/stats/travel')}
-          />
-          <DayCountNumber
-            value={cityCount}
-            label="城市"
-            unit="座"
-            size="stat"
-            onClick={() => requireToy('/growth/stats/cities')}
-          />
-          <DayCountNumber
-            value={entries.length}
-            label="瞬间"
-            unit="条"
-            size="stat"
-            onClick={() => requireToy('/growth/stats/moments')}
-          />
-        </section>
+        {/* Prominent timeline / map switcher */}
+        <div
+          className="mb-3 grid grid-cols-2 gap-1 rounded-2xl bg-cream p-1 ring-1 ring-line/50"
+          role="tablist"
+          aria-label="成长视图"
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'timeline'}
+            onClick={() => setTab('timeline')}
+            className={`flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-semibold transition-all ${
+              tab === 'timeline'
+                ? 'bg-white text-matcha-deep shadow-[var(--shadow-warm-sm)]'
+                : 'text-ink-muted active:bg-white/50'
+            }`}
+          >
+            <History className="h-4 w-4" />
+            时间线
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'map'}
+            onClick={() => setTab('map')}
+            className={`flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-semibold transition-all ${
+              tab === 'map'
+                ? 'bg-white text-matcha-deep shadow-[var(--shadow-warm-sm)]'
+                : 'text-ink-muted active:bg-white/50'
+            }`}
+          >
+            <Globe2 className="h-4 w-4" />
+            地图
+          </button>
+        </div>
+      </div>
 
-        <section className="mb-4">
-          <h2 className="mb-2 flex items-center gap-1.5 px-1 text-base text-ink">
-            <Flag className="h-4 w-4 shrink-0 text-terra-deep" />
-            <span className="font-semibold tracking-wide">成长里程碑</span>
-          </h2>
-          <div className="space-y-2">
-            {milestones.map((m) => (
-              <button
-                key={m.id}
-                type="button"
-                onClick={() => {
-                  if (m.entryId) {
-                    navigate(`/entries/${m.entryId}`, { state: { from: 'growth' } })
-                  } else {
-                    requireToy(m.path || '/growth/stats/companion')
-                  }
-                }}
-                className="flex w-full items-start gap-3 rounded-2xl bg-white px-3.5 py-3 text-left shadow-[var(--shadow-warm-sm)] ring-1 ring-line/50 active:scale-[0.99]"
-              >
-                <span
-                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${m.tone}`}
-                  aria-hidden="true"
-                >
-                  {m.icon}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <strong className="block text-sm text-ink">{m.title}</strong>
-                  <p className="mt-0.5 text-[11px] text-ink-muted">{m.desc}</p>
-                </div>
-                <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-ink-muted" />
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <section className="mb-2">
-          <div className="mb-2 flex items-center justify-between px-1">
-            <h2 className="flex items-center gap-1.5 text-base text-ink">
-              <BookHeart className="h-4 w-4 shrink-0 text-rose-deep" />
-              {/* Avoid display font for CJK title — some devices render 回 as a black blob */}
-              <span className="font-semibold tracking-wide">回忆纪念册</span>
-            </h2>
-            {photoMemories.length > 0 && (
-              <button
-                type="button"
-                onClick={() => requireToy('/growth/stats/moments')}
-                className="text-[10px] font-medium text-matcha-deep"
-              >
-                全部
-              </button>
-            )}
-          </div>
-          {photoMemories.length === 0 ? (
-            <div className="rounded-2xl bg-cream px-4 py-6 text-center text-xs text-ink-muted">
-              还没有带照片的瞬间，去记下第一张合影吧。
+      {tab === 'timeline' ? (
+        <div className="px-3.5 pb-5" role="tabpanel">
+          {!currentToy ? (
+            <div className="flex min-h-48 flex-col items-center justify-center text-center">
+              <p className="text-sm text-ink-muted">请先选择玩偶</p>
+            </div>
+          ) : items.length === 0 ? (
+            <div className="flex min-h-48 flex-col items-center justify-center text-center">
+              <Sparkles className="h-6 w-6 text-matcha-deep" />
+              <p className="mt-2 text-sm text-ink-muted">还没有成长轨迹</p>
+              <Link to="/compose" className="btn-primary mt-4 px-5 py-2.5 text-sm">
+                新建记录
+              </Link>
             </div>
           ) : (
-            <div className="grid grid-cols-3 gap-2">
-              {photoMemories.map((entry) => (
-                <Link
-                  key={entry.id}
-                  to={`/entries/${entry.id}`}
-                  state={{ from: 'growth' }}
-                  className="group overflow-hidden rounded-2xl bg-cream shadow-sm ring-1 ring-line/40 active:scale-[0.98]"
-                >
-                  <div className="relative aspect-square">
-                    <img
-                      src={entry.imageUrl}
-                      alt={entry.title || '回忆'}
-                      className="h-full w-full object-cover"
-                    />
-                    <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-ink/55 to-transparent px-1.5 pb-1.5 pt-4 text-[9px] leading-tight text-white">
-                      <span className="line-clamp-2">
-                        {entry.title ||
-                          entry.place?.displayName ||
-                          entry.location ||
-                          '这一刻'}
-                      </span>
-                    </span>
-                  </div>
-                </Link>
-              ))}
-            </div>
+            <>
+              <p className="mb-3 px-1 text-[11px] text-ink-muted">
+                {currentToy.name} · {items.length} 个节点 · 含成长里程碑
+              </p>
+              <div className="growth-timeline">
+                {items.map((item, index) => {
+                  const { monthDay, year } = splitDate(item.date)
+
+                  if (item.kind === 'milestone') {
+                    return (
+                      <article key={item.id} className="growth-row">
+                        <div className="growth-date">
+                          <time dateTime={item.date}>
+                            <span className="block font-display text-[15px] leading-none text-ink">
+                              {monthDay}
+                            </span>
+                            <span className="mt-1 block text-[9px] text-ink-muted">
+                              {year}
+                            </span>
+                          </time>
+                        </div>
+                        <div
+                          className={`growth-dot ${index === 0 ? 'growth-dot-current' : ''}`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (item.entryId) {
+                              navigate(`/entries/${item.entryId}`, {
+                                state: { from: 'growth-timeline' },
+                              })
+                            } else if (item.path) {
+                              navigate(item.path)
+                            } else {
+                              navigate('/growth/stats/companion')
+                            }
+                          }}
+                          className="growth-milestone-card w-full text-left"
+                        >
+                          <span
+                            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${item.tone}`}
+                            aria-hidden="true"
+                          >
+                            {item.icon}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="inline-flex items-center gap-1 text-[9px] font-semibold tracking-wide text-terra-deep">
+                              <Flag className="h-3 w-3" />
+                              里程碑
+                            </span>
+                            <strong className="mt-0.5 block text-sm text-ink">
+                              {item.title}
+                            </strong>
+                            <span className="mt-0.5 block text-[11px] text-ink-muted">
+                              {item.desc}
+                            </span>
+                          </span>
+                        </button>
+                      </article>
+                    )
+                  }
+
+                  const entry = item.entry
+                  const location = entry.place?.displayName || entry.location
+                  const text = entry.aiDiary?.trim() || entry.userNote?.trim()
+                  return (
+                    <article key={item.id} className="growth-row">
+                      <div className="growth-date">
+                        <time dateTime={entry.date}>
+                          <span className="block font-display text-[15px] leading-none text-ink">
+                            {monthDay}
+                          </span>
+                          <span className="mt-1 block text-[9px] text-ink-muted">
+                            {year}
+                          </span>
+                        </time>
+                      </div>
+                      <div
+                        className={`growth-dot ${index === 0 ? 'growth-dot-current' : ''}`}
+                      />
+                      <Link
+                        to={`/entries/${entry.id}`}
+                        state={{ from: 'growth-timeline' }}
+                        className="growth-entry-card"
+                      >
+                        {entry.imageUrl && (
+                          <div className="growth-entry-image">
+                            <img
+                              src={entry.imageUrl}
+                              alt={entry.title || '成长记录'}
+                            />
+                          </div>
+                        )}
+                        <div className="p-3.5">
+                          <h2 className="font-medium leading-snug text-ink">
+                            {entry.title || '这一刻'}
+                          </h2>
+                          {location && (
+                            <p className="mt-1.5 flex items-center gap-1 text-[11px] text-ink-muted">
+                              <MapPin className="h-3.5 w-3.5 text-matcha-deep" />
+                              {location}
+                            </p>
+                          )}
+                          {text && (
+                            <p className="mt-2 line-clamp-3 text-[13px] leading-relaxed text-ink-soft">
+                              {text}
+                            </p>
+                          )}
+                        </div>
+                      </Link>
+                    </article>
+                  )
+                })}
+              </div>
+            </>
           )}
-        </section>
-      </div>
-    </>
+        </div>
+      ) : (
+        <div className="min-h-0 flex-1" role="tabpanel">
+          <Suspense
+            fallback={
+              <div className="flex min-h-[40vh] items-center justify-center text-sm text-ink-muted">
+                正在展开地图…
+              </div>
+            }
+          >
+            <TravelMapView embedded />
+          </Suspense>
+        </div>
+      )}
+    </div>
   )
 }
 
-function buildMilestones(entries: Entry[], days: number) {
+function buildMilestones(
+  entries: Entry[],
+  days: number,
+  birthDate?: string,
+) {
   const items: {
     id: string
+    date: string
     icon: ReactNode
     tone: string
     title: string
@@ -279,47 +370,84 @@ function buildMilestones(entries: Entry[], days: number) {
     entryId?: string
     path?: string
   }[] = []
+
+  const today = formatToday()
   items.push({
-    id: 'days',
-    icon: <CalendarHeart className="h-5 w-5" strokeWidth={1.8} />,
+    id: 'milestone-days',
+    date: today,
+    icon: <CalendarHeart className="h-4 w-4" strokeWidth={1.8} />,
     tone: 'bg-peach-soft text-rose-deep',
     title: `陪伴第 ${days} 天`,
     desc: '每一个普通日子，都算数。',
     path: '/growth/stats/companion',
   })
+
   const first = [...entries].sort((a, b) => a.date.localeCompare(b.date))[0]
   if (first) {
     items.push({
-      id: 'first',
-      icon: <BookHeart className="h-5 w-5" strokeWidth={1.8} />,
+      id: 'milestone-first',
+      date: first.date,
+      icon: <BookHeart className="h-4 w-4" strokeWidth={1.8} />,
       tone: 'bg-mustard-soft text-terra-deep',
       title: '第一篇日志',
-      desc: `${first.date} · ${first.title || first.location || '开始的故事'}`,
+      desc: first.title || first.location || '开始的故事',
       entryId: first.id,
     })
   }
+
   const firstTravel = entries
     .filter((e) => e.type === 'travel')
     .sort((a, b) => a.date.localeCompare(b.date))[0]
   if (firstTravel) {
     items.push({
-      id: 'travel',
-      icon: <MapPinned className="h-5 w-5" strokeWidth={1.8} />,
+      id: 'milestone-travel',
+      date: firstTravel.date,
+      icon: <MapPinned className="h-4 w-4" strokeWidth={1.8} />,
       tone: 'bg-mist-soft text-matcha-deep',
       title: '第一次旅行记录',
-      desc: `${firstTravel.date} · ${firstTravel.location || firstTravel.place?.displayName || '远方'}`,
+      desc:
+        firstTravel.location ||
+        firstTravel.place?.displayName ||
+        '远方',
       entryId: firstTravel.id,
     })
   }
-  if (days >= 100) {
+
+  if (days >= 100 && birthDate) {
     items.push({
-      id: '100',
-      icon: <PartyPopper className="h-5 w-5" strokeWidth={1.8} />,
+      id: 'milestone-100',
+      date: addDaysIso(birthDate, 99),
+      icon: <PartyPopper className="h-4 w-4" strokeWidth={1.8} />,
       tone: 'bg-lavender/60 text-matcha-deep',
       title: '百日纪念',
       desc: '一百个「今天也在一起」。',
       path: '/growth/stats/companion',
     })
   }
-  return items.slice(0, 4)
+
+  return items
+}
+
+function formatToday() {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+function addDaysIso(iso: string, daysToAdd: number) {
+  const [y, m, d] = iso.split('-').map(Number)
+  if (!y || !m || !d) return iso
+  const date = new Date(Date.UTC(y, m - 1, d))
+  date.setUTCDate(date.getUTCDate() + daysToAdd)
+  const yy = date.getUTCFullYear()
+  const mm = String(date.getUTCMonth() + 1).padStart(2, '0')
+  const dd = String(date.getUTCDate()).padStart(2, '0')
+  return `${yy}-${mm}-${dd}`
+}
+
+function splitDate(iso: string) {
+  const [y, m, d] = iso.split('-')
+  return { year: y, monthDay: `${Number(m)}/${Number(d)}` }
 }

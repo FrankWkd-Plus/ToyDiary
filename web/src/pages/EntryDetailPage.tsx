@@ -31,7 +31,7 @@ export function EntryDetailPage() {
   const fromState = (location.state as { from?: string } | null)?.from
   const backTo =
     fromState === 'growth-timeline'
-      ? '/growth/timeline'
+      ? '/growth'
       : fromState === 'growth' || fromState === 'growth-stats'
         ? '/growth'
         : '/archive'

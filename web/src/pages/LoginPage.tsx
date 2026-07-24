@@ -110,7 +110,10 @@ export function LoginPage() {
           <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-[1.4rem] bg-white text-3xl shadow-[var(--shadow-warm)]">
             🧸
           </span>
-          <h1 className="mt-4 font-display text-2xl text-ink">欢迎回来</h1>
+          {/* Avoid display font for CJK with 回 — some devices render it as a black blob */}
+          <h1 className="mt-4 text-2xl font-semibold tracking-wide text-ink">
+            欢迎回来
+          </h1>
           <p className="mt-1.5 text-xs text-ink-muted">
             登录后可创建玩偶档案与同步成长轨迹
           </p>

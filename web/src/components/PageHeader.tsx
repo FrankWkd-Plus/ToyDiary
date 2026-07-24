@@ -39,7 +39,8 @@ export function PageHeader({
         </button>
       )}
       <div className="min-w-0 flex-1">
-        <h1 className="font-display truncate text-[1.15rem] leading-tight text-ink">
+        {/* Avoid display font for CJK titles — ZCOOL XiaoWei can render 回 as a black blob */}
+        <h1 className="truncate text-[1.15rem] font-semibold leading-tight tracking-wide text-ink">
           {title}
         </h1>
         {subtitle && (

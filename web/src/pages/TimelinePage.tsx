@@ -7,7 +7,7 @@ import {
   Sparkles,
   X,
 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   companionDayStatus,
@@ -16,10 +16,11 @@ import {
 import { useAuth } from '../auth/AuthContext'
 import { ToyCardCarousel } from '../components/ToyCardCarousel'
 import { useApp } from '../context/AppContext'
+import { seedPlaceForLabel, uniqueCities } from '../places/placeUtils'
 
 export function TimelinePage() {
   const navigate = useNavigate()
-  const { currentToy, toys, setCurrentToyId, showToast } = useApp()
+  const { currentToy, toys, entries, setCurrentToyId, showToast } = useApp()
   const { isLoggedIn } = useAuth()
   const [pickerOpen, setPickerOpen] = useState(false)
   const [viewedToyId, setViewedToyId] = useState(currentToy?.id)
@@ -28,6 +29,22 @@ export function TimelinePage() {
   const viewedToyIndex = toys.findIndex((toy) => toy.id === viewedToy?.id)
   const avatar = toyAvatar(viewedToy, viewedToyIndex)
   const companion = viewedToy ? companionDayStatus(viewedToy) : null
+
+  // Stats only make sense for the currently loaded entry set
+  const statsReady = Boolean(viewedToy && currentToy?.id === viewedToy.id)
+  const travelCount = useMemo(
+    () => (statsReady ? entries.filter((e) => e.type === 'travel').length : 0),
+    [entries, statsReady],
+  )
+  const cityCount = useMemo(() => {
+    if (!statsReady) return 0
+    const places = entries
+      .map((e) => e.place || seedPlaceForLabel(e.location))
+      .filter((p): p is NonNullable<typeof p> => Boolean(p))
+    return uniqueCities(places).length
+  }, [entries, statsReady])
+  const momentCount = statsReady ? entries.length : 0
+  const companionDaysValue = companion?.isFuture ? 0 : companion?.days ?? 0
 
   useEffect(() => {
     if (currentToy?.id) setViewedToyId(currentToy.id)
@@ -40,6 +57,17 @@ export function TimelinePage() {
       return
     }
     navigate('/toys/new')
+  }
+
+  function requireViewedToy(path: string) {
+    if (!viewedToy) {
+      showToast('请先选择玩偶')
+      return
+    }
+    if (viewedToy.id !== currentToy?.id) {
+      setCurrentToyId(viewedToy.id)
+    }
+    navigate(path)
   }
 
   return (
@@ -82,7 +110,7 @@ export function TimelinePage() {
         </button>
       </header>
 
-      <main className="space-y-4 px-4 pb-5 pt-4">
+      <main className="space-y-3.5 px-4 pb-5 pt-4">
         {toys.length > 0 ? (
           <ToyCardCarousel
             onVisibleToyChange={(toy) => setViewedToyId(toy.id)}
@@ -143,6 +171,43 @@ export function TimelinePage() {
             </div>
             <Bell className="absolute right-32 top-5 h-4 w-4 rotate-12 text-terra-deep/60" />
           </button>
+        )}
+
+        {viewedToy && companion && (
+          <section className="grid grid-cols-2 gap-2">
+            <ArchiveStatCard
+              badge="📅 陪伴"
+              value={companionDaysValue}
+              unit="天"
+              hint={
+                companion.isFuture
+                  ? `还有 ${companion.daysUntil} 天相遇`
+                  : '一起走过的日子'
+              }
+              onClick={() => requireViewedToy('/growth/stats/companion')}
+            />
+            <ArchiveStatCard
+              badge="✈️ 旅行"
+              value={travelCount}
+              unit="次"
+              hint="出发的记录"
+              onClick={() => requireViewedToy('/growth/stats/travel')}
+            />
+            <ArchiveStatCard
+              badge="🏙️ 城市"
+              value={cityCount}
+              unit="座"
+              hint="留下脚印的地方"
+              onClick={() => requireViewedToy('/growth/stats/cities')}
+            />
+            <ArchiveStatCard
+              badge="✨ 瞬间"
+              value={momentCount}
+              unit="条"
+              hint="共同收藏的闪光"
+              onClick={() => requireViewedToy('/growth/stats/moments')}
+            />
+          </section>
         )}
       </main>
 
@@ -249,5 +314,38 @@ export function TimelinePage() {
         </div>
       )}
     </div>
+  )
+}
+
+function ArchiveStatCard({
+  badge,
+  value,
+  unit,
+  hint,
+  onClick,
+}: {
+  badge: string
+  value: number
+  unit: string
+  hint: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="archive-stat-card text-left active:scale-[0.99]"
+    >
+      <span className="inline-flex items-center rounded-full bg-white/70 px-2 py-0.5 text-[9px] font-medium text-terra-deep">
+        {badge}
+      </span>
+      <p className="mt-2 font-display text-[1.55rem] leading-none text-ink">
+        {value}
+        <span className="ml-0.5 font-sans text-[11px] font-medium text-ink-muted">
+          {unit}
+        </span>
+      </p>
+      <p className="mt-1 text-[10px] leading-snug text-ink-soft">{hint}</p>
+    </button>
   )
 }

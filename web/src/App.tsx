@@ -30,14 +30,6 @@ import { ToyArchiveDetailPage } from './pages/ToyArchiveDetailPage'
 import { ToysPage } from './pages/ToysPage'
 import { ThemeProvider } from './theme/ThemeProvider'
 
-const TravelMapPage = lazy(() =>
-  import('./pages/TravelMapPage').then((m) => ({ default: m.TravelMapPage })),
-)
-const GrowthTimelinePage = lazy(() =>
-  import('./pages/GrowthTimelinePage').then((m) => ({
-    default: m.GrowthTimelinePage,
-  })),
-)
 const GrowthStatsPage = lazy(() =>
   import('./pages/GrowthStatsPage').then((m) => ({ default: m.GrowthStatsPage })),
 )
@@ -87,10 +79,14 @@ export default function App() {
                     element={<Navigate to="/archive" replace />}
                   />
                   <Route path="growth" element={<GrowthPage />} />
-                  <Route path="growth/travel-map" element={<TravelMapPage />} />
+                  {/* Deep links → growth hub tabs (default: timeline) */}
                   <Route
                     path="growth/timeline"
-                    element={<GrowthTimelinePage />}
+                    element={<Navigate to="/growth" replace />}
+                  />
+                  <Route
+                    path="growth/travel-map"
+                    element={<Navigate to="/growth?tab=map" replace />}
                   />
                   <Route
                     path="growth/stats/:kind"

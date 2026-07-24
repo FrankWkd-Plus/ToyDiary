@@ -264,7 +264,7 @@ export function MePage() {
             label="日记"
             unit="篇"
             size="stat"
-            to={currentToy ? '/growth/timeline' : '/growth'}
+            to="/growth"
           />
           <DayCountNumber
             value={entries.filter((e) => e.imageUrl).length}

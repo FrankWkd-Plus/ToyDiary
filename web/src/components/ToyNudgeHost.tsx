@@ -132,7 +132,7 @@ function buildNudgePool(
       kind: 'travel',
       text: `【${name}】提议：打开旅行轨迹，我们再走一遍好不好？（我会乖乖当导航）`,
       cta: '看地图',
-      to: '/growth/travel-map',
+      to: '/growth?tab=map',
     })
   }
 
