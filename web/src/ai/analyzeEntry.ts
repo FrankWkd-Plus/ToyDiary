@@ -92,7 +92,9 @@ function generateLocalAnalysis(
   processedImageUrl: string | undefined,
 ): EntryAnalysis {
   const note = input.userNote?.trim() || ''
-  const scene = inferScene(note, input.location, imageSignals)
+  const explicitScene = inferSceneFromText(note, input.location)
+  const scene =
+    explicitScene || imageSignals?.scene || (note ? '今天的故事' : '这一刻')
   const needsComfort = /心情不好|不开心|难过|疲惫|好累|很累|压力|焦虑|烦|孤单/.test(
     note,
   )
@@ -100,8 +102,11 @@ function generateLocalAnalysis(
   const toyName = shortToyName(input.toy.name)
   const scenePhrase = scene === '这一刻' ? '今天的故事' : scene
   const title = titleForScene(scene, needsComfort, Boolean(input.imageUrl))
+  const resolvedImageAnalysis = input.imageUrl
+    ? imageDescriptionForScene(scene, imageSignals)
+    : undefined
   const visualSentence = input.imageUrl
-    ? `${imageSignals?.description || `照片里留下了${scenePhrase}。`}`
+    ? `${resolvedImageAnalysis || `照片里留下了${scenePhrase}。`}`
     : ''
   const eventSentence = note
     ? `你告诉我：“${note}”`
@@ -122,24 +127,18 @@ function generateLocalAnalysis(
     mood: needsComfort ? '温柔' : isHappy ? '开心' : moodForScene(scene),
     tags: uniqueTags([
       ...tagsForScene(scene),
-      ...(imageSignals?.tags || []),
+      ...(!explicitScene ? imageSignals?.tags || [] : []),
       needsComfort ? '陪伴' : '',
       input.imageUrl ? '照片记录' : '文字记录',
     ]).slice(0, 4),
-    imageAnalysis: input.imageUrl
-      ? imageSignals?.description || `画面记录了${scenePhrase}。`
-      : undefined,
+    imageAnalysis: resolvedImageAnalysis,
     entryType: inferEntryType(input),
     processedImageUrl,
     source: 'local',
   }
 }
 
-function inferScene(
-  note: string,
-  location: string | undefined,
-  imageSignals: ImageSignals | undefined,
-) {
+function inferSceneFromText(note: string, location: string | undefined) {
   const text = `${note} ${location || ''}`
   if (/日落|晚霞|夕阳|落日/.test(text)) return '日落'
   if (/海边|大海|沙滩|海浪/.test(text)) return '海边'
@@ -149,7 +148,7 @@ function inferScene(
   if (/森林|树林|公园|草地|山里/.test(text)) return '绿色小路'
   if (/旅行|出发|火车|飞机|城市/.test(text)) return '旅途'
   if (/在家|回家|房间|卧室|午睡/.test(text)) return '居家时光'
-  return imageSignals?.scene || (note ? '今天的故事' : '这一刻')
+  return undefined
 }
 
 function titleForScene(scene: string, needsComfort: boolean, hasImage: boolean) {
@@ -221,6 +220,23 @@ function tagsForScene(scene: string) {
   return map[scene] || ['日常']
 }
 
+function imageDescriptionForScene(
+  scene: string,
+  imageSignals: ImageSignals | undefined,
+) {
+  const descriptions: Record<string, string> = {
+    日落: '照片里留下了傍晚的天空，暖暖的光像是在慢慢和今天告别。',
+    海边: '照片和文字一起记录了开阔的海边，海水、沙滩和远处的风景都被收藏下来。',
+    咖啡店: '照片和文字一起记录了咖啡店里的生活片段。',
+    雨天: '照片和文字一起记录了一个带着雨意的安静时刻。',
+    夜景: '照片和文字一起记录了夜晚亮起来的灯光。',
+    绿色小路: '照片里有很多自然的颜色，像是一起走进了绿色风景里。',
+    旅途: '照片记录了这段旅途中的一个停留时刻。',
+    居家时光: '照片记录了在家度过的一段普通又珍贵的时光。',
+  }
+  return descriptions[scene] || imageSignals?.description || '照片记录了你和玩偶共同经历的一个生活瞬间。'
+}
+
 function uniqueTags(tags: string[]) {
   return [...new Set(tags.filter(Boolean))]
 }
@@ -249,17 +265,25 @@ async function analyzeImagePalette(imageUrl: string): Promise<ImageSignals> {
   let brightness = 0
   let samples = 0
 
-  for (let index = 0; index < pixels.length; index += 16) {
-    const red = pixels[index]
-    const greenValue = pixels[index + 1]
-    const blueValue = pixels[index + 2]
-    brightness += (red + greenValue + blueValue) / 3
-    if (red > 140 && red > greenValue * 1.08 && red > blueValue * 1.28) warm += 1
-    if (blueValue > 120 && blueValue > red * 1.12) blue += 1
-    if (greenValue > 95 && greenValue > red * 1.06 && greenValue > blueValue * 1.03) {
-      green += 1
+  const sampledHeight = Math.round(canvas.height * 0.62)
+  for (let y = 0; y < sampledHeight; y += 2) {
+    for (let x = 0; x < canvas.width; x += 2) {
+      const index = (y * canvas.width + x) * 4
+      const red = pixels[index]
+      const greenValue = pixels[index + 1]
+      const blueValue = pixels[index + 2]
+      brightness += (red + greenValue + blueValue) / 3
+      if (red > 145 && red > greenValue * 1.1 && red > blueValue * 1.3) warm += 1
+      if (blueValue > 115 && blueValue > red * 1.1) blue += 1
+      if (
+        greenValue > 95 &&
+        greenValue > red * 1.06 &&
+        greenValue > blueValue * 1.03
+      ) {
+        green += 1
+      }
+      samples += 1
     }
-    samples += 1
   }
 
   const warmRatio = warm / samples
