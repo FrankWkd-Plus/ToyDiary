@@ -30,21 +30,13 @@ import {
   getToyVitality,
   vitalityStatusLine,
 } from '../archive/toyVitality'
+import {
+  loadChats,
+  saveChats,
+  type ChatMessage,
+} from '../conversation/chatStorage'
 import { useApp } from '../context/AppContext'
 import type { Entry, Toy } from '../types'
-
-type ChatRole = 'user' | 'toy' | 'system'
-type ChatMessageKind = 'text' | 'image' | 'memory' | 'error'
-
-interface ChatMessage {
-  id: string
-  role: ChatRole
-  kind: ChatMessageKind
-  text?: string
-  imageUrl?: string
-  entryId?: string
-  createdAt: string
-}
 
 const QUICK_TOPICS = [
   '和你说说今天',
@@ -54,28 +46,10 @@ const QUICK_TOPICS = [
   '一起写日记',
 ] as const
 
-const CHAT_STORAGE_KEY = 'toydairy.conversations.v1'
 const EMPTY_MESSAGES: ChatMessage[] = []
 
 function uid(prefix: string) {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`
-}
-
-function loadChats(): Record<string, ChatMessage[]> {
-  try {
-    const raw = window.localStorage.getItem(CHAT_STORAGE_KEY)
-    return raw ? (JSON.parse(raw) as Record<string, ChatMessage[]>) : {}
-  } catch {
-    return {}
-  }
-}
-
-function saveChats(chats: Record<string, ChatMessage[]>) {
-  try {
-    window.localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(chats))
-  } catch {
-    // A large uploaded photo may exceed localStorage. The current session still works.
-  }
 }
 
 function createOpeningMessage(toy: Toy, entries: Entry[]): ChatMessage {

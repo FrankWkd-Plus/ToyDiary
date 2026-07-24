@@ -266,7 +266,7 @@ export function formatRelativeTime(iso: string, now = Date.now()): string {
 
 export function ownedToyAvatar(id: string | undefined, index = 0) {
   if (id === 'toy_luna_demo' || index <= 0) return '/toy-cards/profile.jpg'
-  if (id === 'toy_bean_demo' || index === 1) return '/toy-cards/highlight-3.jpg'
+  if (id === 'toy_bean_demo' || index === 1) return '/toy-cards/geese-avatar.jpg'
   return index % 2 === 0
     ? '/toy-cards/highlight-2.jpg'
     : '/toy-cards/highlight-1.jpg'
@@ -290,7 +290,7 @@ export function toOwnedCommunityToy(toy: {
   return {
     id: toy.id,
     name: toy.name,
-    emoji: '🧸',
+    emoji: toy.id === 'toy_bean_demo' ? '🐧' : '🧸',
     role: toy.role,
     bio: toy.bio || `${toy.name} 的社区主页`,
     traits: toy.traits,

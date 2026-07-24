@@ -1,6 +1,13 @@
-import { Camera, Check, MapPin, Sparkles } from 'lucide-react'
-import { getToyVitality } from '../archive/toyVitality'
-import type { Entry, Toy } from '../types'
+import {
+  CalendarDays,
+  Camera,
+  ChevronRight,
+  MessageCircle,
+  Sparkles,
+} from 'lucide-react'
+import { companionDays } from '../archive/archiveUtils'
+import { uniqueCities } from '../places/placeUtils'
+import type { Entry, Place, Toy } from '../types'
 
 export interface ToyCardPhotos {
   profile: string
@@ -10,20 +17,28 @@ export interface ToyCardPhotos {
 export function ToyCard({
   toy,
   photos,
-  active,
-  onSelect,
-  entries = [],
+  onOpenConversation,
+  chatPreview,
+  entries,
 }: {
   toy: Toy
   photos: ToyCardPhotos
-  active: boolean
-  onSelect: () => void
-  entries?: Entry[]
+  onOpenConversation: () => void
+  chatPreview: string
+  entries: Entry[]
 }) {
-  const vitality = getToyVitality(toy, entries)
+  const cityCount = uniqueCities(
+    entries
+      .map((entry) => entry.place)
+      .filter((place): place is Place => Boolean(place)),
+  ).length
+  const days = companionDays(toy)
 
   return (
-    <article className="toy-id-card">
+    <article
+      className="toy-id-card"
+      aria-label={`${toy.name}的玩偶身份卡`}
+    >
       <div className="toy-id-card__topbar">
         <span className="flex gap-1.5" aria-hidden="true">
           <i />
@@ -37,45 +52,28 @@ export function ToyCard({
 
       <div className="p-3.5 pb-4">
         <section className="grid grid-cols-[42%_1fr] gap-3">
-          <div className="toy-profile-photo relative">
-            <img src={photos.profile} alt={`${toy.name}的介绍照`} />
-            <span className="absolute bottom-2 left-2 rounded-full bg-white/90 px-2 py-1 text-[9px] font-semibold text-matcha-deep shadow-sm">
-              MY TOY
-            </span>
-            <span
-              className="absolute -right-1 -top-1 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-paper text-sm shadow-sm"
-              title={`${vitality.label} · 电量 ${vitality.energy}`}
-              aria-label={`状态 ${vitality.label}`}
-            >
-              {vitality.emoji}
-            </span>
+          <div className="min-w-0">
+            <div className="toy-profile-photo relative">
+              <img src={photos.profile} alt={`${toy.name}的介绍照`} />
+              <span className="absolute bottom-2 left-2 rounded-full bg-white/90 px-2 py-1 text-[9px] font-semibold text-matcha-deep shadow-sm">
+                MY TOY
+              </span>
+            </div>
           </div>
 
           <div className="min-w-0 py-0.5">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <h2 className="font-display truncate text-[1.35rem] leading-none text-ink">
-                {toy.name}
-              </h2>
-              <span className="toy-role-tag">{toy.role}</span>
-            </div>
+            <h2 className="font-display truncate text-[1.35rem] leading-none text-ink">
+              {toy.name}
+            </h2>
 
             <div className="toy-sketch-line" />
 
-            <p className="text-[11px] font-medium text-matcha-deep">
-              {vitality.emoji} {vitality.line}
-            </p>
-
-            <h3 className="mt-1.5 text-xs font-semibold text-ink">玩偶简介</h3>
-            <p className="mt-1 line-clamp-3 text-[11px] leading-[1.55] text-ink-soft">
-              {toy.bio ||
-                `${toy.name}是一位温柔的${toy.role}，喜欢和你一起收集日常里的小小快乐。`}
+            <p className="text-[11px] font-semibold text-matcha-deep">
+              {toy.zodiac || '神秘星座'}
             </p>
 
             <div className="mt-2 flex flex-wrap gap-1">
-              <span className="rounded-full bg-peach-soft px-2 py-0.5 text-[9px] font-medium text-rose-deep">
-                {vitality.label} ·{vitality.energy}
-              </span>
-              {toy.traits.slice(0, 2).map((trait) => (
+              {toy.traits.slice(0, 4).map((trait) => (
                 <span
                   key={trait}
                   className="rounded-full bg-mist-soft px-2 py-0.5 text-[9px] font-medium text-matcha-deep"
@@ -84,16 +82,44 @@ export function ToyCard({
                 </span>
               ))}
             </div>
+
+            <p className="mt-3 flex items-center gap-1.5 text-[10px] text-ink-muted">
+              <CalendarDays className="h-3.5 w-3.5 shrink-0 text-matcha-deep" />
+              出生日期 {toy.birthDate.replaceAll('-', '.')}
+            </p>
           </div>
         </section>
 
-        <div className="mt-3 flex items-center justify-between gap-2 rounded-xl bg-cream px-3 py-2 text-[10px] text-ink-muted">
-          <span className="flex min-w-0 items-center gap-1">
-            <MapPin className="h-3 w-3 shrink-0 text-matcha-deep" />
-            <span className="truncate">{toy.birthPlace}</span>
+        <button
+          type="button"
+          className="toy-chat-bubble"
+          onClick={(event) => {
+            event.stopPropagation()
+            onOpenConversation()
+          }}
+          aria-label={`进入和${toy.name}的对话`}
+        >
+          <span className="toy-chat-bubble__icon" aria-hidden="true">
+            <MessageCircle className="h-4 w-4" strokeWidth={2} />
           </span>
-          <span className="shrink-0">{toy.birthDate.replaceAll('-', '.')}</span>
-        </div>
+          <span className="toy-chat-bubble__content">
+            <span className="toy-chat-bubble__label">{toy.name} 刚刚说</span>
+            <span className="toy-chat-bubble__message">“{chatPreview}”</span>
+          </span>
+          <span className="toy-chat-bubble__action">
+            去聊聊
+            <ChevronRight className="h-3 w-3" strokeWidth={2.5} />
+          </span>
+        </button>
+
+        <section
+          className="mt-4 grid grid-cols-3 gap-2"
+          aria-label={`${toy.name}的陪伴数据`}
+        >
+          <ToyStat value={entries.length} label="日志" tone="peach" />
+          <ToyStat value={cityCount} label="城市" tone="mist" />
+          <ToyStat value={days} label="陪伴" suffix="天" tone="mustard" />
+        </section>
 
         <section className="mt-4">
           <div className="flex items-center justify-center gap-2">
@@ -126,20 +152,35 @@ export function ToyCard({
           </div>
         </section>
 
-        <button
-          type="button"
-          onClick={onSelect}
-          disabled={active}
-          className={
-            active
-              ? 'toy-current-button toy-current-button--active'
-              : 'toy-current-button'
-          }
-        >
-          {active && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
-          {active ? '当前玩偶' : '设为当前玩偶'}
-        </button>
       </div>
     </article>
+  )
+}
+
+function ToyStat({
+  value,
+  label,
+  suffix,
+  tone,
+}: {
+  value: number
+  label: string
+  suffix?: string
+  tone: 'peach' | 'mist' | 'mustard'
+}) {
+  const toneClass = {
+    peach: 'bg-peach-soft text-rose-deep',
+    mist: 'bg-mist-soft text-matcha-deep',
+    mustard: 'bg-mustard-soft text-terra-deep',
+  }[tone]
+
+  return (
+    <div className={`rounded-2xl px-2 py-2.5 text-center ${toneClass}`}>
+      <p className="font-display text-xl leading-none">
+        {value}
+        {suffix && <span className="ml-0.5 text-[9px] font-sans">{suffix}</span>}
+      </p>
+      <p className="mt-1 text-[10px] font-medium tracking-wide">{label}</p>
+    </div>
   )
 }

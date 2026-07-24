@@ -102,7 +102,7 @@ export function NewToyPage() {
 
   return (
     <>
-      <PageHeader title="新增玩偶" back="/archive" soft />
+      <PageHeader title="新增玩偶" back="/toys" soft />
       <form onSubmit={onSubmit} className="space-y-4 px-4 py-4">
         <ToyAvatarStudio
           value={avatarUrl}

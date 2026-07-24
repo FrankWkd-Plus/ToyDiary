@@ -108,31 +108,52 @@ const LUNA_DEMO_UPDATES: Record<string, Partial<Entry>> = {
       '2026年5月12日，家。\n\n窗台有一小块阳光，刚好够我躺下。主人说今天什么也不做，我也跟着什么都不想。\n\n原来「什么都不做」也是一种很满的一天。醒来时，光还在，你还在。',
   },
   entry_bean1: {
-    location: '大理',
-    title: '风很大',
+    type: 'travel',
+    date: '2026-07-06',
+    location: '海湾岸边',
+    title: '鹅子的旅行日记',
     userNote:
-      '洱海边的风大得像要把人吹走。我把围巾给豆豆围了两圈，又给自己围一圈，两个人变成会走路的小粽子。',
-    mood: '兴奋',
+      '给鹅鹅鹅戴上毛线尖帽和红围巾，在海边认真拍了一张“到此一游”。风很大，帽子没飞，鹅的旅行家气质先飞起来了。',
+    mood: '开心',
+    imageUrl: '/toy-cards/geese-trip-1.jpg',
     aiDiary:
-      '2026年3月1日，大理。\n\n风把围巾吹成一面小旗，我整只熊几乎要起飞。主人说「抓紧我」——我抓紧了。\n\n再大的风也吹不走我们的脚印。后来我们去吃了烤乳扇，我假装自己也咬了一口。',
+      '2026年7月6日，海湾岸边。\n\n妈妈给我戴上尖尖的毛线帽，还围了最显眼的红围巾。风从海面跑过来，我站在拍立得后面郑重宣布：鹅子的旅行日记，从这一页正式开始。\n\n帽子没有飞走，说明今天的风已经认可了我这位旅行家。',
   },
   entry_bean_chengdu: {
-    location: '成都',
-    title: '火锅店门口',
+    type: 'travel',
+    date: '2026-07-12',
+    location: '意大利 · 多洛米蒂',
+    title: '妈妈，鹅生是狂野',
     userNote:
-      '情人节不搞仪式，就在火锅店门口排队。辣香从门缝钻出来，我和豆豆都眼睛发亮——当然，豆豆只能闻。',
-    mood: '开心',
+      '雪山、草坡和小教堂都在身后，鹅鹅鹅冲到镜头最前面。虽然焦点留给了远山，但它坚信真正的主角不需要清晰。',
+    mood: '兴奋',
+    imageUrl: '/toy-cards/geese-trip-2.jpg',
     aiDiary:
-      '2026年2月14日，成都。\n\n火锅的香气从门缝里钻出来，我的绒毛都要变成花椒味了。主人说「豆豆不能吃辣」——可是看着你们哈哈大笑，我已经吃得很饱了。\n\n原来节日的味道，不一定要进嘴巴。',
+      '2026年7月12日，意大利多洛米蒂。\n\n妈妈，鹅生是狂野。雪山那么高，草地那么绿，我当然要冲到最前面证明自己来过。虽然镜头把我拍得有一点模糊，但自由本来就不该被对焦。\n\n今天解锁的新身份：阿尔卑斯山脚下的狂野小鹅。',
   },
   entry_bean_text: {
-    location: '火车上',
-    title: '写给口袋的信',
+    type: 'travel',
+    date: '2026-07-15',
+    location: '云上航班',
+    title: '鹅要飞得更高',
     userNote:
-      '座位晃晃悠悠，耳机里放着随便的歌。我把豆豆塞进外套口袋，只露出半个脑袋看窗外——下一座城还没到，已经开始期待。',
+      '飞机穿过云层时，把鹅鹅鹅放到舷窗边。它盯着机翼看了很久，大概正在研究一只不会扇翅膀的大鸟为什么也能飞。',
     mood: '好奇',
+    imageUrl: '/toy-cards/geese-trip-3.jpg',
     aiDiary:
-      '2026年4月20日，火车上。\n\n车窗外的电线杆一棵一棵往后跑。我数到 87 就睡着了。醒来时主人还在，风景换成了新的——这大概就是旅行最好的部分。\n\n口袋很暖和，像一座会移动的小房子。',
+      '2026年7月15日，云上航班。\n\n我靠着舷窗认真观察机翼。它明明不会扇，却带着我们越过了整片云。作为一只名字里有鹅的旅行家，我决定暂时承认：飞机也挺会飞。\n\n下一站还没落地，期待已经先到达了。',
+  },
+  entry_bean_park: {
+    type: 'travel',
+    date: '2026-07-18',
+    location: '法国 · 巴黎 · 卢浮宫',
+    title: '今天和艺术鹅解',
+    userNote:
+      '阳光很好，在卢浮宫玻璃金字塔前把鹅鹅鹅举起来。它一脸认真，像是马上要进去点评名画。',
+    mood: '好奇',
+    imageUrl: '/toy-cards/geese-trip-4.jpg',
+    aiDiary:
+      '2026年7月18日，法国巴黎卢浮宫。\n\n妈妈把我举到玻璃金字塔前，说今天要去看艺术。我先在门口摆好姿势——参观可以慢慢来，旅行鹅的游客照必须先拍。\n\n如果蒙娜丽莎见到我也微笑，那一定是因为她懂鹅鹅鹅的审美。',
   },
 }
 
@@ -179,6 +200,18 @@ function applyDemoUpdates(data: StoreData) {
   data.entries = data.entries.filter(
     (entry) => !REMOVED_DEMO_TOY_IDS.has(entry.toyId),
   )
+  const geese = data.toys.find((toy) => toy.id === 'toy_bean_demo')
+  if (geese) {
+    Object.assign(geese, {
+      name: '鹅鹅鹅',
+      avatarUrl: '/toy-cards/geese-avatar.jpg',
+      birthPlace: '旅行箱里',
+      role: '狂野旅行鹅',
+      traits: ['狂野', '好奇', '爱出发'],
+      bio: '一只看起来像企鹅、坚持自称小鹅的旅行家。鹅生信条是：风景可以很远，妈妈必须在旁边。',
+      monologue: '妈妈，今天我们去哪里狂野？',
+    })
+  }
   if (
     data.currentToyId &&
     !data.toys.some((toy) => toy.id === data.currentToyId)
@@ -187,7 +220,12 @@ function applyDemoUpdates(data: StoreData) {
   }
   data.entries.forEach((entry) => {
     const update = LUNA_DEMO_UPDATES[entry.id]
-    if (update) Object.assign(entry, update)
+    if (update) {
+      Object.assign(entry, update)
+      if (update.location) {
+        entry.place = seedPlaceForLabel(update.location)
+      }
+    }
     const narration = ENTRY_NARRATION_UPDATES[entry.id]
     if (narration) {
       // Always refresh demo seed copy so dual-perspective UI has full text.
@@ -221,14 +259,15 @@ function seed(): StoreData {
     },
     {
       id: beanId,
-      name: '豆豆',
+      name: '鹅鹅鹅',
       birthDate: '2025-12-01',
-      birthPlace: '成都宽窄巷子',
-      role: '童年伙伴',
-      traits: ['活泼', '话多', '爱吃'],
+      birthPlace: '旅行箱里',
+      role: '狂野旅行鹅',
+      traits: ['狂野', '好奇', '爱出发'],
       zodiac: '射手座',
-      bio: '豆豆喜欢热闹，也喜欢在口袋里藏糖纸和辣条包装。',
-      monologue: '今天也要一起出门吗？我已经选好围巾啦！',
+      bio: '一只看起来像企鹅、坚持自称小鹅的旅行家。鹅生信条是：风景可以很远，妈妈必须在旁边。',
+      monologue: '妈妈，今天我们去哪里狂野？',
+      avatarUrl: '/toy-cards/geese-avatar.jpg',
       createdAt: '2026-01-10T08:00:00.000Z',
     },
     {
@@ -344,66 +383,66 @@ function seed(): StoreData {
         '2026年7月10日，家。\n\n台灯把主人的影子拉得很长。我听完两件小事，又听了一句「明天见」。\n\n我把这句话收进绒毛里——比任何旅行纪念都沉。',
       createdAt: '2026-07-10T22:15:00.000Z',
     },
-    // —— 豆豆 ——
+    // —— 鹅鹅鹅 ——
     {
       id: 'entry_bean1',
       toyId: beanId,
       type: 'travel',
-      date: '2026-03-01',
-      location: '大理',
-      title: '风很大',
+      date: '2026-07-06',
+      location: '海湾岸边',
+      title: '鹅子的旅行日记',
       userNote:
-        '洱海边的风大得像要把人吹走。我把围巾给豆豆围了两圈，又给自己围一圈，两个人变成会走路的小粽子。',
-      mood: '兴奋',
-      imageUrl:
-        'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&q=80',
+        '给鹅鹅鹅戴上毛线尖帽和红围巾，在海边认真拍了一张“到此一游”。风很大，帽子没飞，鹅的旅行家气质先飞起来了。',
+      mood: '开心',
+      imageUrl: '/toy-cards/geese-trip-1.jpg',
       aiDiary:
-        '2026年3月1日，大理。\n\n风把围巾吹成一面小旗，我整只熊几乎要起飞。主人说「抓紧我」——我抓紧了。\n\n再大的风也吹不走我们的脚印。后来我们去吃了烤乳扇，我假装自己也咬了一口。',
-      createdAt: '2026-03-01T12:00:00.000Z',
+        '2026年7月6日，海湾岸边。\n\n妈妈给我戴上尖尖的毛线帽，还围了最显眼的红围巾。风从海面跑过来，我站在拍立得后面郑重宣布：鹅子的旅行日记，从这一页正式开始。\n\n帽子没有飞走，说明今天的风已经认可了我这位旅行家。',
+      createdAt: '2026-07-06T12:00:00.000Z',
     },
     {
       id: 'entry_bean_chengdu',
       toyId: beanId,
-      type: 'daily',
-      date: '2026-02-14',
-      location: '成都',
-      title: '火锅店门口',
+      type: 'travel',
+      date: '2026-07-12',
+      location: '意大利 · 多洛米蒂',
+      title: '妈妈，鹅生是狂野',
       userNote:
-        '情人节不搞仪式，就在火锅店门口排队。辣香从门缝钻出来，我和豆豆都眼睛发亮——当然，豆豆只能闻。',
-      mood: '开心',
-      imageUrl:
-        'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=800&q=80',
+        '雪山、草坡和小教堂都在身后，鹅鹅鹅冲到镜头最前面。虽然焦点留给了远山，但它坚信真正的主角不需要清晰。',
+      mood: '兴奋',
+      imageUrl: '/toy-cards/geese-trip-2.jpg',
       aiDiary:
-        '2026年2月14日，成都。\n\n火锅的香气从门缝里钻出来，我的绒毛都要变成花椒味了。主人说「豆豆不能吃辣」——可是看着你们哈哈大笑，我已经吃得很饱了。\n\n原来节日的味道，不一定要进嘴巴。',
-      createdAt: '2026-02-14T19:40:00.000Z',
+        '2026年7月12日，意大利多洛米蒂。\n\n妈妈，鹅生是狂野。雪山那么高，草地那么绿，我当然要冲到最前面证明自己来过。虽然镜头把我拍得有一点模糊，但自由本来就不该被对焦。\n\n今天解锁的新身份：阿尔卑斯山脚下的狂野小鹅。',
+      createdAt: '2026-07-12T19:40:00.000Z',
     },
     {
       id: 'entry_bean_text',
       toyId: beanId,
-      type: 'text',
-      date: '2026-04-20',
-      location: '火车上',
-      title: '写给口袋的信',
+      type: 'travel',
+      date: '2026-07-15',
+      location: '云上航班',
+      title: '鹅要飞得更高',
       userNote:
-        '座位晃晃悠悠，耳机里放着随便的歌。我把豆豆塞进外套口袋，只露出半个脑袋看窗外——下一座城还没到，已经开始期待。',
+        '飞机穿过云层时，把鹅鹅鹅放到舷窗边。它盯着机翼看了很久，大概正在研究一只不会扇翅膀的大鸟为什么也能飞。',
       mood: '好奇',
+      imageUrl: '/toy-cards/geese-trip-3.jpg',
       aiDiary:
-        '2026年4月20日，火车上。\n\n车窗外的电线杆一棵一棵往后跑。我数到 87 就睡着了。醒来时主人还在，风景换成了新的——这大概就是旅行最好的部分。\n\n口袋很暖和，像一座会移动的小房子。',
-      createdAt: '2026-04-20T15:10:00.000Z',
+        '2026年7月15日，云上航班。\n\n我靠着舷窗认真观察机翼。它明明不会扇，却带着我们越过了整片云。作为一只名字里有鹅的旅行家，我决定暂时承认：飞机也挺会飞。\n\n下一站还没落地，期待已经先到达了。',
+      createdAt: '2026-07-15T15:10:00.000Z',
     },
     {
       id: 'entry_bean_park',
       toyId: beanId,
-      type: 'daily',
-      date: '2026-06-02',
-      location: '人民公园',
-      title: '长椅上的半小时',
+      type: 'travel',
+      date: '2026-07-18',
+      location: '法国 · 巴黎 · 卢浮宫',
+      title: '今天和艺术鹅解',
       userNote:
-        '下班绕路去公园。长椅有点旧，树荫刚好。豆豆坐在我腿上，我们什么也不做，只听蝉叫。',
-      mood: '平静',
+        '阳光很好，在卢浮宫玻璃金字塔前把鹅鹅鹅举起来。它一脸认真，像是马上要进去点评名画。',
+      mood: '好奇',
+      imageUrl: '/toy-cards/geese-trip-4.jpg',
       aiDiary:
-        '2026年6月2日，人民公园。\n\n蝉声一层一层的，像夏天在说话。主人什么也没说，我也没有——有些陪伴不需要台词。\n\n半小时很短，却够我记住树荫的形状。',
-      createdAt: '2026-06-02T18:40:00.000Z',
+        '2026年7月18日，法国巴黎卢浮宫。\n\n妈妈把我举到玻璃金字塔前，说今天要去看艺术。我先在门口摆好姿势——参观可以慢慢来，旅行鹅的游客照必须先拍。\n\n如果蒙娜丽莎见到我也微笑，那一定是因为她懂鹅鹅鹅的审美。',
+      createdAt: '2026-07-18T18:40:00.000Z',
     },
     // —— 摩卡 / 雪球 / 皮皮（seed 仍保留；applyDemoUpdates 会按需过滤）——
     {

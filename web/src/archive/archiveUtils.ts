@@ -7,18 +7,31 @@ const FALLBACK_PHOTOS = [
 ] as const
 
 export function companionDays(toy: Toy) {
-  if (toy.id === 'toy_luna_demo') return 100
-  const start = new Date(`${toy.birthDate}T00:00:00`).getTime()
+  return companionDayStatus(toy).days
+}
+
+export function companionDayStatus(toy: Toy) {
+  const [year, month, day] = toy.birthDate.split('-').map(Number)
   const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  return Math.max(1, Math.floor((today.getTime() - start) / 86400000) + 1)
+  const startOrdinal = Date.UTC(year, month - 1, day) / 86400000
+  const todayOrdinal =
+    Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()) / 86400000
+  const difference = todayOrdinal - startOrdinal
+
+  if (!Number.isFinite(difference)) {
+    return { days: 0, isFuture: false, daysUntil: 0 }
+  }
+  if (difference < 0) {
+    return { days: 0, isFuture: true, daysUntil: Math.abs(difference) }
+  }
+  return { days: difference + 1, isFuture: false, daysUntil: 0 }
 }
 
 export function toyAvatar(toy: Toy | null | undefined, index = 0) {
   if (toy?.avatarUrl) return toy.avatarUrl
   if (toy?.id === 'toy_luna_demo' || index <= 0) return '/toy-cards/profile.jpg'
   if (toy?.id === 'toy_bean_demo' || index === 1) {
-    return '/toy-cards/highlight-3.jpg'
+    return '/toy-cards/geese-avatar.jpg'
   }
   return index % 2 === 0
     ? '/toy-cards/highlight-2.jpg'
