@@ -488,7 +488,7 @@ export const mockStore = {
       id: uid('entry'),
       toyId,
       ...input,
-      aiDiary: mockDiary(toy, input),
+      aiDiary: input.aiDiary || mockDiary(toy, input),
       createdAt: new Date().toISOString(),
     }
     data.entries.unshift(entry)

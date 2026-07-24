@@ -36,6 +36,8 @@ export interface Entry {
   mood?: string
   imageUrl?: string
   aiDiary?: string
+  tags?: string[]
+  imageAnalysis?: string
   createdAt: string
 }
 
@@ -48,6 +50,9 @@ export interface CreateEntryInput {
   mood?: string
   /** local object URL or data URL for mock */
   imageUrl?: string
+  aiDiary?: string
+  tags?: string[]
+  imageAnalysis?: string
 }
 
 export const ENTRY_TYPE_LABEL: Record<EntryType, string> = {

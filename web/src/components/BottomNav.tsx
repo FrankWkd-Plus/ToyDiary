@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { Plus } from 'lucide-react'
 import {
-  CommunityNavIcon,
+  ConversationNavIcon,
   DiaryNavIcon,
   GrowthNavIcon,
   MeNavIcon,
@@ -13,7 +13,7 @@ const tabs = [
   { to: '/archive', label: '档案', icon: DiaryNavIcon },
   { to: '/growth', label: '成长', icon: GrowthNavIcon },
   { to: '/compose', label: '', icon: Plus, center: true },
-  { to: '/community', label: '社区', icon: CommunityNavIcon },
+  { to: '/conversation', label: '对话', icon: ConversationNavIcon },
   { to: '/me', label: '我的', icon: MeNavIcon },
 ] as const
 
@@ -52,7 +52,8 @@ export function BottomNav() {
             pathname === tab.to ||
             (tab.to === '/me' &&
               (pathname.startsWith('/me') || pathname.startsWith('/toys'))) ||
-            (tab.to === '/community' && pathname.startsWith('/community')) ||
+            (tab.to === '/conversation' &&
+              pathname.startsWith('/conversation')) ||
             (tab.to === '/archive' &&
               (pathname.startsWith('/archive') ||
                 pathname.startsWith('/entries') ||

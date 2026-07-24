@@ -129,7 +129,7 @@ function TimelineItem({ entry, isFirst }: { entry: Entry; isFirst: boolean }) {
   const hasImage = Boolean(entry.imageUrl)
   const hasUserText = Boolean(entry.title?.trim() || entry.userNote?.trim())
   const imageOnly = hasImage && !hasUserText
-  const text = entry.userNote?.trim() || entry.aiDiary?.trim()
+  const text = entry.aiDiary?.trim() || entry.userNote?.trim()
 
   return (
     <article className="growth-row">
@@ -182,6 +182,19 @@ function TimelineItem({ entry, isFirst }: { entry: Entry; isFirst: boolean }) {
               <p className={`mt-2 text-[13px] leading-relaxed text-ink-soft ${hasImage ? 'line-clamp-2' : 'line-clamp-4'}`}>
                 {text}
               </p>
+            )}
+
+            {entry.tags && entry.tags.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {entry.tags.slice(0, 3).map((tag) => (
+                  <span
+                    key={tag}
+                    className="rounded-full bg-mist-soft px-2 py-0.5 text-[9px] text-matcha-deep"
+                  >
+                    #{tag}
+                  </span>
+                ))}
+              </div>
             )}
 
             {!hasImage && (

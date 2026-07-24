@@ -38,7 +38,7 @@ export function RecordMethodSheet({
     const imageUrl = URL.createObjectURL(file)
     onClose()
     if (source === 'gallery') {
-      navigate('/compose', { state: { mode: 'photo', imageUrl } })
+      navigate('/compose', { state: { mode: 'photo', imageUrl, imageFile: file } })
       return
     }
 
@@ -50,14 +50,20 @@ export function RecordMethodSheet({
         setOcrProgress(Math.max(0, Math.min(1, progress)))
       })
       navigate('/compose', {
-        state: { mode: 'photo', imageUrl, ocrText, fromCamera: true },
+        state: {
+          mode: 'photo',
+          imageUrl,
+          imageFile: file,
+          ocrText,
+          fromCamera: true,
+        },
       })
       showToast(
         ocrText ? '照片文字已识别，可在描述中修改' : '拍照完成，未识别到文字',
       )
     } catch {
       navigate('/compose', {
-        state: { mode: 'photo', imageUrl, fromCamera: true },
+        state: { mode: 'photo', imageUrl, imageFile: file, fromCamera: true },
       })
       showToast('拍照完成，OCR 暂时未识别成功')
     } finally {

@@ -100,6 +100,11 @@ export function EntryDetailPage() {
           <span className="tag tag-mist">{ENTRY_TYPE_LABEL[entry.type]}</span>
           <time className="tabular-nums text-ink-muted">{entry.date}</time>
           {entry.mood && <span className="tag tag-mustard">{entry.mood}</span>}
+          {entry.tags?.map((tag) => (
+            <span key={tag} className="tag tag-cream">
+              #{tag}
+            </span>
+          ))}
         </div>
 
         {entry.location && (
@@ -115,6 +120,13 @@ export function EntryDetailPage() {
           <p className="mb-4 rounded-2xl bg-gradient-to-br from-cream-dark to-cream px-3.5 py-3 text-sm leading-relaxed text-ink-soft ring-1 ring-line/40">
             <span className="text-xs font-medium text-ink-muted">主人备注 · </span>
             {entry.userNote}
+          </p>
+        )}
+
+        {entry.imageAnalysis && (
+          <p className="mb-4 rounded-2xl bg-mist-soft/70 px-3.5 py-3 text-xs leading-relaxed text-matcha-deep">
+            <span className="font-medium">照片理解 · </span>
+            {entry.imageAnalysis}
           </p>
         )}
 

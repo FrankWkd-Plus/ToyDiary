@@ -58,9 +58,9 @@ export function TimelinePage() {
         </div>
         <button
           type="button"
-          onClick={() => showToast('暂时没有新的玩偶消息')}
+          onClick={() => navigate('/conversation')}
           className="relative flex h-9 w-9 items-center justify-center rounded-full bg-mustard-soft text-matcha-deep shadow-[var(--shadow-warm-sm)] ring-1 ring-line/30 transition-transform active:scale-95"
-          aria-label="消息"
+          aria-label="进入玩偶对话"
         >
           <MessageCircle className="h-5 w-5 fill-white/70" />
           <span className="absolute right-0.5 top-0.5 h-2 w-2 rounded-full border-2 border-white bg-rose" />

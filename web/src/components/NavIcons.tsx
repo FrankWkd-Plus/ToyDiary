@@ -105,42 +105,36 @@ export function GrowthNavIcon(props: SVGProps<SVGSVGElement>) {
   )
 }
 
-export function CommunityNavIcon(props: SVGProps<SVGSVGElement>) {
+export function ConversationNavIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg {...iconProps(props)}>
       <path
-        d="M5.2 23.2C4.5 15.9 10.4 10 18 10c7.5 0 13 5.2 12.7 11.5-.4 6.5-6.5 11.4-13.9 10.8l-6 3 .9-5.1c-3.7-1.8-6.1-4.2-6.5-7Z"
-        fill="#8fb4e8"
+        d="M6.2 22.7C5.4 14.4 12.4 8 21.3 8c9.1 0 15.7 6 15.1 13.5-.5 7.4-7.6 13-16.2 12.2l-7.5 4.1 1.3-6.3c-4.4-2-7.4-5-7.8-8.8Z"
+        fill="var(--color-mint)"
         stroke={STROKE}
-        strokeWidth="2.1"
+        strokeWidth="2.2"
         strokeLinejoin="round"
       />
       <path
-        d="M20.3 24.8c.6 6.3 6 10.8 12.6 10.3l5.4 2.7-.7-4.5c3.6-1.8 5.9-4.8 6-8.4.2-6-5-10.8-11.7-10.8-6.9 0-12 4.7-11.6 10.7Z"
-        fill="#f59d6c"
+        d="M31.8 28.4c.3 4.1 3.4 7.2 7.7 7.3l3.8 2-.6-3.5c2-1.3 3.2-3.3 3.1-5.5-.2-4.2-3.9-7.5-8.7-7.4-2.1 0-4 .7-5.3 1.8"
+        fill="var(--color-mustard)"
         stroke={STROKE}
-        strokeWidth="2.1"
+        strokeWidth="2"
         strokeLinejoin="round"
       />
-      <circle cx="28.8" cy="22.3" r="1.1" fill={STROKE} />
-      <circle cx="36.6" cy="22.3" r="1.1" fill={STROKE} />
+      <circle cx="15.6" cy="21" r="1.2" fill={STROKE} />
+      <circle cx="25.4" cy="21" r="1.2" fill={STROKE} />
       <path
-        d="M30.4 26.3c1.6 1.9 3.6 1.9 5.1 0"
+        d="M18 25.3c1.7 1.8 3.8 1.8 5.4 0"
         stroke={STROKE}
         strokeWidth="1.8"
         strokeLinecap="round"
       />
-      <circle cx="12.6" cy="20.6" r="1.1" fill={STROKE} />
-      <circle cx="19.3" cy="20.6" r="1.1" fill={STROKE} />
       <path
-        d="M14.2 24.2c1.2 1.4 2.8 1.4 4 0"
-        stroke={STROKE}
-        strokeWidth="1.7"
-        strokeLinecap="round"
-      />
-      <path
-        d="M31.1 7.7c1.9-3 5.8-.9 4.2 2-1 1.7-3.3 2.7-3.3 2.7s-1.8-3.2-.9-4.7Z"
-        fill="var(--color-mint-deep)"
+        d="m39.3 8.4 1.2 2.7 2.8 1.2-2.8 1.2-1.2 2.8-1.2-2.8-2.7-1.2 2.7-1.2Z"
+        fill="var(--color-mustard)"
+        stroke="var(--color-terra-deep)"
+        strokeWidth="1"
       />
     </svg>
   )
