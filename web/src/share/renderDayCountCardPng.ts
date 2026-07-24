@@ -6,7 +6,6 @@
  */
 import { companionDays, toyAvatar } from '../archive/archiveUtils'
 import {
-  DAY_COUNT_FONTS,
   DAY_COUNT_PALETTES,
   type DayCountFont,
   type DayCountPalette,
