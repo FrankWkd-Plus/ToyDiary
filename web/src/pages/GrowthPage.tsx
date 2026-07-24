@@ -8,7 +8,6 @@ import {
   Flag,
   Globe2,
   History,
-  Sparkles,
 } from 'lucide-react'
 import { companionDays, toyAvatar } from '../archive/archiveUtils'
 import { DayCountNumber } from '../components/DayCountNumber'
