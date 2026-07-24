@@ -4,14 +4,20 @@
 交互扫描并选择若干蓝牙设备，完成 pair / trust / connect，
 将配置写入本机，并可选安装 systemd 服务，使下次开机后自动重连。
 
+身份标识：
+  每台设备以唯一 MAC 地址记忆与连接；名称（如 ring）仅作显示。
+  环境中有多台同名 ring 时，不会按名称猜测或改绑 MAC。
+
 依赖（系统包，无需 pip）：
   sudo apt update
   sudo apt install -y bluez bluez-tools python3
+  # 耳机 A2DP 另需：
+  # sudo apt install -y bluez-alsa-utils libasound2-plugin-bluez
 
 用法：
   sudo python3 bluetooth.py              # 交互：扫描 → 选择 → 连接 → 持久化
   sudo python3 bluetooth.py scan         # 仅扫描
-  sudo python3 bluetooth.py connect      # 按已保存配置重连
+  sudo python3 bluetooth.py connect      # 按已保存 MAC 重连（会先扫描刷新）
   sudo python3 bluetooth.py status       # 查看适配器与已保存设备状态
   sudo python3 bluetooth.py list         # 列出已保存设备
   sudo python3 bluetooth.py remove MAC   # 取消信任/配对并删除配置
@@ -30,6 +36,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -43,16 +50,17 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 DEFAULT_CONFIG_PATH = Path(
     os.environ.get("BT_CONFIG", "/etc/toydairy-bluetooth/devices.json")
 )
-# 无 root 时回落到用户目录，便于开发预览
 USER_CONFIG_FALLBACK = Path.home() / ".config" / "toydairy-bluetooth" / "devices.json"
 
 SERVICE_NAME = "toydairy-bluetooth-autoconnect"
 SERVICE_PATH = Path(f"/etc/systemd/system/{SERVICE_NAME}.service")
 
-SCAN_SECONDS_DEFAULT = 12
-CONNECT_RETRIES = 3
+SCAN_SECONDS_DEFAULT = 15
+REDISCOVER_SECONDS = 20
+CONNECT_RETRIES = 4
 CONNECT_RETRY_DELAY_S = 2.0
-BTCTL_TIMEOUT_S = 60
+BTCTL_TIMEOUT_S = 90
+PAIR_TIMEOUT_S = 60
 
 
 # ---------------------------------------------------------------------------
@@ -87,7 +95,6 @@ def is_root() -> bool:
     try:
         return os.geteuid() == 0
     except AttributeError:
-        # Windows 开发机无 geteuid
         return False
 
 
@@ -100,9 +107,9 @@ def require_linux_bluez() -> None:
         eprint(
             "当前是 Windows 环境，本脚本面向 Armbian / Linux BlueZ。\n"
             "请把本文件拷到 Orange Pi 后执行，例如：\n"
-            "  scp hardware/bluetooth/bluetooth.py root@<pi-ip>:/root/\n"
-            "  ssh root@<pi-ip>\n"
-            "  sudo python3 /root/bluetooth.py"
+            "  scp hardware/bluetooth/bluetooth.py root@<pi-ip>:/home/blt/\n"
+            "  ssh -p 19198 root@<pi-ip>\n"
+            "  sudo python3 /home/blt/bluetooth.py"
         )
         sys.exit(2)
     if not which("bluetoothctl"):
@@ -148,17 +155,103 @@ def run(
         raise SystemExit(1) from exc
 
 
+def strip_ansi(text: str) -> str:
+    return re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", text)
+
+
+# ---------------------------------------------------------------------------
+# bluetoothctl 会话（保持 agent，避免 "No agent is registered"）
+# ---------------------------------------------------------------------------
+
+
+class BtSession:
+    """长生命周期 bluetoothctl 交互会话。"""
+
+    def __init__(self) -> None:
+        self.proc = subprocess.Popen(
+            ["bluetoothctl"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+        )
+        self._buf: list[str] = []
+        self._lock = threading.Lock()
+        self._alive = True
+        self._reader = threading.Thread(target=self._read_loop, daemon=True)
+        self._reader.start()
+        time.sleep(0.3)
+
+    def _read_loop(self) -> None:
+        assert self.proc.stdout is not None
+        try:
+            for line in self.proc.stdout:
+                with self._lock:
+                    self._buf.append(line)
+        except Exception:
+            pass
+        finally:
+            self._alive = False
+
+    def send(self, cmd: str) -> None:
+        if not self._alive or self.proc.stdin is None:
+            raise RuntimeError("bluetoothctl 会话已结束")
+        self.proc.stdin.write(cmd + "\n")
+        self.proc.stdin.flush()
+
+    def drain(self) -> str:
+        with self._lock:
+            text = "".join(self._buf)
+            self._buf.clear()
+        return text
+
+    def expect_idle(self, settle: float = 0.8, max_wait: float = 8.0) -> str:
+        """等待输出暂时停顿后返回累计文本。"""
+        chunks: list[str] = []
+        end = time.time() + max_wait
+        last_data = time.time()
+        while time.time() < end:
+            piece = self.drain()
+            if piece:
+                chunks.append(piece)
+                last_data = time.time()
+            elif time.time() - last_data >= settle:
+                break
+            time.sleep(0.1)
+        chunks.append(self.drain())
+        return strip_ansi("".join(chunks))
+
+    def cmd(self, command: str, wait: float = 1.2) -> str:
+        self.drain()
+        self.send(command)
+        time.sleep(wait)
+        return self.expect_idle(settle=0.5, max_wait=max(wait + 2.0, 4.0))
+
+    def close(self) -> None:
+        try:
+            if self._alive and self.proc.stdin:
+                self.send("quit")
+        except Exception:
+            pass
+        try:
+            self.proc.terminate()
+        except Exception:
+            pass
+        try:
+            self.proc.wait(timeout=3)
+        except Exception:
+            try:
+                self.proc.kill()
+            except Exception:
+                pass
+
+
 def bluetoothctl(commands: Iterable[str], *, timeout: float = BTCTL_TIMEOUT_S) -> str:
-    """向 bluetoothctl 批量发送命令（非交互批处理）。"""
+    """向一次性 bluetoothctl 批量发送命令。"""
     script = "\n".join(commands) + "\nquit\n"
-    # 使用临时脚本 + bluetoothctl -- 的 stdin，兼容 BlueZ 5.x
-    proc = run(
-        ["bluetoothctl"],
-        timeout=timeout,
-        input_text=script,
-    )
-    out = (proc.stdout or "") + (proc.stderr or "")
-    return out
+    proc = run(["bluetoothctl"], timeout=timeout, input_text=script)
+    return strip_ansi((proc.stdout or "") + (proc.stderr or ""))
 
 
 def bluetoothctl_cmd(*args: str, timeout: float = 30.0) -> subprocess.CompletedProcess[str]:
@@ -211,7 +304,6 @@ def save_config(path: Path, devices: list[DeviceRecord]) -> None:
         "updated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "devices": [asdict(d.normalize()) for d in devices],
     }
-    # 原子写入
     fd, tmp_name = tempfile.mkstemp(dir=str(path.parent), prefix=".bt-", suffix=".json")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
@@ -251,9 +343,58 @@ def remove_from_config(devices: list[DeviceRecord], mac: str) -> list[DeviceReco
     return [d for d in devices if d.mac != mac]
 
 
+def replace_mac_in_config(
+    devices: list[DeviceRecord], old_mac: str, new_mac: str, name: str = ""
+) -> list[DeviceRecord]:
+    old_mac = normalize_mac(old_mac)
+    new_mac = normalize_mac(new_mac)
+    out: list[DeviceRecord] = []
+    for d in devices:
+        if d.mac == old_mac:
+            d.mac = new_mac
+            if name:
+                d.name = name
+            out.append(d)
+        elif d.mac == new_mac:
+            # 合并重复
+            continue
+        else:
+            out.append(d)
+    return out
+
+
 # ---------------------------------------------------------------------------
 # 适配器 / 扫描 / 连接
 # ---------------------------------------------------------------------------
+
+
+
+def ensure_audio_profiles() -> None:
+    """Ensure A2DP/HFP endpoints exist (needed for headsets like MINISO)."""
+    if not which("systemctl"):
+        return
+    # bluealsa provides MediaEndpoint; without it connect fails with
+    # br-connection-profile-unavailable for audio-headset devices.
+    for unit in ("bluealsa", "bluealsa.service"):
+        st = run(["systemctl", "is-active", unit], timeout=10)
+        if st.stdout.strip() == "active":
+            return
+    for unit in ("bluealsa", "bluealsa.service"):
+        r = run(["systemctl", "start", unit], timeout=20)
+        if r.returncode == 0:
+            time.sleep(1.0)
+            st = run(["systemctl", "is-active", unit], timeout=10)
+            if st.stdout.strip() == "active":
+                print("已启动 bluealsa（A2DP 音频后端）")
+                return
+    if not which("bluealsa"):
+        eprint(
+            "警告: 未安装 bluealsa。耳机类设备连接会报 profile-unavailable。\n"
+            "  安装: sudo apt install -y bluez-alsa-utils libasound2-plugin-bluez\n"
+            "  启动: sudo systemctl enable --now bluealsa"
+        )
+    else:
+        eprint("警告: bluealsa 未能启动，耳机 A2DP 可能不可用")
 
 
 def ensure_bluetooth_service() -> None:
@@ -264,145 +405,357 @@ def ensure_bluetooth_service() -> None:
         print("启动 bluetooth 服务…")
         run(["systemctl", "start", "bluetooth"], timeout=30)
         time.sleep(1)
-    # 开机自启
     en = run(["systemctl", "is-enabled", "bluetooth"], timeout=10)
-    if en.stdout.strip() not in ("enabled", "static", "indirect", "alias", "enabled-runtime"):
+    if en.stdout.strip() not in (
+        "enabled",
+        "static",
+        "indirect",
+        "alias",
+        "enabled-runtime",
+    ):
         print("设置 bluetooth 开机自启…")
         run(["systemctl", "enable", "bluetooth"], timeout=30)
 
 
 def power_on_adapter() -> None:
+    # 一次性命令足够 power/pairable；agent 在长会话里注册
+    ensure_audio_profiles()
     bluetoothctl(
         [
             "power on",
-            "agent on",
-            "default-agent",
             "pairable on",
             "discoverable off",
         ],
         timeout=20,
     )
+    # 额外确保
+    bluetoothctl_cmd("power", "on", timeout=10)
+    bluetoothctl_cmd("pairable", "on", timeout=10)
 
 
 def parse_device_lines(text: str) -> dict[str, str]:
-    """从 bluetoothctl 输出解析 MAC -> 名称。"""
     devices: dict[str, str] = {}
-    # Device AA:BB:CC:DD:EE:FF Name here
+    text = strip_ansi(text)
     for line in text.splitlines():
-        m = re.search(
-            r"Device\s+([0-9A-Fa-f:]{17})\s+(.*)$",
-            line.strip(),
-        )
+        m = re.search(r"Device\s+([0-9A-Fa-f:]{17})\s+(.*)$", line.strip())
         if m:
             mac = normalize_mac(m.group(1))
             name = m.group(2).strip() or "(unknown)"
+            # 去掉可能的颜色残留 / 控制符
+            name = re.sub(r"\s+", " ", name).strip()
             devices[mac] = name
     return devices
 
 
+def list_known_devices() -> dict[str, str]:
+    listed = bluetoothctl_cmd("devices", timeout=15)
+    return parse_device_lines((listed.stdout or "") + (listed.stderr or ""))
+
+
 def scan_devices(seconds: int = SCAN_SECONDS_DEFAULT) -> dict[str, str]:
-    print(f"扫描蓝牙设备 {seconds}s …（请确保设备已开机且处于可发现状态）")
-    # 先清一次扫描状态
+    print(f"扫描蓝牙设备 {seconds}s …（请确保目标设备已开机且可被发现）")
     bluetoothctl(["scan off"], timeout=10)
-    # 启动扫描
     start = run(
         ["bluetoothctl", "--timeout", str(seconds), "scan", "on"],
-        timeout=seconds + 15,
+        timeout=seconds + 20,
     )
-    # 扫描结束后再拉一次已发现列表
     listed = bluetoothctl_cmd("devices", timeout=15)
     text = (start.stdout or "") + (start.stderr or "") + (listed.stdout or "")
     devices = parse_device_lines(text)
-    # 补充 devices.paired / devices.trusted 里已有的
-    for sub in ("devices",):
-        p = bluetoothctl_cmd(sub, timeout=10)
-        devices.update(parse_device_lines(p.stdout or ""))
+    devices.update(list_known_devices())
+    warn_duplicate_names(devices)
     return devices
 
 
 def get_device_info(mac: str) -> str:
     p = bluetoothctl_cmd("info", mac, timeout=15)
-    return (p.stdout or "") + (p.stderr or "")
+    return strip_ansi((p.stdout or "") + (p.stderr or ""))
+
+
+def device_available(mac: str) -> bool:
+    info = get_device_info(mac)
+    if re.search(r"not available|No default controller", info, re.I):
+        return False
+    return bool(re.search(r"Device\s+" + re.escape(mac), info, re.I)) or bool(
+        re.search(r"Name:|Alias:|Paired:|Connected:", info, re.I)
+    )
 
 
 def is_connected(mac: str) -> bool:
-    info = get_device_info(mac)
-    return bool(re.search(r"Connected:\s*yes", info, re.I))
+    if not device_available(mac):
+        return False
+    return bool(re.search(r"Connected:\s*yes", get_device_info(mac), re.I))
 
 
 def is_paired(mac: str) -> bool:
-    info = get_device_info(mac)
-    return bool(re.search(r"Paired:\s*yes", info, re.I))
+    if not device_available(mac):
+        return False
+    return bool(re.search(r"Paired:\s*yes", get_device_info(mac), re.I))
 
 
 def is_trusted(mac: str) -> bool:
-    info = get_device_info(mac)
-    return bool(re.search(r"Trusted:\s*yes", info, re.I))
+    if not device_available(mac):
+        return False
+    return bool(re.search(r"Trusted:\s*yes", get_device_info(mac), re.I))
 
 
-def pair_trust_connect(mac: str, name: str = "") -> bool:
+def warn_duplicate_names(devices: dict[str, str]) -> None:
+    """扫描结果里若多名同名设备，提示必须以 MAC 区分。"""
+    by_name: dict[str, list[str]] = {}
+    for mac, name in devices.items():
+        key = (name or "").strip().lower() or "(unknown)"
+        by_name.setdefault(key, []).append(mac)
+    dups = {n: macs for n, macs in by_name.items() if len(macs) > 1 and n != "(unknown)"}
+    if not dups:
+        return
+    eprint("注意: 扫描到重名设备，配置/连接仅以 MAC 为唯一标识，不会按名称猜测：")
+    for n, macs in sorted(dups.items()):
+        eprint(f"  名称 {n!r}:")
+        for m in macs:
+            eprint(f"    - {m}")
+
+
+def rediscover_device(
+    mac: str,
+    name: str = "",
+    seconds: int = REDISCOVER_SECONDS,
+) -> tuple[str, str]:
+    """仅按唯一 MAC 重新扫描发现设备。
+
+    名称只用于显示，绝不作为身份匹配键（多台 ring 同名时必须靠 MAC）。
+    返回 (mac, resolved_name)。找不到则仍返回原 mac。
+    """
     mac = normalize_mac(mac)
+    label = f"{name} [{mac}]" if name else mac
+    print(f"  设备未在缓存中，按 MAC 扫描 {seconds}s 以重新发现 {label} …")
+
+    known = list_known_devices()
+    if mac in known:
+        return mac, known[mac] or name
+
+    # 扫描期间若看到其它同名设备，仅提示，不切换目标 MAC
+    same_name_seen: set[str] = set()
+
+    session = BtSession()
+    try:
+        session.cmd("power on", wait=0.5)
+        session.cmd("pairable on", wait=0.3)
+        session.cmd("agent NoInputNoOutput", wait=0.4)
+        session.cmd("default-agent", wait=0.4)
+        session.cmd("scan on", wait=0.5)
+
+        deadline = time.time() + seconds
+        found_name = ""
+        while time.time() < deadline:
+            out = session.expect_idle(settle=0.4, max_wait=2.0)
+            for m in re.finditer(
+                r"Device\s+([0-9A-Fa-f:]{17})\s+(.+)", strip_ansi(out)
+            ):
+                dm = normalize_mac(m.group(1))
+                dn = m.group(2).strip()
+                if dm == mac:
+                    found_name = dn
+                    break
+                if name and dn.strip().lower() == name.strip().lower() and dm != mac:
+                    same_name_seen.add(dm)
+            if found_name:
+                break
+
+            session.send("devices")
+            time.sleep(0.8)
+            listing = session.expect_idle(settle=0.3, max_wait=2.0)
+            devices = parse_device_lines(listing)
+            if mac in devices:
+                found_name = devices[mac]
+                break
+            if name:
+                for k, v in devices.items():
+                    if v.strip().lower() == name.strip().lower() and k != mac:
+                        same_name_seen.add(k)
+
+        session.cmd("scan off", wait=0.5)
+    finally:
+        session.close()
+
+    devices = list_known_devices()
+    if not found_name and mac in devices:
+        found_name = devices[mac]
+
+    if mac in devices or found_name:
+        print(f"  已按 MAC 重新发现: {found_name or name or mac} [{mac}]")
+        if same_name_seen:
+            eprint(
+                f"  提示: 同时看到 {len(same_name_seen)} 台同名设备，"
+                f"已忽略它们，只连接配置中的 MAC {mac}"
+            )
+            for other in sorted(same_name_seen):
+                eprint(f"    忽略: {other}")
+        return mac, found_name or name
+
+    eprint(f"  扫描结束仍未发现 MAC: {mac}" + (f" ({name})" if name else ""))
+    if same_name_seen:
+        eprint("  附近有同名但不同 MAC 的设备（未自动改绑，避免连错 ring）：")
+        for other in sorted(same_name_seen):
+            eprint(f"    {other}")
+        eprint("  若确需换绑，请重新运行交互 setup 并选择正确 MAC")
+    else:
+        eprint("  请确认设备已开机、靠近板子，且未连在手机等其它主机上")
+    return mac, name
+
+
+def pair_trust_connect(
+    mac: str,
+    name: str = "",
+    *,
+    allow_name_rediscover: bool = False,
+) -> tuple[bool, str, str]:
+    """配对/信任/连接。身份键始终为 MAC；name 仅显示用。
+
+    allow_name_rediscover 已废弃（保留参数兼容旧调用），不会按名称改 MAC。
+    返回 (ok, mac, resolved_name)。
+    """
+    del allow_name_rediscover  # 明确忽略：禁止按名称切换目标
+    original_mac = normalize_mac(mac)
+    mac = original_mac
     label = f"{name} [{mac}]" if name else mac
     print(f"\n>>> 处理设备: {label}")
 
-    # 部分 BLE 设备需要先 connect 再 pair
-    bluetoothctl([f"connect {mac}"], timeout=25)
-    time.sleep(0.5)
+    power_on_adapter()
 
-    if not is_paired(mac):
-        print("  配对中…")
-        out = bluetoothctl(
-            [
-                "agent on",
-                "default-agent",
-                f"pair {mac}",
-            ],
-            timeout=45,
-        )
-        if re.search(r"Failed to pair|AuthenticationFailed|org\.bluez\.Error", out, re.I):
-            # 再试一次：部分耳机/音箱要先 remove 再 pair
-            eprint("  首次配对可能失败，尝试 remove 后重试…")
-            bluetoothctl([f"remove {mac}"], timeout=15)
-            time.sleep(1)
-            out = bluetoothctl(
-                [
-                    "agent on",
-                    "default-agent",
-                    f"pair {mac}",
-                ],
-                timeout=45,
-            )
+    if not device_available(mac):
+        mac, name = rediscover_device(mac, name)
+        label = f"{name} [{mac}]" if name else mac
+        # rediscover 只刷新缓存，不得改变 MAC
+        if mac != original_mac:
+            eprint(f"  内部错误: MAC 被改写 {original_mac} -> {mac}，已强制还原")
+            mac = original_mac
+        if not device_available(mac):
+            eprint(f"  [X] BlueZ 中无此设备对象: {label}")
+            eprint("      原因: Device not available（未扫描到该 MAC / 未开机）")
+            eprint("      身份仅认 MAC，不会用同名 ring 顶替")
+            return False, mac, name
+
+    session = BtSession()
+    try:
+        session.cmd("power on", wait=0.4)
+        session.cmd("pairable on", wait=0.3)
+        # NoInputNoOutput 适合音箱/戒指等无 PIN 场景；失败再试 on
+        out_agent = session.cmd("agent NoInputNoOutput", wait=0.5)
+        if re.search(r"Failed|error|AlreadyExists", out_agent, re.I):
+            session.cmd("agent off", wait=0.2)
+            session.cmd("agent on", wait=0.4)
+        session.cmd("default-agent", wait=0.4)
+
+        # BLE 常见路径：先 connect 再建键；经典耳机则 pair 更关键
+        print("  尝试连接…")
+        out = session.cmd(f"connect {mac}", wait=3.0)
+        # 等链路稳定
+        time.sleep(1.5)
+
         if not is_paired(mac):
-            # 有些设备不支持经典 pair，仅 connect 即可
-            eprint("  警告: 未确认 Paired=yes，继续尝试 trust/connect")
+            print("  配对中…")
+            out = session.cmd(f"pair {mac}", wait=4.0)
+            # pair 可能异步
+            deadline = time.time() + PAIR_TIMEOUT_S
+            while time.time() < deadline and not is_paired(mac):
+                more = session.expect_idle(settle=0.5, max_wait=2.0)
+                out += more
+                if re.search(
+                    r"Failed to pair|AuthenticationFailed|Authentication Rejected|"
+                    r"org\.bluez\.Error\.(Authentication|Failed|AlreadyExists)",
+                    out,
+                    re.I,
+                ):
+                    break
+                if re.search(r"Pairing successful|Paired:\s*yes", out, re.I):
+                    break
+                time.sleep(0.8)
+
+            if not is_paired(mac):
+                eprint("  配对未确认，尝试 remove 后重来…")
+                session.cmd(f"remove {mac}", wait=1.0)
+                time.sleep(1.0)
+                # remove 后需再发现（仍只认原 MAC）
+                session.cmd("scan on", wait=0.3)
+                time.sleep(3.0)
+                session.cmd("scan off", wait=0.3)
+                if not device_available(mac):
+                    session.close()
+                    mac, name = rediscover_device(original_mac, name)
+                    mac = original_mac
+                    session = BtSession()
+                    session.cmd("power on", wait=0.3)
+                    session.cmd("pairable on", wait=0.3)
+                    session.cmd("agent NoInputNoOutput", wait=0.4)
+                    session.cmd("default-agent", wait=0.3)
+                session.cmd(f"pair {mac}", wait=5.0)
+                time.sleep(2.0)
+
+            if is_paired(mac):
+                print("  已配对")
+            else:
+                eprint("  警告: 未确认 Paired=yes（部分 BLE 仅需 connect）")
         else:
-            print("  已配对")
-    else:
-        print("  已配对（跳过）")
+            print("  已配对（跳过）")
 
-    print("  设置信任（trust）…")
-    bluetoothctl([f"trust {mac}"], timeout=15)
-    if is_trusted(mac):
-        print("  已信任")
-    else:
-        eprint("  警告: Trusted 未确认")
+        print("  设置信任（trust）…")
+        session.cmd(f"trust {mac}", wait=1.0)
+        if is_trusted(mac):
+            print("  已信任")
+        else:
+            # 再试一次非会话命令
+            bluetoothctl_cmd("trust", mac, timeout=15)
+            if is_trusted(mac):
+                print("  已信任")
+            else:
+                eprint("  警告: Trusted 未确认")
 
-    ok = False
-    for attempt in range(1, CONNECT_RETRIES + 1):
-        print(f"  连接中… ({attempt}/{CONNECT_RETRIES})")
-        bluetoothctl([f"connect {mac}"], timeout=30)
-        time.sleep(1.0)
-        if is_connected(mac):
-            ok = True
-            break
-        time.sleep(CONNECT_RETRY_DELAY_S)
+        ok = False
+        for attempt in range(1, CONNECT_RETRIES + 1):
+            if is_connected(mac):
+                ok = True
+                break
+            print(f"  连接中… ({attempt}/{CONNECT_RETRIES})")
+            cout = session.cmd(f"connect {mac}", wait=3.0)
+            time.sleep(1.2)
+            if is_connected(mac):
+                ok = True
+                break
+            if re.search(r"profile-unavailable", cout, re.I):
+                eprint("  检测到 profile-unavailable，重启 bluealsa 后重试…")
+                if which("systemctl"):
+                    run(["systemctl", "restart", "bluealsa"], timeout=20)
+                    time.sleep(1.5)
+                    ensure_audio_profiles()
+            if re.search(r"Connection refused|br-connection-page-timeout|"
+                         r"br-connection-timeout|Failed to connect|"
+                         r"le-connection-abort-by-local|Input/output error|"
+                         r"profile-unavailable",
+                         cout, re.I):
+                eprint(f"  connect 输出异常片段: {cout.strip()[-200:]}")
+            time.sleep(CONNECT_RETRY_DELAY_S)
 
-    if ok:
-        print(f"  ✓ 已连接: {label}")
-    else:
-        eprint(f"  ✗ 连接失败: {label}")
-        eprint("    可稍后执行: sudo python3 bluetooth.py connect")
-    return ok
+        if ok:
+            print(f"  [OK] 已连接: {name or ''} [{mac}]".strip())
+        else:
+            info = get_device_info(mac)
+            eprint(f"  [X] 连接失败: {name or ''} [{mac}]".strip())
+            eprint("  诊断 info:")
+            for line in info.splitlines()[:25]:
+                eprint(f"    {line}")
+            eprint("  常见原因:")
+            eprint("    - 设备已连到手机/其它主机（请断开后重试）")
+            eprint("    - 设备休眠/关机，或不在可发现模式")
+            eprint("    - BLE 随机地址变化：请重新 scan 并用新 MAC setup")
+            eprint("    - 耳机需在配对模式（常按 3–5 秒）")
+            eprint("    - audio-headset 报 profile-unavailable: 需 bluealsa/A2DP 后端")
+            eprint("      sudo apt install -y bluez-alsa-utils && sudo systemctl enable --now bluealsa")
+        return ok, mac, name
+    finally:
+        try:
+            session.close()
+        except Exception:
+            pass
 
 
 def disconnect_device(mac: str) -> None:
@@ -420,7 +773,6 @@ def remove_device_system(mac: str) -> None:
 
 
 def print_device_table(devices: dict[str, str], saved: set[str] | None = None) -> list[str]:
-    """打印表格，返回按序号排列的 mac 列表。"""
     saved = saved or set()
     macs = sorted(devices.keys(), key=lambda m: (devices[m].lower(), m))
     if not macs:
@@ -437,7 +789,6 @@ def print_device_table(devices: dict[str, str], saved: set[str] | None = None) -
 
 
 def parse_selection(text: str, count: int) -> list[int]:
-    """解析 '1 3 5' / '1,3-5' / 'all'。"""
     text = text.strip().lower()
     if not text:
         return []
@@ -511,16 +862,13 @@ def service_unit_content(script_path: Path, config_path: Path) -> str:
 Description=ToyDairy Bluetooth auto-connect (trusted devices)
 After=bluetooth.service network.target
 Wants=bluetooth.service
-# 等待适配器就绪
 StartLimitIntervalSec=0
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-# 开机后稍等 BlueZ 与固件
-ExecStartPre=/bin/sleep 5
+ExecStartPre=/bin/sleep 8
 ExecStart={python} {script_path} connect --config {config_path} --quiet-ok
-# 断线后不自动无限重试；由 BlueZ trust + 本服务开机拉一次
 StandardOutput=journal
 StandardError=journal
 
@@ -538,7 +886,6 @@ def install_service(config_path: Path) -> None:
         sys.exit(1)
 
     script_path = Path(__file__).resolve()
-    # 复制脚本到系统路径，避免 U 盘路径变动
     install_dir = Path("/usr/local/lib/toydairy-bluetooth")
     install_dir.mkdir(parents=True, exist_ok=True)
     target_script = install_dir / "bluetooth.py"
@@ -593,7 +940,7 @@ def cmd_status(args: argparse.Namespace) -> int:
 
     print("== 适配器 ==")
     show = bluetoothctl_cmd("show", timeout=15)
-    print((show.stdout or show.stderr or "").strip() or "(无输出)")
+    print(strip_ansi((show.stdout or show.stderr or "")).strip() or "(无输出)")
 
     cfg_path = resolve_config_path(args.config)
     devices = load_config(cfg_path)
@@ -602,6 +949,10 @@ def cmd_status(args: argparse.Namespace) -> int:
         print("（无）")
         return 0
     for d in devices:
+        if not device_available(d.mac):
+            print(f"  {d.mac}  {d.name or '-'}")
+            print("    auto={}  not-in-cache  offline".format(d.auto_connect))
+            continue
         conn = "connected" if is_connected(d.mac) else "offline"
         pair = "paired" if is_paired(d.mac) else "not-paired"
         trust = "trusted" if is_trusted(d.mac) else "not-trusted"
@@ -638,12 +989,18 @@ def cmd_connect(args: argparse.Namespace) -> int:
         mac = normalize_mac(args.mac)
         targets = [d for d in devices if d.mac == mac]
         if not targets:
-            eprint(f"配置中无此 MAC: {mac}")
-            return 1
+            # 允许直接 connect 未在配置中的 MAC
+            targets = [DeviceRecord(mac=mac, name="", auto_connect=True)]
+
+    # 连接前做一次轻量扫描，刷新 BlueZ 缓存（解决 Device not available）
+    if not getattr(args, "no_scan", False):
+        print("连接前刷新扫描（让 BlueZ 重新看到设备）…")
+        scan_devices(min(getattr(args, "seconds", SCAN_SECONDS_DEFAULT), 12))
 
     ok_n = 0
+    updated = False
     for d in targets:
-        if not d.auto_connect and not args.force:
+        if not d.auto_connect and not args.force and args.mac is None:
             if not getattr(args, "quiet_ok", False):
                 print(f"跳过（auto_connect=false）: {d.mac} {d.name}")
             continue
@@ -652,8 +1009,27 @@ def cmd_connect(args: argparse.Namespace) -> int:
                 print(f"已连接: {d.mac} {d.name}")
             ok_n += 1
             continue
-        if pair_trust_connect(d.mac, d.name):
+
+        # 身份键 = 配置中的 MAC；禁止按名称改绑到其它 ring
+        ok, resolved_mac, new_name = pair_trust_connect(
+            d.mac, d.name, allow_name_rediscover=False
+        )
+        if resolved_mac != d.mac:
+            eprint(
+                f"  拒绝改绑: 目标 MAC 必须为 {d.mac}，忽略 {resolved_mac}"
+            )
+            resolved_mac = d.mac
+        if new_name and new_name != d.name:
+            for item in devices:
+                if item.mac == d.mac:
+                    item.name = new_name
+            updated = True
+            print(f"  已更新显示名: {d.mac}  name={new_name!r}")
+        if ok:
             ok_n += 1
+
+    if updated:
+        save_config(cfg_path, devices)
 
     if ok_n == 0:
         return 1
@@ -674,7 +1050,6 @@ def cmd_remove(args: argparse.Namespace) -> int:
 
 def cmd_install_service(args: argparse.Namespace) -> int:
     cfg_path = resolve_config_path(args.config)
-    # 确保配置目录存在
     cfg_path.parent.mkdir(parents=True, exist_ok=True)
     if not cfg_path.exists():
         save_config(cfg_path, [])
@@ -716,11 +1091,16 @@ def cmd_setup(args: argparse.Namespace) -> int:
     now = time.strftime("%Y-%m-%dT%H:%M:%S")
     success = 0
     for mac, name in selected:
-        if pair_trust_connect(mac, name):
+        # 交互选择得到的 mac 即为唯一身份；连接失败也不改成同名其它设备
+        ok, mac2, name2 = pair_trust_connect(mac, name, allow_name_rediscover=False)
+        if mac2 != mac:
+            eprint(f"  拒绝改绑: 保持所选 MAC {mac}（忽略 {mac2}）")
+            mac2 = mac
+        if ok:
             success += 1
         rec = DeviceRecord(
-            mac=mac,
-            name=name,
+            mac=mac2,
+            name=name2 or name,
             trusted=True,
             auto_connect=True,
             paired_at=now,
@@ -729,13 +1109,12 @@ def cmd_setup(args: argparse.Namespace) -> int:
 
     save_config(cfg_path, saved)
     print(f"\n连接成功 {success}/{len(selected)}")
+    print("配置以 MAC 为唯一键保存；同名 ring 需分别选择各自 MAC。")
 
-    # 持久化：trust 已由 BlueZ 写入 /var/lib/bluetooth
-    # 再装 systemd 以便开机主动 connect
     if is_root() and which("systemctl"):
         if args.yes or prompt_yes_no("安装开机自动连接 systemd 服务？", default=True):
             install_service(cfg_path)
-            run(["systemctl", "start", SERVICE_NAME], timeout=60)
+            run(["systemctl", "start", SERVICE_NAME], timeout=120)
     else:
         print(
             "\n提示: 使用 root 运行下列命令可安装开机自连服务：\n"
@@ -743,7 +1122,7 @@ def cmd_setup(args: argparse.Namespace) -> int:
         )
 
     print(
-        "\n完成。BlueZ 已 trust 设备；下次设备上电后通常会自动回连。\n"
+        "\n完成。\n"
         "手动重连: sudo python3 bluetooth.py connect\n"
         "查看状态: sudo python3 bluetooth.py status"
     )
@@ -791,9 +1170,10 @@ def build_parser() -> argparse.ArgumentParser:
     sp = sub.add_parser("list", help="列出已保存配置")
     sp.set_defaults(func=cmd_list)
 
-    sp = sub.add_parser("connect", help="按配置重连")
+    sp = sub.add_parser("connect", help="按配置重连（先扫描刷新缓存）")
     sp.add_argument("mac", nargs="?", help="只连接指定 MAC")
     sp.add_argument("--force", action="store_true", help="忽略 auto_connect=false")
+    sp.add_argument("--no-scan", action="store_true", help="连接前不预扫描")
     sp.add_argument(
         "--quiet-ok",
         action="store_true",
@@ -823,7 +1203,6 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    # 无子命令 → setup
     if not args.command:
         args.command = "setup"
         args.func = cmd_setup
