@@ -400,16 +400,16 @@ export function ConversationPage() {
 
   return (
     <div className="conversation-page">
-      <header className="relative z-20 shrink-0 border-b border-line/60 bg-white/92 px-4 pb-3 pt-3 backdrop-blur-xl">
-        <div className="flex items-center justify-between gap-3">
+      <header className="relative z-20 shrink-0 border-b border-line/60 bg-white/92 px-3.5 pb-2 pt-2 backdrop-blur-xl">
+        <div className="flex items-center justify-between gap-2">
           <button
             type="button"
             onClick={() => navigate(`/archive/toys/${currentToy.id}`)}
-            className="flex min-w-0 flex-1 items-center gap-3 text-left"
+            className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
             aria-label={`查看${currentToy.name}的身份卡`}
           >
-            <span className="relative h-11 w-11 shrink-0">
-              <span className="block h-full w-full overflow-hidden rounded-[1rem] border-2 border-white bg-cream shadow-[var(--shadow-warm-sm)] ring-1 ring-line/50">
+            <span className="relative h-9 w-9 shrink-0">
+              <span className="block h-full w-full overflow-hidden rounded-[0.85rem] border-2 border-white bg-cream shadow-[var(--shadow-warm-sm)] ring-1 ring-line/50">
                 <img
                   src={avatar}
                   alt={currentToy.name}
@@ -417,7 +417,7 @@ export function ConversationPage() {
                 />
               </span>
               <span
-                className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border border-white bg-paper text-[11px] shadow-sm"
+                className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full border border-white bg-paper text-[10px] shadow-sm"
                 aria-hidden="true"
               >
                 {vitality?.emoji ?? '🟢'}
@@ -425,38 +425,37 @@ export function ConversationPage() {
             </span>
             <span className="min-w-0">
               <span className="flex items-center gap-1.5">
-                <strong className="truncate font-display text-[17px] text-ink">
+                <strong className="truncate font-display text-[15px] text-ink">
                   {currentToy.name}
                 </strong>
-                <span className="rounded-full bg-mustard-soft px-2 py-0.5 text-[9px] text-terra-deep">
-                  {days} 天
+                <span className="rounded-full bg-mustard-soft px-1.5 py-0.5 text-[9px] text-terra-deep">
+                  {days}天
                 </span>
-                {vitality && !quietMode && (
-                  <span className="hidden rounded-full bg-peach-soft px-1.5 py-0.5 text-[9px] text-rose-deep min-[360px]:inline">
-                    {vitality.label}
-                  </span>
-                )}
               </span>
               <span className="mt-0.5 block truncate text-[10px] text-ink-muted">
-                {quietMode ? '安静陪伴中' : status}
+                {quietMode
+                  ? '安静陪伴中'
+                  : vitality
+                    ? `${vitality.label} · ${status}`
+                    : status}
               </span>
             </span>
           </button>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex shrink-0 items-center gap-1">
             <button
               type="button"
               onClick={() => setClearConfirmOpen(true)}
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-cream text-ink-muted transition-transform active:scale-95"
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-cream text-ink-muted transition-transform active:scale-95"
               aria-label="删除聊天记录"
               title="删除聊天记录"
             >
-              <Trash2 className="h-[17px] w-[17px]" />
+              <Trash2 className="h-4 w-4" />
             </button>
             <button
               type="button"
               onClick={toggleQuietMode}
-              className={`flex h-9 w-9 items-center justify-center rounded-full transition-transform active:scale-95 ${
+              className={`flex h-8 w-8 items-center justify-center rounded-full transition-transform active:scale-95 ${
                 quietMode
                   ? 'bg-mist-soft text-matcha-deep'
                   : 'bg-cream text-ink-muted'
@@ -464,17 +463,17 @@ export function ConversationPage() {
               aria-label={quietMode ? '关闭安静模式' : '开启安静模式'}
               aria-pressed={quietMode}
             >
-              <BellOff className="h-[17px] w-[17px]" />
+              <BellOff className="h-4 w-4" />
             </button>
             <button
               type="button"
               onClick={() => setToyPickerOpen((open) => !open)}
-              className="flex h-9 items-center gap-1 rounded-full bg-cream px-3 text-[11px] font-medium text-matcha-deep transition-transform active:scale-95"
+              className="flex h-8 items-center gap-0.5 rounded-full bg-cream px-2.5 text-[10px] font-medium text-matcha-deep transition-transform active:scale-95"
               aria-expanded={toyPickerOpen}
             >
               切换
               <ChevronDown
-                className={`h-3.5 w-3.5 transition-transform ${toyPickerOpen ? 'rotate-180' : ''}`}
+                className={`h-3 w-3 transition-transform ${toyPickerOpen ? 'rotate-180' : ''}`}
               />
             </button>
           </div>

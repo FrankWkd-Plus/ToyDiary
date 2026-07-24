@@ -1,18 +1,26 @@
-import { useState, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   Bell,
   BookOpen,
   Check,
   ChevronRight,
+  Download,
   FileText,
   HelpCircle,
   Info,
+  Upload,
   Volume2,
 } from 'lucide-react'
 import { useAuth } from '../auth/AuthContext'
 import { PageHeader } from '../components/PageHeader'
 import { useApp } from '../context/AppContext'
+import {
+  buildGrowthExport,
+  growthExportFilename,
+  parseGrowthImport,
+} from '../share/growthJson'
+import { shareOrDownloadFile } from '../share/shareHelpers'
 import { THEME_LIST, type ThemeId } from '../theme/themes'
 import { useTheme } from '../theme/ThemeProvider'
 
@@ -179,10 +187,13 @@ export function NotifySoundPage() {
       <PageHeader title="通知与声音" back="/me" soft />
       <div className="space-y-3 px-4 py-4">
         <section className="card-paper overflow-hidden">
+          <div className="border-b border-line/70 px-4 py-2.5 text-xs font-medium text-ink-muted">
+            提醒开关
+          </div>
           <ToggleRow
             icon={<Bell className="h-4 w-4" />}
             label="玩偶响应提醒"
-            desc="玩偶想你、提到你时弹出轻提示，可跳转聊天"
+            desc="总开关：关闭后不再弹出想你卡片"
             on={prefs.toyReminders}
             onChange={(v) => {
               updatePrefs({ toyReminders: v })
@@ -190,13 +201,43 @@ export function NotifySoundPage() {
             }}
           />
           <ToggleRow
+            icon={<Bell className="h-4 w-4" />}
+            label="想你 / 闲聊提醒"
+            desc="「想你啦」「窗外的光」一类趣味打扰"
+            on={prefs.nudgeMiss}
+            onChange={(v) => {
+              updatePrefs({ nudgeMiss: v })
+              showToast(v ? '已开启想你提醒' : '已关闭想你提醒')
+            }}
+          />
+          <ToggleRow
             icon={<BookOpen className="h-4 w-4" />}
             label="日记提醒"
-            desc="玩偶每日会发 push 提醒你写手帐（演示开关）"
+            desc="玩偶催你写手帐（演示推送）"
             on={prefs.diaryPush}
             onChange={(v) => {
               updatePrefs({ diaryPush: v })
               showToast(v ? '已开启日记提醒' : '已关闭日记提醒')
+            }}
+          />
+          <ToggleRow
+            icon={<Bell className="h-4 w-4" />}
+            label="旅行回忆提醒"
+            desc="梦见上次旅行时来敲你一下"
+            on={prefs.nudgeTravel}
+            onChange={(v) => {
+              updatePrefs({ nudgeTravel: v })
+              showToast(v ? '已开启旅行回忆' : '已关闭旅行回忆')
+            }}
+          />
+          <ToggleRow
+            icon={<Bell className="h-4 w-4" />}
+            label="夜间 / 电量状态"
+            desc="困困的、电量低时的温柔提醒"
+            on={prefs.nudgeNight}
+            onChange={(v) => {
+              updatePrefs({ nudgeNight: v })
+              showToast(v ? '已开启夜间提醒' : '已关闭夜间提醒')
             }}
           />
           <ToggleRow
@@ -211,8 +252,165 @@ export function NotifySoundPage() {
             last
           />
         </section>
+
+        <section className="card-paper p-4">
+          <p className="text-xs font-medium text-ink">提醒频率</p>
+          <div className="mt-2.5 grid grid-cols-3 gap-2">
+            {(
+              [
+                { id: 'rare' as const, label: '佛系', desc: '少打扰' },
+                { id: 'normal' as const, label: '适中', desc: '推荐' },
+                { id: 'chatty' as const, label: '话唠', desc: '更勤快' },
+              ] as const
+            ).map((opt) => {
+              const active = prefs.nudgeFrequency === opt.id
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => {
+                    updatePrefs({ nudgeFrequency: opt.id })
+                    showToast(`提醒频率：${opt.label}`)
+                  }}
+                  className={`rounded-2xl px-2 py-2.5 text-center transition-all ${
+                    active
+                      ? 'bg-mist-soft ring-2 ring-matcha'
+                      : 'bg-cream ring-1 ring-line/50'
+                  }`}
+                >
+                  <span className="block text-xs font-semibold text-ink">
+                    {opt.label}
+                  </span>
+                  <span className="mt-0.5 block text-[10px] text-ink-muted">
+                    {opt.desc}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        </section>
+
         <p className="px-1 text-[11px] leading-relaxed text-ink-muted">
-          演示环境为应用内提醒，不会发送系统推送。关闭「玩偶响应提醒」后将不再弹出想你卡片。
+          演示环境为应用内卡片提醒，不会发送系统推送。对话页开启「安静陪伴」时也会暂停主动消息。
+        </p>
+      </div>
+    </>
+  )
+}
+
+/**
+ * JSON 备份：导出 / 导入成长轨迹（设置入口）
+ */
+export function DataBackupPage() {
+  const { toys, entries, currentToy, importGrowthData, showToast } = useApp()
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [busy, setBusy] = useState(false)
+
+  async function onExportJson() {
+    setBusy(true)
+    try {
+      const payload = buildGrowthExport({
+        toys,
+        entries,
+        currentToyId: currentToy?.id ?? null,
+      })
+      const blob = new Blob([JSON.stringify(payload, null, 2)], {
+        type: 'application/json',
+      })
+      const filename = growthExportFilename()
+      const mode = await shareOrDownloadFile({
+        blob,
+        filename,
+        title: 'Toy Dairy 成长轨迹备份',
+        text: `toys ${toys.length} · entries ${entries.length}`,
+      })
+      showToast(
+        mode === 'shared' ? '已分享 / 导出成长轨迹 JSON' : '已下载成长轨迹 JSON',
+      )
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : '导出失败')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  function onPickImport() {
+    fileRef.current?.click()
+  }
+
+  async function onImportFile(file: File | null) {
+    if (!file) return
+    setBusy(true)
+    try {
+      const text = await file.text()
+      const json = JSON.parse(text) as unknown
+      const payload = parseGrowthImport(json)
+      if (
+        !window.confirm(
+          `将导入 ${payload.toys.length} 只玩偶、${payload.entries.length} 条日记，并覆盖当前本地数据。继续？`,
+        )
+      ) {
+        return
+      }
+      await importGrowthData(payload)
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : '导入失败，请检查 JSON')
+    } finally {
+      setBusy(false)
+      if (fileRef.current) fileRef.current.value = ''
+    }
+  }
+
+  return (
+    <>
+      <PageHeader title="数据备份" back="/me" soft />
+      <div className="space-y-3 px-4 py-4">
+        <section className="card-paper overflow-hidden">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void onExportJson()}
+            className="flex min-h-14 w-full items-center gap-3 border-b border-line/70 px-4 py-3.5 text-left active:bg-cream disabled:opacity-50"
+          >
+            <span className="text-matcha-deep">
+              <Download className="h-4 w-4" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm text-ink">导出成长轨迹 JSON</p>
+              <p className="text-[11px] text-ink-muted">
+                含玩偶档案与日记（演示本地备份）
+              </p>
+            </div>
+            <ChevronRight className="h-4 w-4 text-ink-muted" />
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onPickImport}
+            className="flex min-h-14 w-full items-center gap-3 px-4 py-3.5 text-left active:bg-cream disabled:opacity-50"
+          >
+            <span className="text-matcha-deep">
+              <Upload className="h-4 w-4" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm text-ink">导入成长轨迹 JSON</p>
+              <p className="text-[11px] text-ink-muted">
+                覆盖当前本地数据，请先自行备份
+              </p>
+            </div>
+            <ChevronRight className="h-4 w-4 text-ink-muted" />
+          </button>
+        </section>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="application/json,.json"
+          className="hidden"
+          onChange={(e) => void onImportFile(e.target.files?.[0] ?? null)}
+        />
+        <p className="px-1 text-[11px] leading-relaxed text-ink-muted">
+          当前：{toys.length} 只玩偶 · {entries.length} 条日记。图片若为本地
+          data URL 会一并写入 JSON，体积可能较大。
         </p>
       </div>
     </>

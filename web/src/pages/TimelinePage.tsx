@@ -14,12 +14,13 @@ import {
   toyAvatar,
 } from '../archive/archiveUtils'
 import { useAuth } from '../auth/AuthContext'
+import { DayCountNumber } from '../components/DayCountNumber'
 import { ToyCardCarousel } from '../components/ToyCardCarousel'
 import { useApp } from '../context/AppContext'
 
 export function TimelinePage() {
   const navigate = useNavigate()
-  const { currentToy, toys, setCurrentToyId, showToast } = useApp()
+  const { currentToy, toys, entries, setCurrentToyId, showToast } = useApp()
   const { isLoggedIn } = useAuth()
   const [pickerOpen, setPickerOpen] = useState(false)
   const [viewedToyId, setViewedToyId] = useState(currentToy?.id)
@@ -28,6 +29,7 @@ export function TimelinePage() {
   const viewedToyIndex = toys.findIndex((toy) => toy.id === viewedToy?.id)
   const avatar = toyAvatar(viewedToy, viewedToyIndex)
   const companion = viewedToy ? companionDayStatus(viewedToy) : null
+  const photoUrl = entries.find((e) => e.imageUrl)?.imageUrl
 
   useEffect(() => {
     if (currentToy?.id) setViewedToyId(currentToy.id)
@@ -99,6 +101,54 @@ export function TimelinePage() {
               <p className="mt-1 text-[11px] text-ink-muted">游客模式请先登录</p>
             )}
           </button>
+        )}
+
+        {/* Local feature: Days Matter–style 正数日 on archive timeline */}
+        {viewedToy && companion && (
+          <div className="space-y-2">
+            {companion.isFuture ? (
+              <DayCountNumber
+                value={companion.daysUntil}
+                label={`距离与 ${viewedToy.name} 相遇`}
+                unit="天"
+                size="card"
+                photoUrl={photoUrl}
+                sublabel="即将相遇 · 点击自定义正数日样式"
+                onClick={() => navigate('/days')}
+              />
+            ) : (
+              <DayCountNumber
+                value={companion.days}
+                label={`和 ${viewedToy.name} 相遇`}
+                unit="天"
+                size="card"
+                photoUrl={photoUrl}
+                sublabel="正数日 · 点击自定义样式"
+                onClick={() => navigate('/days')}
+              />
+            )}
+            <div className="grid grid-cols-3 gap-2">
+              <DayCountNumber
+                value={entries.length}
+                label="日志"
+                unit="篇"
+                size="stat"
+              />
+              <DayCountNumber
+                value={entries.filter((e) => e.imageUrl).length}
+                label="照片"
+                unit="张"
+                size="stat"
+              />
+              <DayCountNumber
+                value={companion.isFuture ? companion.daysUntil : companion.days}
+                label={companion.isFuture ? '倒计时' : '陪伴'}
+                unit="天"
+                size="stat"
+                onClick={() => navigate('/days')}
+              />
+            </div>
+          </div>
         )}
 
         {viewedToy && companion && (

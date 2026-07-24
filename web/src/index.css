@@ -1477,6 +1477,15 @@ button:focus-visible {
   box-shadow: 0 1px 2px rgb(74 67 60 / 0.2);
 }
 
+.toy-map-marker__bubble.is-active {
+  width: 48px;
+  height: 48px;
+  border-color: #f0c96a;
+  box-shadow:
+    0 0 0 4px rgb(240 201 106 / 0.35),
+    0 6px 16px rgb(74 67 60 / 0.28);
+}
+
 .leaflet-container {
   font: inherit;
   background: #e8efe3;
@@ -1535,4 +1544,117 @@ button:focus-visible {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+/* —— Days Matter style 正数日 —— */
+.daycount {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1.25rem;
+  border: 1px solid var(--dc-border, var(--color-line));
+  box-shadow: var(--shadow-warm-sm);
+  isolation: isolate;
+}
+
+.daycount__bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.daycount__content {
+  position: relative;
+  z-index: 1;
+  padding: 0.85rem 1rem 0.95rem;
+}
+
+.daycount__label {
+  margin: 0;
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  color: var(--dc-label, var(--color-ink-muted));
+}
+
+.daycount__row {
+  margin: 0.15rem 0 0;
+  display: flex;
+  align-items: baseline;
+  gap: 0.2rem;
+  line-height: 1;
+}
+
+.daycount__number {
+  font-family: var(--dc-font, var(--font-display));
+  font-size: 2.35rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--dc-number, var(--color-matcha-deep));
+  font-variant-numeric: tabular-nums;
+}
+
+.daycount__unit {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--dc-unit, var(--color-terra-deep));
+}
+
+.daycount__sub {
+  margin: 0.4rem 0 0;
+  font-size: 0.65rem;
+  color: var(--dc-label, var(--color-ink-muted));
+}
+
+.daycount--hero .daycount__content {
+  padding: 1.15rem 1.15rem 1.25rem;
+}
+
+.daycount--hero .daycount__number {
+  font-size: 3.4rem;
+}
+
+.daycount--hero .daycount__label {
+  font-size: 0.8rem;
+}
+
+.daycount--stat .daycount__content {
+  padding: 0.65rem 0.55rem 0.7rem;
+  text-align: center;
+}
+
+.daycount--stat .daycount__number {
+  font-size: 1.55rem;
+}
+
+.daycount--stat .daycount__row {
+  justify-content: center;
+}
+
+.daycount--stat .daycount__unit {
+  font-size: 0.7rem;
+}
+
+.daycount--inline {
+  display: inline-flex;
+  border-radius: 999px;
+  box-shadow: none;
+}
+
+.daycount--inline .daycount__content {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  padding: 0.25rem 0.65rem;
+}
+
+.daycount--inline .daycount__label {
+  font-size: 0.65rem;
+}
+
+.daycount--inline .daycount__number {
+  font-size: 1.05rem;
+}
+
+.daycount--inline .daycount__unit {
+  font-size: 0.65rem;
 }

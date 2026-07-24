@@ -25,6 +25,11 @@ export type UserPrefs = {
   wechat?: string
   deviceLabel?: string
   toyReminders: boolean
+  /** granular proactive nudge channels */
+  nudgeMiss: boolean
+  nudgeTravel: boolean
+  nudgeNight: boolean
+  nudgeFrequency: 'rare' | 'normal' | 'chatty'
 }
 
 const DEFAULT_PREFS: UserPrefs = {
@@ -34,6 +39,10 @@ const DEFAULT_PREFS: UserPrefs = {
   wechat: '',
   deviceLabel: '本机 · Safari / Chrome',
   toyReminders: true,
+  nudgeMiss: true,
+  nudgeTravel: true,
+  nudgeNight: true,
+  nudgeFrequency: 'normal',
 }
 
 export function loadAuthSession(): AuthSession | null {

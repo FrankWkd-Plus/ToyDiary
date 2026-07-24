@@ -11,6 +11,7 @@ import {
   Camera,
   Check,
   ChevronRight,
+  Database,
   FileText,
   HelpCircle,
   Info,
@@ -19,6 +20,7 @@ import {
   Palette,
   Pencil,
   Share2,
+  Sparkles,
   UserRound,
   X,
 } from 'lucide-react'
@@ -30,7 +32,10 @@ import {
   saveProfileAvatar,
   saveProfileName,
 } from '../profile/profileStorage'
-import { getToyVitality } from '../archive/toyVitality'
+import { DayCountNumber } from '../components/DayCountNumber'
+import { companionDays } from '../archive/archiveUtils'
+import { renderGrowthTimelinePng } from '../share/renderGrowthTimelinePng'
+import { shareOrDownloadFile } from '../share/shareHelpers'
 import { useTheme } from '../theme/ThemeProvider'
 
 const DEFAULT_AVATAR = '/profile/default-avatar.jpg'
@@ -47,6 +52,7 @@ export function MePage() {
   const [avatarUrl, setAvatarUrl] = useState(() =>
     loadProfileAvatar(DEFAULT_AVATAR),
   )
+  const [sharingGrowth, setSharingGrowth] = useState(false)
 
   function saveName() {
     const nextName = draftName.trim()
@@ -97,23 +103,37 @@ export function MePage() {
     reader.readAsDataURL(file)
   }
 
-  function exportGrowth() {
-    const payload = {
-      exportedAt: new Date().toISOString(),
-      toys,
-      entries,
-      currentToyId: currentToy?.id ?? null,
+  async function shareGrowthTimeline() {
+    if (sharingGrowth) return
+    if (!toys.length) {
+      showToast('还没有可分享的成长轨迹')
+      return
     }
-    const blob = new Blob([JSON.stringify(payload, null, 2)], {
-      type: 'application/json',
-    })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `toydairy-growth-${new Date().toISOString().slice(0, 10)}.json`
-    a.click()
-    URL.revokeObjectURL(url)
-    showToast('已导出成长轨迹 JSON')
+    setSharingGrowth(true)
+    try {
+      const blob = await renderGrowthTimelinePng({
+        toys,
+        entries,
+        currentToy,
+        ownerName: profileName,
+      })
+      const filename = `toydairy-timeline-${new Date().toISOString().slice(0, 10)}.png`
+      const mode = await shareOrDownloadFile({
+        blob,
+        filename,
+        title: `${currentToy?.name || '玩偶'} 的成长轨迹`,
+        text: '来自 Toy Dairy 的成长时间轴',
+      })
+      showToast(
+        mode === 'shared'
+          ? '已打开分享（可转微信 / 朋友圈 / 保存相册）'
+          : '已保存成长轨迹图片',
+      )
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : '生成分享图失败')
+    } finally {
+      setSharingGrowth(false)
+    }
   }
 
   function onLogout() {
@@ -129,9 +149,6 @@ export function MePage() {
         ? '游客 · 随便看看'
         : '未登录'
 
-  const currentVitality = currentToy
-    ? getToyVitality(currentToy, entries)
-    : null
 
   return (
     <div className="min-h-full">
@@ -221,42 +238,58 @@ export function MePage() {
         </div>
       </div>
 
-      {/* Stats banner — extra top space so it doesn't crowd the avatar */}
+      {/* Stats banner — Days Matter style numbers */}
       <div className="mx-auto w-full max-w-lg space-y-3 px-4 pb-6 pt-6 sm:pt-7">
-        <div className="card-paper px-1.5 py-4 shadow-[var(--shadow-warm)] sm:px-2 sm:py-5">
-          <div className="grid grid-cols-4 gap-y-1 text-center">
-            <Stat label="玩偶" value={String(toys.length)} to="/toys" highlight />
-            <Stat
-              label="日记"
-              value={String(entries.length)}
-              to={currentToy ? '/growth/timeline' : '/growth'}
-            />
-            <Stat
-              label="照片"
-              value={String(entries.filter((e) => e.imageUrl).length)}
-              to={currentToy ? '/growth/stats/moments' : '/growth'}
-            />
-            <Stat
-              label="当前"
-              value={currentToy ? '1' : '0'}
-              sub={
-                currentToy
-                  ? `${currentVitality?.emoji ?? ''} ${currentToy.name}`.trim()
-                  : undefined
-              }
-              to={
-                isLoggedIn
-                  ? currentToy
-                    ? `/archive/toys/${currentToy.id}`
-                    : '/toys/new'
-                  : '/login'
-              }
-            />
-          </div>
+        <DayCountNumber
+          value={currentToy ? companionDays(currentToy) : 0}
+          label={
+            currentToy ? `和 ${currentToy.name} 相遇` : '还没有玩偶'
+          }
+          unit="天"
+          size="hero"
+          photoUrl={entries.find((e) => e.imageUrl)?.imageUrl}
+          sublabel="正数日"
+          onClick={() => navigate('/days')}
+        />
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <DayCountNumber
+            value={toys.length}
+            label="玩偶"
+            unit="只"
+            size="stat"
+            to="/toys"
+          />
+          <DayCountNumber
+            value={entries.length}
+            label="日记"
+            unit="篇"
+            size="stat"
+            to={currentToy ? '/growth/timeline' : '/growth'}
+          />
+          <DayCountNumber
+            value={entries.filter((e) => e.imageUrl).length}
+            label="照片"
+            unit="张"
+            size="stat"
+            to={currentToy ? '/growth/stats/moments' : '/growth'}
+          />
+          <DayCountNumber
+            value={currentToy ? companionDays(currentToy) : 0}
+            label="陪伴"
+            unit="天"
+            size="stat"
+            to={currentToy ? '/growth/stats/companion' : '/growth'}
+          />
         </div>
 
         {/* A 快捷操作 */}
         <SectionCard title="快捷操作">
+          <LinkRow
+            to="/days"
+            icon={<Sparkles className="h-4 w-4" />}
+            label="正数日样式"
+            hint="配色 / 字体"
+          />
           <LinkRow
             to="/me/theme"
             icon={<Palette className="h-4 w-4" />}
@@ -277,13 +310,17 @@ export function MePage() {
           </button>
           <button
             type="button"
-            onClick={exportGrowth}
-            className="flex min-h-12 w-full items-center gap-3 px-4 py-3.5 text-left active:bg-cream"
+            onClick={() => void shareGrowthTimeline()}
+            disabled={sharingGrowth}
+            className="flex min-h-12 w-full items-center gap-3 px-4 py-3.5 text-left active:bg-cream disabled:opacity-60"
           >
             <span className="text-matcha-deep">
               <Share2 className="h-4 w-4" />
             </span>
-            <span className="flex-1 text-sm text-ink">导出玩偶成长轨迹</span>
+            <span className="flex-1 text-sm text-ink">
+              {sharingGrowth ? '正在生成时间轴…' : '成长轨迹分享'}
+            </span>
+            <span className="text-[10px] text-ink-muted">PNG</span>
             <ChevronRight className="h-4 w-4 text-ink-muted" />
           </button>
         </SectionCard>
@@ -294,7 +331,18 @@ export function MePage() {
             to="/me/notify"
             icon={<Bell className="h-4 w-4" />}
             label="玩偶提醒 / 日记 / 声音"
-            hint="推送与回忆展厅"
+            hint="细分开关"
+          />
+        </SectionCard>
+
+        {/* 数据备份 */}
+        <SectionCard title="数据">
+          <LinkRow
+            to="/me/data"
+            icon={<Database className="h-4 w-4" />}
+            label="导出 / 导入成长轨迹"
+            hint="JSON"
+            last
           />
         </SectionCard>
 
@@ -365,50 +413,6 @@ function SectionCard({
   )
 }
 
-function Stat({
-  label,
-  value,
-  sub,
-  to,
-  highlight,
-}: {
-  label: string
-  value: string
-  sub?: string
-  to?: string
-  highlight?: boolean
-}) {
-  const body = (
-    <div
-      className={`py-2.5 transition-colors sm:py-3 ${
-        highlight ? 'rounded-2xl bg-mist-soft' : 'rounded-2xl active:bg-cream'
-      }`}
-    >
-      <div className="font-display truncate px-1 text-xl leading-none text-matcha-deep">
-        {sub ? (
-          <span className="text-sm leading-7 text-ink">{sub}</span>
-        ) : (
-          value
-        )}
-      </div>
-      <div className="mt-1 text-[11px] text-ink-muted">{label}</div>
-    </div>
-  )
-
-  if (to) {
-    return (
-      <Link
-        to={to}
-        className="block px-1 transition-transform active:scale-95"
-        aria-label={`查看${label}`}
-      >
-        {body}
-      </Link>
-    )
-  }
-
-  return body
-}
 
 function LinkRow({
   to,
