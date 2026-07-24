@@ -1,0 +1,66 @@
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Editors / IDEs
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Claude / local agent state
+.claude/
+.claude/worktrees/
+
+# Cloudflare Wrangler local state
+.wrangler/
+**/.wrangler/
+
+# Env & secrets (never commit)
+.env
+.env.*
+!.env.example
+!.env*.example
+*.pem
+*.key
+credentials.json
+secrets.json
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Dependencies & build (also covered under web/)
+node_modules/
+dist/
+dist-ssr/
+build/
+coverage/
+*.local
+.cache/
+.turbo/
+.vite/
+
+# Package manager noise
+.npm/
+.pnpm-store/
+
+# Test / temp
+tmp/
+temp/
+*.tmp
+*.temp
+
+# Optional OS / backup
+*~
+*.bak
