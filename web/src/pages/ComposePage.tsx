@@ -391,7 +391,7 @@ export function ComposePage() {
             >
               {toys.map((toy) => (
                 <option key={toy.id} value={toy.id}>
-                  {toy.name} · {toy.traits.slice(0, 2).join('、')}
+                  {toy.name}
                 </option>
               ))}
             </select>

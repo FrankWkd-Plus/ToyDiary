@@ -1,6 +1,7 @@
 /**
  * Export a dual-perspective diary card as PNG.
  * Layouts: side (左主右偶) | stack (上下对称)
+ * Location is drawn as a clear grey label with a pin glyph (not a faint watermark).
  */
 import { companionDays, toyAvatar } from '../archive/archiveUtils'
 import type { Entry, Toy } from '../types'
@@ -17,8 +18,8 @@ export interface DiaryCardOptions {
   stickerFrame: boolean
   /** show companion day count */
   showDayCount: boolean
-  /** location watermark */
-  locationWatermark: boolean
+  /** show location as visible grey text + pin under the title */
+  showLocation: boolean
 }
 
 export async function renderDiaryCardPng(
@@ -31,15 +32,16 @@ export async function renderDiaryCardPng(
     layout,
     stickerFrame,
     showDayCount,
-    locationWatermark,
+    showLocation,
   } = opts
 
-  const W = 1080
-  const H = layout === 'side' ? 1350 : 1600
+  // Compact canvas + JPEG keeps mobile encode under ~300ms
+  const W = 720
+  const H = layout === 'side' ? 900 : 1060
   const canvas = document.createElement('canvas')
   canvas.width = W
   canvas.height = H
-  const ctx = canvas.getContext('2d')
+  const ctx = canvas.getContext('2d', { alpha: false })
   if (!ctx) throw new Error('Canvas 不可用')
 
   const cream = '#f7f0e6'
@@ -47,6 +49,16 @@ export async function renderDiaryCardPng(
   const ink = '#4a433c'
   const muted = '#8a7563'
   const matcha = '#9a8758'
+  // Clear readable grey — not a watermark
+  const locationGrey = '#5c554e'
+
+  const pad = 32
+
+  // Preload images in parallel before paint work
+  const [entryImg, avatarImg] = await Promise.all([
+    entry.imageUrl ? loadImage(entry.imageUrl) : Promise.resolve(null),
+    toy ? loadImage(toyAvatar(toy, 0)) : Promise.resolve(null),
+  ])
 
   // outer bg
   const bg = ctx.createLinearGradient(0, 0, W, H)
@@ -56,98 +68,109 @@ export async function renderDiaryCardPng(
   ctx.fillRect(0, 0, W, H)
 
   // card
-  const pad = 56
   ctx.fillStyle = paper
-  roundRect(ctx, pad, pad, W - pad * 2, H - pad * 2, 40)
+  roundRect(ctx, pad, pad, W - pad * 2, H - pad * 2, 26)
   ctx.fill()
 
   if (stickerFrame) {
     ctx.strokeStyle = '#f0c96a'
-    ctx.lineWidth = 10
-    roundRect(ctx, pad + 18, pad + 18, W - pad * 2 - 36, H - pad * 2 - 36, 32)
+    ctx.lineWidth = 6
+    roundRect(ctx, pad + 10, pad + 10, W - pad * 2 - 20, H - pad * 2 - 20, 20)
     ctx.stroke()
-    // corner stickers
     const corners = [
-      [pad + 36, pad + 48],
-      [W - pad - 70, pad + 48],
-      [pad + 36, H - pad - 70],
-      [W - pad - 70, H - pad - 70],
+      [pad + 22, pad + 32],
+      [W - pad - 44, pad + 32],
+      [pad + 22, H - pad - 44],
+      [W - pad - 44, H - pad - 44],
     ] as const
-    ctx.font = '40px serif'
+    ctx.font = '26px serif'
     corners.forEach(([x, y], i) => {
       ctx.fillText(['🌸', '⭐', '🧸', '🍀'][i], x, y)
     })
   }
 
-  // header
   const toyName = toy?.name || '玩偶'
   const days = toy ? companionDays(toy) : 0
-  ctx.fillStyle = ink
-  ctx.font = '700 40px "ZCOOL XiaoWei", "Noto Sans SC", serif'
-  ctx.fillText(entry.title || '今日日记', pad + 48, pad + 90)
+  const locationText =
+    entry.place?.displayName?.trim() || entry.location?.trim() || ''
 
+  // header title
+  ctx.fillStyle = ink
+  ctx.textAlign = 'left'
+  ctx.font = '700 28px "Noto Sans SC", sans-serif'
+  ctx.fillText(entry.title || '今日日记', pad + 28, pad + 56)
+
+  // date + mood (grey, clear)
   ctx.fillStyle = muted
-  ctx.font = '500 24px "Noto Sans SC", sans-serif'
+  ctx.font = '500 16px "Noto Sans SC", sans-serif'
   ctx.fillText(
     `${entry.date}${entry.mood ? ` · ${entry.mood}` : ''}`,
-    pad + 48,
-    pad + 132,
+    pad + 28,
+    pad + 84,
   )
+
+  // location as explicit grey line with pin icon (NOT a watermark)
+  let metaBottom = pad + 84
+  if (showLocation && locationText) {
+    metaBottom = pad + 112
+    drawLocationLine(ctx, {
+      x: pad + 28,
+      y: metaBottom,
+      text: locationText,
+      color: locationGrey,
+      maxWidth: W - pad * 2 - 56 - (showDayCount ? 100 : 0),
+    })
+  }
 
   if (showDayCount) {
     ctx.fillStyle = matcha
-    ctx.font = '700 28px "Noto Sans SC", sans-serif'
+    ctx.font = '700 20px "Noto Sans SC", sans-serif'
     ctx.textAlign = 'right'
-    ctx.fillText(`DAY ${days}`, W - pad - 48, pad + 100)
-    ctx.font = '500 20px "Noto Sans SC", sans-serif'
-    ctx.fillText('正数日', W - pad - 48, pad + 132)
+    ctx.fillText(`DAY ${days}`, W - pad - 28, pad + 56)
+    ctx.font = '500 14px "Noto Sans SC", sans-serif'
+    ctx.fillText('正数日', W - pad - 28, pad + 78)
     ctx.textAlign = 'left'
   }
 
   // photo
-  let contentTop = pad + 170
-  if (entry.imageUrl) {
-    const img = await loadImage(entry.imageUrl)
-    if (img) {
-      const photoH = 360
-      const photoW = W - pad * 2 - 80
-      const photoX = pad + 40
-      ctx.save()
-      roundRect(ctx, photoX, contentTop, photoW, photoH, 28)
-      ctx.clip()
-      const scale = Math.max(photoW / img.width, photoH / img.height)
-      const dw = img.width * scale
-      const dh = img.height * scale
-      ctx.drawImage(
-        img,
-        photoX + (photoW - dw) / 2,
-        contentTop + (photoH - dh) / 2,
-        dw,
-        dh,
-      )
-      ctx.restore()
-      contentTop += photoH + 36
-    }
+  let contentTop = metaBottom + 20
+  if (entryImg) {
+    const photoH = 220
+    const photoW = W - pad * 2 - 48
+    const photoX = pad + 24
+    ctx.save()
+    roundRect(ctx, photoX, contentTop, photoW, photoH, 18)
+    ctx.clip()
+    const scale = Math.max(photoW / entryImg.width, photoH / entryImg.height)
+    const dw = entryImg.width * scale
+    const dh = entryImg.height * scale
+    ctx.drawImage(
+      entryImg,
+      photoX + (photoW - dw) / 2,
+      contentTop + (photoH - dh) / 2,
+      dw,
+      dh,
+    )
+    ctx.restore()
+    contentTop += photoH + 20
   }
 
   const ownerText =
     entry.userNote?.trim() ||
     entry.title?.trim() ||
-    (entry.location
-      ? `今天和 ${toyName} 一起去了${entry.location}。`
+    (locationText
+      ? `今天和 ${toyName} 一起去了${locationText}。`
       : `今天想把这一刻写给 ${toyName}。`)
   const toyText =
     entry.aiDiary?.trim() ||
-    `我是${toyName}。${entry.location ? `在${entry.location}，` : ''}和 ${ownerName} 的这一天，我想记住。`
-
-  const avatarImg = toy ? await loadImage(toyAvatar(toy, 0)) : null
+    `我是${toyName}。${locationText ? `在${locationText}，` : ''}和 ${ownerName} 的这一天，我想记住。`
 
   if (layout === 'side') {
-    const colW = (W - pad * 2 - 100) / 2
-    const leftX = pad + 40
-    const rightX = leftX + colW + 20
+    const colW = (W - pad * 2 - 56) / 2
+    const leftX = pad + 24
+    const rightX = leftX + colW + 12
     const boxY = contentTop
-    const boxH = H - boxY - pad - 100
+    const boxH = H - boxY - pad - 52
 
     drawPerspectiveBox(ctx, {
       x: leftX,
@@ -173,10 +196,10 @@ export async function renderDiaryCardPng(
       avatar: avatarImg,
     })
   } else {
-    const boxW = W - pad * 2 - 80
-    const boxX = pad + 40
-    const gap = 28
-    const boxH = (H - contentTop - pad - 100 - gap) / 2
+    const boxW = W - pad * 2 - 48
+    const boxX = pad + 24
+    const gap = 14
+    const boxH = (H - contentTop - pad - 52 - gap) / 2
     drawPerspectiveBox(ctx, {
       x: boxX,
       y: contentTop,
@@ -202,29 +225,54 @@ export async function renderDiaryCardPng(
     })
   }
 
-  if (locationWatermark && entry.location) {
-    ctx.save()
-    ctx.translate(W / 2, H / 2)
-    ctx.rotate(-Math.PI / 8)
-    ctx.fillStyle = 'rgba(154,135,88,0.12)'
-    ctx.font = '700 64px "Noto Sans SC", sans-serif'
-    ctx.textAlign = 'center'
-    ctx.fillText(entry.location, 0, 0)
-    ctx.restore()
-    ctx.textAlign = 'left'
-  }
-
   ctx.fillStyle = muted
-  ctx.font = '500 20px "Noto Sans SC", sans-serif'
+  ctx.font = '500 14px "Noto Sans SC", sans-serif'
   ctx.textAlign = 'center'
-  ctx.fillText('Toy Dairy · 双视角日记', W / 2, H - pad - 28)
+  ctx.fillText('Toy Dairy · 双视角日记', W / 2, H - pad - 16)
   ctx.textAlign = 'left'
 
+  // JPEG is much faster to encode than PNG on mobile
   const blob = await new Promise<Blob | null>((resolve) =>
-    canvas.toBlob(resolve, 'image/png'),
+    canvas.toBlob(resolve, 'image/jpeg', 0.86),
   )
   if (!blob) throw new Error('生成图片失败')
   return blob
+}
+
+function drawLocationLine(
+  ctx: CanvasRenderingContext2D,
+  opts: {
+    x: number
+    y: number
+    text: string
+    color: string
+    maxWidth: number
+  },
+) {
+  const { x, y, text, color, maxWidth } = opts
+  // Map-pin glyph drawn with path (always visible grey, never a watermark)
+  const pinR = 5
+  const pinCx = x + pinR
+  const pinCy = y - 6
+  ctx.fillStyle = color
+  ctx.beginPath()
+  ctx.arc(pinCx, pinCy, pinR, Math.PI * 0.15, Math.PI * 0.85, true)
+  ctx.lineTo(pinCx, pinCy + pinR + 6)
+  ctx.closePath()
+  ctx.fill()
+  ctx.fillStyle = '#fffdf8'
+  ctx.beginPath()
+  ctx.arc(pinCx, pinCy - 1, 2.2, 0, Math.PI * 2)
+  ctx.fill()
+
+  const pinW = pinR * 2 + 8
+  ctx.fillStyle = color
+  ctx.font = '500 16px "Noto Sans SC", sans-serif'
+  let line = text
+  while (ctx.measureText(line).width > maxWidth - pinW && line.length > 1) {
+    line = line.slice(0, -2) + '…'
+  }
+  ctx.fillText(line, x + pinW, y)
 }
 
 function drawPerspectiveBox(
@@ -244,32 +292,38 @@ function drawPerspectiveBox(
 ) {
   const { x, y, w, h, title, body, tint, ink, muted, avatar } = opts
   ctx.fillStyle = tint
-  roundRect(ctx, x, y, w, h, 24)
+  roundRect(ctx, x, y, w, h, 16)
   ctx.fill()
   ctx.strokeStyle = 'rgba(232,228,220,0.95)'
-  ctx.lineWidth = 2
-  roundRect(ctx, x, y, w, h, 24)
+  ctx.lineWidth = 1.5
+  roundRect(ctx, x, y, w, h, 16)
   ctx.stroke()
 
-  let titleX = x + 24
+  let titleX = x + 14
   if (avatar) {
     ctx.save()
     ctx.beginPath()
-    ctx.arc(x + 36, y + 36, 20, 0, Math.PI * 2)
+    ctx.arc(x + 24, y + 24, 12, 0, Math.PI * 2)
     ctx.clip()
-    ctx.drawImage(avatar, x + 16, y + 16, 40, 40)
+    ctx.drawImage(avatar, x + 12, y + 12, 24, 24)
     ctx.restore()
-    titleX = x + 68
+    titleX = x + 42
   }
 
   ctx.fillStyle = ink
-  ctx.font = '700 24px "Noto Sans SC", sans-serif'
-  ctx.fillText(title, titleX, y + 44)
+  ctx.font = '700 15px "Noto Sans SC", sans-serif'
+  // Truncate long titles in narrow columns
+  let shown = title
+  while (ctx.measureText(shown).width > w - (titleX - x) - 12 && shown.length > 2) {
+    shown = shown.slice(0, -2) + '…'
+  }
+  ctx.fillText(shown, titleX, y + 28)
 
   ctx.fillStyle = muted
-  ctx.font = '400 22px "Noto Sans SC", sans-serif'
-  const lines = wrapText(ctx, body, w - 48, Math.floor((h - 80) / 30))
+  ctx.font = '400 14px "Noto Sans SC", sans-serif'
+  const lineH = 20
+  const lines = wrapText(ctx, body, w - 28, Math.max(2, Math.floor((h - 48) / lineH)))
   lines.forEach((line, i) => {
-    ctx.fillText(line, x + 24, y + 86 + i * 30)
+    ctx.fillText(line, x + 14, y + 52 + i * lineH)
   })
 }

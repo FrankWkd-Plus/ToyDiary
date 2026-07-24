@@ -7,7 +7,7 @@ import {
   ChevronRight,
   Flag,
   Globe2,
-  MapPin,
+  History,
   Sparkles,
 } from 'lucide-react'
 import { companionDays, toyAvatar } from '../archive/archiveUtils'
@@ -56,10 +56,35 @@ export function GrowthPage() {
 
   return (
     <>
-      <PageHeader title="成长" subtitle="和玩偶一起走过的日子" soft />
+      <PageHeader
+        title="成长"
+        subtitle="和玩偶一起走过的日子"
+        soft
+        right={
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => requireToy('/growth/travel-map')}
+              className="flex h-9 items-center gap-1 rounded-full bg-paper/95 px-2.5 text-[10px] font-medium text-matcha-deep shadow-[var(--shadow-warm-sm)] ring-1 ring-line/40"
+              aria-label="旅行轨迹地图"
+            >
+              <Globe2 className="h-3.5 w-3.5" />
+              地图
+            </button>
+            <button
+              type="button"
+              onClick={() => requireToy('/growth/timeline')}
+              className="flex h-9 items-center gap-1 rounded-full bg-paper/95 px-2.5 text-[10px] font-medium text-matcha-deep shadow-[var(--shadow-warm-sm)] ring-1 ring-line/40"
+              aria-label="成长时间线"
+            >
+              <History className="h-3.5 w-3.5" />
+              时间线
+            </button>
+          </div>
+        }
+      />
 
       <div className="px-3.5 pb-5 pt-3">
-        {/* Toy card with integrated switch arrow */}
         <div className="relative mb-3">
           <div className="growth-toy-bubble min-w-0 w-full !max-w-none justify-between pr-1.5">
             <div className="flex min-w-0 items-center gap-2.5">
@@ -78,7 +103,7 @@ export function GrowthPage() {
             <button
               type="button"
               onClick={() => setPickerOpen((open) => !open)}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/90 text-matcha-deep shadow-sm ring-1 ring-line/40 transition-transform active:scale-95"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/90 text-matcha-deep shadow-sm ring-1 ring-line/40"
               aria-expanded={pickerOpen}
               aria-label="切换玩偶"
             >
@@ -121,7 +146,6 @@ export function GrowthPage() {
           )}
         </div>
 
-        {/* Clickable overview stats — Days Matter style */}
         <section className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
           <DayCountNumber
             value={days}
@@ -153,30 +177,10 @@ export function GrowthPage() {
           />
         </section>
 
-        <div className="mb-3 space-y-1.5">
-          <SecondaryMenuButton
-            icon={<Globe2 className="growth-globe-spin h-4 w-4" />}
-            title="旅行轨迹地图"
-            subtitle="按日期串起每一次出发"
-            onClick={() => requireToy('/growth/travel-map')}
-            trailing={<MapPin className="h-3.5 w-3.5 text-matcha-deep" />}
-            gradient="from-mist-soft via-white to-mustard-soft"
-          />
-          <SecondaryMenuButton
-            icon={<Sparkles className="h-4 w-4" />}
-            title="成长时间线"
-            subtitle="回顾每一篇日志与瞬间"
-            onClick={() => requireToy('/growth/timeline')}
-            trailing={<ChevronRight className="h-3.5 w-3.5 text-matcha-deep" />}
-            gradient="from-mustard-soft via-white to-mist-soft"
-          />
-        </div>
-
-        {/* Milestones */}
         <section className="mb-4">
-          <h2 className="mb-2 flex items-center gap-1.5 px-1 font-display text-base text-ink">
-            <Flag className="h-4 w-4 text-terra-deep" />
-            成长里程碑
+          <h2 className="mb-2 flex items-center gap-1.5 px-1 text-base text-ink">
+            <Flag className="h-4 w-4 shrink-0 text-terra-deep" />
+            <span className="font-semibold tracking-wide">成长里程碑</span>
           </h2>
           <div className="space-y-2">
             {milestones.map((m) => (
@@ -190,7 +194,7 @@ export function GrowthPage() {
                     requireToy(m.path || '/growth/stats/companion')
                   }
                 }}
-                className="flex w-full items-start gap-3 rounded-2xl bg-white px-3.5 py-3 text-left shadow-[var(--shadow-warm-sm)] ring-1 ring-line/50 transition-transform active:scale-[0.99]"
+                className="flex w-full items-start gap-3 rounded-2xl bg-white px-3.5 py-3 text-left shadow-[var(--shadow-warm-sm)] ring-1 ring-line/50 active:scale-[0.99]"
               >
                 <span className="text-lg">{m.emoji}</span>
                 <div className="min-w-0 flex-1">
@@ -203,12 +207,12 @@ export function GrowthPage() {
           </div>
         </section>
 
-        {/* Memory album — each photo opens entry detail */}
         <section className="mb-2">
           <div className="mb-2 flex items-center justify-between px-1">
-            <h2 className="flex items-center gap-1.5 font-display text-base text-ink">
-              <BookHeart className="h-4 w-4 text-rose-deep" />
-              回忆纪念册
+            <h2 className="flex items-center gap-1.5 text-base text-ink">
+              <BookHeart className="h-4 w-4 shrink-0 text-rose-deep" />
+              {/* Avoid display font for CJK title — some devices render 回 as a black blob */}
+              <span className="font-semibold tracking-wide">回忆纪念册</span>
             </h2>
             {photoMemories.length > 0 && (
               <button
@@ -237,11 +241,14 @@ export function GrowthPage() {
                     <img
                       src={entry.imageUrl}
                       alt={entry.title || '回忆'}
-                      className="h-full w-full object-cover transition-transform group-active:scale-105"
+                      className="h-full w-full object-cover"
                     />
                     <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-ink/55 to-transparent px-1.5 pb-1.5 pt-4 text-[9px] leading-tight text-white">
                       <span className="line-clamp-2">
-                        {entry.title || entry.place?.displayName || entry.location || '这一刻'}
+                        {entry.title ||
+                          entry.place?.displayName ||
+                          entry.location ||
+                          '这一刻'}
                       </span>
                     </span>
                   </div>
@@ -254,44 +261,6 @@ export function GrowthPage() {
     </>
   )
 }
-
-function SecondaryMenuButton({
-  icon,
-  title,
-  subtitle,
-  onClick,
-  trailing,
-  gradient,
-}: {
-  icon: React.ReactNode
-  title: string
-  subtitle: string
-  onClick: () => void
-  trailing: React.ReactNode
-  gradient: string
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex w-full items-center gap-2.5 rounded-[1rem] bg-gradient-to-r ${gradient} px-3 py-2 text-left shadow-[var(--shadow-warm-sm)] ring-1 ring-line/50 transition-transform active:scale-[0.99]`}
-    >
-      <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-white text-matcha-deep shadow-sm">
-        {icon}
-      </span>
-      <span className="min-w-0 flex-1">
-        <strong className="block font-display text-[13px] leading-tight text-ink">
-          {title}
-        </strong>
-        <span className="mt-0.5 block truncate text-[9px] text-ink-muted">
-          {subtitle}
-        </span>
-      </span>
-      {trailing}
-    </button>
-  )
-}
-
 
 function buildMilestones(entries: Entry[], days: number) {
   const items: {

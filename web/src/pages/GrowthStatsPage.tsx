@@ -3,12 +3,11 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   ChevronLeft,
   ChevronRight,
-  Heart,
   MapPin,
-  Plane,
   Sparkles,
 } from 'lucide-react'
-import { companionDays } from '../archive/archiveUtils'
+import { companionDays, toyAvatar } from '../archive/archiveUtils'
+import { DayCountNumber } from '../components/DayCountNumber'
 import { useApp } from '../context/AppContext'
 import {
   placeCityKey,
@@ -21,37 +20,44 @@ type StatKind = 'companion' | 'travel' | 'cities' | 'moments'
 
 const META: Record<
   StatKind,
-  { title: string; subtitle: (n: number) => string; icon: string }
+  { title: string; subtitle: (n: number) => string; icon: string; unit: string }
 > = {
   companion: {
     title: '陪伴天数',
     subtitle: (n) => `已经一起走过 ${n} 天`,
     icon: '📅',
+    unit: '天',
   },
   travel: {
     title: '旅行记录',
     subtitle: (n) => `${n} 次出发`,
     icon: '✈️',
+    unit: '次',
   },
   cities: {
     title: '到访城市',
     subtitle: (n) => `${n} 座城市留下脚印`,
     icon: '🏙️',
+    unit: '座',
   },
   moments: {
     title: '记录瞬间',
     subtitle: (n) => `共 ${n} 条成长瞬间`,
     icon: '✨',
+    unit: '条',
   },
 }
 
+/**
+ * Growth stat detail — styled like the archive memorial / day-count card.
+ */
 export function GrowthStatsPage() {
   const { kind } = useParams<{ kind: string }>()
   const navigate = useNavigate()
-  const { currentToy, entries } = useApp()
-  const statKind = (['companion', 'travel', 'cities', 'moments'] as const).includes(
-    kind as StatKind,
-  )
+  const { currentToy, entries, toys } = useApp()
+  const statKind = (
+    ['companion', 'travel', 'cities', 'moments'] as const
+  ).includes(kind as StatKind)
     ? (kind as StatKind)
     : null
 
@@ -68,16 +74,14 @@ export function GrowthStatsPage() {
     [entries],
   )
   const cityGroups = useMemo(() => groupByCity(entries), [entries])
+  const toyIndex = toys.findIndex((t) => t.id === currentToy?.id)
+  const photoUrl = entries.find((e) => e.imageUrl)?.imageUrl
 
   if (!statKind) {
-    return (
-      <Empty message="页面不存在" onBack={() => navigate('/growth')} />
-    )
+    return <Empty message="页面不存在" onBack={() => navigate('/growth')} />
   }
   if (!currentToy) {
-    return (
-      <Empty message="请先选择玩偶" onBack={() => navigate('/growth')} />
-    )
+    return <Empty message="请先选择玩偶" onBack={() => navigate('/growth')} />
   }
 
   const meta = META[statKind]
@@ -103,7 +107,7 @@ export function GrowthStatsPage() {
             <ChevronLeft className="h-5 w-5" />
           </button>
           <div className="min-w-0 flex-1">
-            <h1 className="truncate font-display text-base text-ink">
+            <h1 className="truncate text-base font-semibold text-ink">
               {meta.icon} {meta.title}
             </h1>
             <p className="text-[10px] text-ink-muted">
@@ -113,25 +117,50 @@ export function GrowthStatsPage() {
         </div>
       </header>
 
-      <div className="space-y-3 px-3.5 py-4">
-        <section className="rounded-[1.35rem] bg-gradient-to-br from-mist-soft via-white to-mustard-soft p-4 shadow-[var(--shadow-warm-sm)] ring-1 ring-line/50">
-          <p className="text-[10px] font-medium tracking-wider text-matcha-deep">
-            {currentToy.name}
-          </p>
-          <p className="mt-1 font-display text-3xl text-ink">
-            {count}
-            <span className="ml-1 text-sm text-ink-muted">
-              {statKind === 'companion'
-                ? '天'
-                : statKind === 'travel'
-                  ? '次'
-                  : statKind === 'cities'
-                    ? '座'
-                    : '条'}
+      <div className="space-y-4 px-3.5 py-4">
+        {/* Memorial-style hero card */}
+        <button
+          type="button"
+          onClick={() => navigate(`/memories/${currentToy.id}`)}
+          className="archive-milestone-card w-full overflow-hidden text-left active:scale-[0.99]"
+        >
+          <div className="relative z-[1] max-w-[65%]">
+            <span className="inline-flex items-center gap-1 rounded-full bg-white/65 px-2.5 py-1 text-[10px] font-medium text-terra-deep">
+              <Sparkles className="h-3 w-3" />
+              {meta.title}
             </span>
-          </p>
-          <p className="mt-1 text-xs text-ink-soft">{meta.subtitle(count)}</p>
-        </section>
+            <p className="mt-3 text-xs font-medium text-ink-soft">
+              {meta.subtitle(count)}
+            </p>
+            <p className="mt-0.5 font-display text-[2.25rem] leading-none text-ink">
+              {count}{' '}
+              <span className="text-lg font-sans text-ink-muted">
+                {meta.unit}
+              </span>
+            </p>
+            <span className="mt-3 inline-flex items-center text-[10px] font-semibold text-matcha-deep">
+              打开回忆展厅
+              <ChevronRight className="h-3.5 w-3.5" />
+            </span>
+          </div>
+          <div className="absolute -bottom-5 -right-2 h-36 w-36 rotate-6 overflow-hidden rounded-[2rem] border-[5px] border-white bg-white shadow-lg">
+            <img
+              src={toyAvatar(currentToy, toyIndex)}
+              alt=""
+              className="h-full w-full object-cover"
+            />
+          </div>
+        </button>
+
+        <DayCountNumber
+          value={count}
+          label={meta.title}
+          unit={meta.unit}
+          size="hero"
+          photoUrl={photoUrl}
+          sublabel={meta.subtitle(count)}
+          onClick={() => navigate('/days')}
+        />
 
         {statKind === 'companion' && (
           <CompanionDetail
@@ -142,25 +171,10 @@ export function GrowthStatsPage() {
             firstEntry={momentEntries[momentEntries.length - 1]}
           />
         )}
-
-        {statKind === 'travel' && (
-          <EntryList
-            entries={travelEntries}
-            empty="还没有旅行记录，去记一次出发吧。"
-            emptyIcon={<Plane className="h-6 w-6 text-matcha-deep" />}
-          />
-        )}
-
-        {statKind === 'cities' && (
-          <CityList groups={cityGroups} />
-        )}
-
+        {statKind === 'travel' && <EntryList entries={travelEntries} empty="还没有旅行记录。" />}
+        {statKind === 'cities' && <CityList groups={cityGroups} />}
         {statKind === 'moments' && (
-          <EntryList
-            entries={momentEntries}
-            empty="还没有瞬间记录。"
-            emptyIcon={<Sparkles className="h-6 w-6 text-matcha-deep" />}
-          />
+          <EntryList entries={momentEntries} empty="还没有瞬间记录。" />
         )}
       </div>
     </div>
@@ -191,7 +205,7 @@ function CompanionDetail({
           state={{ from: 'growth-stats' }}
           className="flex items-center gap-3 rounded-2xl bg-white px-3.5 py-3 shadow-[var(--shadow-warm-sm)] ring-1 ring-line/50 active:bg-cream"
         >
-          <Heart className="h-4 w-4 shrink-0 text-rose-deep" />
+          <span className="text-lg">📖</span>
           <span className="min-w-0 flex-1">
             <span className="block text-xs font-medium text-ink">第一篇日志</span>
             <span className="mt-0.5 block truncate text-[11px] text-ink-muted">
@@ -202,7 +216,8 @@ function CompanionDetail({
         </Link>
       )}
       <p className="px-1 pt-2 text-[11px] leading-relaxed text-ink-muted">
-        从 {birthDate} 到今天，已经一起度过 {days} 天。继续记录，下一次纪念会自己长出来。
+        从 {birthDate} 到今天，已经一起度过 {days}{' '}
+        天。继续记录，下一次纪念会自己长出来。
       </p>
     </div>
   )
@@ -211,24 +226,17 @@ function CompanionDetail({
 function EntryList({
   entries,
   empty,
-  emptyIcon,
 }: {
   entries: Entry[]
   empty: string
-  emptyIcon: React.ReactNode
 }) {
   if (!entries.length) {
     return (
-      <div className="flex min-h-40 flex-col items-center justify-center gap-2 text-center">
-        {emptyIcon}
-        <p className="text-xs text-ink-muted">{empty}</p>
-        <Link to="/compose" className="btn-primary mt-2 px-4 py-2 text-sm">
-          去记录
-        </Link>
+      <div className="rounded-2xl bg-cream px-4 py-8 text-center text-xs text-ink-muted">
+        {empty}
       </div>
     )
   }
-
   return (
     <ul className="space-y-2">
       {entries.map((entry) => {
@@ -284,13 +292,11 @@ function CityList({
 }) {
   if (!groups.length) {
     return (
-      <div className="flex min-h-40 flex-col items-center justify-center gap-2 text-center">
-        <MapPin className="h-6 w-6 text-matcha-deep" />
-        <p className="text-xs text-ink-muted">还没有到访城市，给记录加上地点吧。</p>
+      <div className="rounded-2xl bg-cream px-4 py-8 text-center text-xs text-ink-muted">
+        还没有到访城市，给记录加上地点吧。
       </div>
     )
   }
-
   return (
     <ul className="space-y-2">
       {groups.map((g) => (
@@ -362,7 +368,11 @@ function Empty({ message, onBack }: { message: string; onBack: () => void }) {
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center px-6 text-center">
       <p className="text-sm text-ink-muted">{message}</p>
-      <button type="button" className="btn-primary mt-4 px-4 py-2 text-sm" onClick={onBack}>
+      <button
+        type="button"
+        className="btn-primary mt-4 px-4 py-2 text-sm"
+        onClick={onBack}
+      >
         返回成长
       </button>
     </div>

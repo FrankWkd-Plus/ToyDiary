@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import {
   Download,
@@ -17,7 +18,7 @@ import {
   renderDiaryCardPng,
   type DiaryCardLayout,
 } from '../share/renderDiaryCardPng'
-import { shareOrDownloadFile } from '../share/shareHelpers'
+import { isMobileClient, shareOrDownloadFile } from '../share/shareHelpers'
 import type { Entry, Toy } from '../types'
 import { ENTRY_TYPE_LABEL } from '../types'
 
@@ -44,13 +45,34 @@ export function EntryDetailPage() {
   const [layout, setLayout] = useState<DiaryCardLayout>('side')
   const [stickerFrame, setStickerFrame] = useState(true)
   const [showDayCount, setShowDayCount] = useState(true)
-  const [locationWatermark, setLocationWatermark] = useState(true)
+  const [showLocation, setShowLocation] = useState(true)
 
   useEffect(() => {
     const onFocus = () => setOwnerName(loadProfileName())
     window.addEventListener('focus', onFocus)
     return () => window.removeEventListener('focus', onFocus)
   }, [])
+
+  // Lock background scroll while export sheet is open (page-scroll + body)
+  useEffect(() => {
+    if (!exportOpen) return
+    const scrollEl = document.querySelector('.page-scroll') as HTMLElement | null
+    const prevBody = document.body.style.overflow
+    const prevScroll = scrollEl?.style.overflow ?? ''
+    document.body.style.overflow = 'hidden'
+    if (scrollEl) scrollEl.style.overflow = 'hidden'
+    const blockTouch = (e: TouchEvent) => {
+      const target = e.target as HTMLElement | null
+      if (target?.closest('[data-export-sheet]')) return
+      e.preventDefault()
+    }
+    document.addEventListener('touchmove', blockTouch, { passive: false })
+    return () => {
+      document.body.style.overflow = prevBody
+      if (scrollEl) scrollEl.style.overflow = prevScroll
+      document.removeEventListener('touchmove', blockTouch)
+    }
+  }, [exportOpen])
 
   useEffect(() => {
     if (!id) return
@@ -103,9 +125,9 @@ export function EntryDetailPage() {
         layout,
         stickerFrame,
         showDayCount,
-        locationWatermark,
+        showLocation,
       })
-      const filename = `toydairy-diary-${entry.date}.png`
+      const filename = `toydairy-diary-${entry.date}.jpg`
       const mode = await shareOrDownloadFile({
         blob,
         filename,
@@ -114,8 +136,8 @@ export function EntryDetailPage() {
       })
       showToast(
         mode === 'shared'
-          ? '已打开分享（微信 / 朋友圈 / 相册）'
-          : '日记卡 PNG 已保存',
+          ? '请在系统菜单选择「存储图像」保存到相册'
+          : '日记卡已下载',
       )
       setExportOpen(false)
     } catch (err) {
@@ -159,26 +181,26 @@ export function EntryDetailPage() {
         back={backTo}
         soft
         right={
-          <div className="flex items-center gap-1">
+          <div className="flex shrink-0 items-center gap-1">
             <button
               type="button"
               onClick={() => setExportOpen(true)}
-              className="chip inline-flex items-center gap-1 !py-1.5 !text-xs"
+              className="chip inline-flex items-center gap-1 !min-h-9 !px-2.5 !py-1.5 !text-xs"
               aria-label="导出日记卡"
             >
               <Share2 className="h-3.5 w-3.5" />
-              导出
+              <span>导出</span>
             </button>
             <button
               type="button"
               onClick={onRegenerate}
               disabled={regen}
-              className="chip inline-flex items-center gap-1 !py-1.5 !text-xs disabled:opacity-50"
+              className="chip inline-flex items-center gap-1 !min-h-9 !px-2.5 !py-1.5 !text-xs disabled:opacity-50"
             >
               <RefreshCw
                 className={`h-3.5 w-3.5 ${regen ? 'animate-spin' : ''}`}
               />
-              重写
+              <span>重写</span>
             </button>
           </div>
         }
@@ -244,79 +266,89 @@ export function EntryDetailPage() {
         </div>
       </article>
 
-      {exportOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/35 px-3 pb-4 backdrop-blur-[2px] sm:items-center"
-          onClick={() => !exporting && setExportOpen(false)}
-        >
+      {exportOpen &&
+        createPortal(
           <div
-            className="w-full max-w-[390px] rounded-[1.5rem] bg-white p-4 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
+            className="export-sheet-overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-label="导出日记"
+            onClick={() => !exporting && setExportOpen(false)}
           >
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-display text-lg text-ink">导出当日日记</p>
-                <p className="text-[10px] text-ink-muted">
-                  生成 PNG，可分享到微信 / 朋友圈或保存相册
-                </p>
+            <div
+              data-export-sheet
+              className="export-sheet-panel"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-display text-lg text-ink">导出当日日记</p>
+                  <p className="text-[10px] text-ink-muted">
+                    手机：保存到相册 · 电脑：自动下载
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={exporting}
+                  onClick={() => setExportOpen(false)}
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-cream"
+                  aria-label="关闭"
+                >
+                  <X className="h-4 w-4" />
+                </button>
               </div>
+
+              <div className="mt-3">
+                <p className="text-[11px] font-medium text-ink-muted">排版</p>
+                <div className="mt-1.5 grid grid-cols-2 gap-2">
+                  <OptionChip
+                    active={layout === 'side'}
+                    label="左主右偶"
+                    onClick={() => setLayout('side')}
+                  />
+                  <OptionChip
+                    active={layout === 'stack'}
+                    label="上下对称"
+                    onClick={() => setLayout('stack')}
+                  />
+                </div>
+              </div>
+
+              <div className="mt-3 space-y-1">
+                <ToggleOption
+                  label="贴纸边框"
+                  on={stickerFrame}
+                  onChange={setStickerFrame}
+                />
+                <ToggleOption
+                  label="正数日数字"
+                  on={showDayCount}
+                  onChange={setShowDayCount}
+                />
+                <ToggleOption
+                  label="显示地点（📍 灰色文字）"
+                  on={showLocation}
+                  onChange={setShowLocation}
+                />
+              </div>
+
               <button
                 type="button"
                 disabled={exporting}
-                onClick={() => setExportOpen(false)}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-cream"
-                aria-label="关闭"
+                onClick={() => void onExportCard()}
+                className="btn-primary mt-4 flex w-full items-center justify-center gap-2 py-3.5 text-sm disabled:opacity-60"
               >
-                <X className="h-4 w-4" />
+                <Download className="h-4 w-4" />
+                {exporting
+                  ? '生成中…'
+                  : isMobileClient()
+                    ? '生成并保存到相册'
+                    : '生成并下载'}
               </button>
             </div>
-
-            <div className="mt-3">
-              <p className="text-[11px] font-medium text-ink-muted">排版</p>
-              <div className="mt-1.5 grid grid-cols-2 gap-2">
-                <OptionChip
-                  active={layout === 'side'}
-                  label="左主右偶"
-                  onClick={() => setLayout('side')}
-                />
-                <OptionChip
-                  active={layout === 'stack'}
-                  label="上下对称"
-                  onClick={() => setLayout('stack')}
-                />
-              </div>
-            </div>
-
-            <div className="mt-3 space-y-1">
-              <ToggleOption
-                label="贴纸边框"
-                on={stickerFrame}
-                onChange={setStickerFrame}
-              />
-              <ToggleOption
-                label="正数日数字"
-                on={showDayCount}
-                onChange={setShowDayCount}
-              />
-              <ToggleOption
-                label="地点水印"
-                on={locationWatermark}
-                onChange={setLocationWatermark}
-              />
-            </div>
-
-            <button
-              type="button"
-              disabled={exporting}
-              onClick={() => void onExportCard()}
-              className="btn-primary mt-4 flex w-full items-center justify-center gap-2 py-3 text-sm disabled:opacity-60"
-            >
-              <Download className="h-4 w-4" />
-              {exporting ? '生成中…' : '生成并分享 PNG'}
-            </button>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
     </>
   )
 }

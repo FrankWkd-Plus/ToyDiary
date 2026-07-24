@@ -38,18 +38,46 @@ export function toyAvatar(toy: Toy | null | undefined, index = 0) {
     : '/toy-cards/highlight-1.jpg'
 }
 
+/** Memory-hall card copy — always first-person from the toy's POV. */
+export function toyPerspectiveNarration(entry: Entry): string {
+  const diaryLine = entry.aiDiary
+    ?.split('\n')
+    .map((line) => line.trim())
+    .find(Boolean)
+  if (diaryLine) return diaryLine
+
+  const place =
+    entry.place?.displayName?.trim() || entry.location?.trim() || ''
+  const note = entry.userNote?.trim()
+  if (note) {
+    // Owner wrote a note; reframe as the toy remembering that moment.
+    return place
+      ? `在${place}，你说「${clipNote(note)}」。那一刻，我想一直待在你身边。`
+      : `你说「${clipNote(note)}」。那一刻，我想一直待在你身边。`
+  }
+  if (place) return `在${place}的这一刻，我把风景和你的温度都记住了。`
+  if (entry.title?.trim()) {
+    return `关于「${entry.title.trim()}」的这一天，我都替你收好了。`
+  }
+  return '这一天的光，我替你记住了。'
+}
+
+function clipNote(note: string, max = 36) {
+  const oneLine = note.replace(/\s+/g, ' ')
+  return oneLine.length > max ? `${oneLine.slice(0, max)}…` : oneLine
+}
+
 export function archivePhotos(entries: Entry[]) {
   const photos = entries
     .filter((entry) => Boolean(entry.imageUrl))
     .map((entry) => ({
       src: entry.imageUrl as string,
       title: entry.title || '一起收藏的日子',
-      narration:
-        entry.userNote ||
-        entry.aiDiary?.split('\n').find((line) => line.trim()) ||
-        '这一天的光，我替你记住了。',
+      // Always toy voice — never raw owner note as the card caption.
+      narration: toyPerspectiveNarration(entry),
       date: entry.date,
-      location: entry.location || '我们的秘密地点',
+      location:
+        entry.place?.displayName || entry.location || '我们的秘密地点',
     }))
 
   if (photos.length > 0) return photos
@@ -57,6 +85,7 @@ export function archivePhotos(entries: Entry[]) {
   return FALLBACK_PHOTOS.map((src, index) => ({
     src,
     title: ['海风吹过的下午', '把浪花装进口袋', '藏在绿意里的瀑布'][index],
+    // Fallback slides stay in first-person toy voice
     narration: [
       '第一次一起出发，蓝色的海很大，但你的手心刚刚好。',
       '我们把阳光、浪花和想念，都收藏在了这张照片里。',

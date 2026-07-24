@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useParams } from 'react-router-dom'
 import {
   ChevronLeft,
   ChevronRight,
   Download,
+  ImagePlus,
   Pause,
   Play,
   Share2,
@@ -20,7 +22,19 @@ import {
 import { useAuth } from '../auth/AuthContext'
 import { PageHeader } from '../components/PageHeader'
 import { useApp } from '../context/AppContext'
+import {
+  DAY_COUNT_FONTS,
+  DAY_COUNT_PALETTES,
+  type DayCountFont,
+  type DayCountPalette,
+} from '../daysmatter/dayCountTheme'
+import { renderDayCountCardPng } from '../share/renderDayCountCardPng'
+import { isMobileClient, shareOrDownloadFile } from '../share/shareHelpers'
 
+/**
+ * Memory hall: slideshow + header share icon.
+ * Share sheet includes export-only day-count styling (does not affect site theme).
+ */
 export function MemoryHallPage() {
   const { id } = useParams()
   const { toys, currentToy, entries, setCurrentToyId, showToast } = useApp()
@@ -30,11 +44,39 @@ export function MemoryHallPage() {
   const [playing, setPlaying] = useState(true)
   const [musicOn, setMusicOn] = useState(() => prefs.memorySound)
   const [shareOpen, setShareOpen] = useState(false)
+  const [exportPalette, setExportPalette] =
+    useState<DayCountPalette>('matcha')
+  const [exportFont, setExportFont] = useState<DayCountFont>('display')
+  const [exportBg, setExportBg] = useState<string | undefined>()
+  const [previewUrl, setPreviewUrl] = useState<string>()
+  const [rendering, setRendering] = useState(false)
+  const albumRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     setMusicOn(prefs.memorySound)
   }, [prefs.memorySound])
-  // Wait until currentToy matches route id so we don't flash another toy's photos.
+
+  // Prevent background page-scroll while share sheet is open
+  useEffect(() => {
+    if (!shareOpen) return
+    const scrollEl = document.querySelector('.page-scroll') as HTMLElement | null
+    const prevBody = document.body.style.overflow
+    const prevScroll = scrollEl?.style.overflow ?? ''
+    document.body.style.overflow = 'hidden'
+    if (scrollEl) scrollEl.style.overflow = 'hidden'
+    const blockTouch = (e: TouchEvent) => {
+      const target = e.target as HTMLElement | null
+      if (target?.closest('[data-export-sheet]')) return
+      e.preventDefault()
+    }
+    document.addEventListener('touchmove', blockTouch, { passive: false })
+    return () => {
+      document.body.style.overflow = prevBody
+      if (scrollEl) scrollEl.style.overflow = prevScroll
+      document.removeEventListener('touchmove', blockTouch)
+    }
+  }, [shareOpen])
+
   const ready = Boolean(toy && currentToy?.id === toy.id)
   const photos = useMemo(
     () => (ready ? archivePhotos(entries) : []),
@@ -54,17 +96,59 @@ export function MemoryHallPage() {
     return () => window.clearInterval(timer)
   }, [photos.length, playing])
 
+  // Live preview when share sheet open — export only, never writes site daycount style
+  useEffect(() => {
+    if (!shareOpen || !toy) return
+    let cancelled = false
+    setRendering(true)
+    void renderDayCountCardPng({
+      toy,
+      days: companionDays(toy),
+      backgroundUrl: exportBg || photos[slide]?.src,
+      palette: exportPalette,
+      font: exportFont,
+      title: `和 ${toy.name} 相遇`,
+    })
+      .then(async (blob) => {
+        if (cancelled) return
+        const url = URL.createObjectURL(blob)
+        setPreviewUrl((prev) => {
+          if (prev) URL.revokeObjectURL(prev)
+          return url
+        })
+      })
+      .catch(() => {
+        if (!cancelled) showToast('预览生成失败')
+      })
+      .finally(() => {
+        if (!cancelled) setRendering(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [
+    shareOpen,
+    toy,
+    exportBg,
+    exportPalette,
+    exportFont,
+    photos,
+    slide,
+    showToast,
+  ])
+
   if (!toy) {
     return (
       <>
         <PageHeader title="回忆展厅" back="/archive" soft />
-        <div className="px-4 py-16 text-center text-sm text-ink-muted">这段回忆暂时找不到了</div>
+        <div className="px-4 py-16 text-center text-sm text-ink-muted">
+          这段回忆暂时找不到了
+        </div>
       </>
     )
   }
 
   const days = companionDays(toy)
-  const toyName = toy.name
   const currentPhoto = photos[slide] || photos[0]
   const cities = Array.from(
     new Set(
@@ -79,73 +163,87 @@ export function MemoryHallPage() {
     setSlide((current) => (current + direction + photos.length) % photos.length)
   }
 
-  async function shareMemory() {
-    const text = `我和 ${toyName} 已经认识 ${days} 天了。`
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: `${days} DAYS 陪伴纪念`, text, url: window.location.href })
-        return
-      } catch {
-        return
+  async function saveOrShareCard(mode: 'save' | 'share') {
+    if (!toy) return
+    try {
+      setRendering(true)
+      const blob = await renderDayCountCardPng({
+        toy,
+        days,
+        backgroundUrl: exportBg || currentPhoto?.src,
+        palette: exportPalette,
+        font: exportFont,
+        title: `和 ${toy.name} 相遇`,
+      })
+      const filename = `Toy-Dairy-${days}-days.png`
+      if (mode === 'share') {
+        const result = await shareOrDownloadFile({
+          blob,
+          filename,
+          title: `${days} DAYS 陪伴纪念`,
+          text: `我和 ${toy.name} 已经认识 ${days} 天了。`,
+        })
+        showToast(
+          result === 'shared'
+            ? '已打开系统分享（可存到相册）'
+            : '纪念卡片已下载',
+        )
+      } else {
+        const result = await shareOrDownloadFile({
+          blob,
+          filename,
+          title: `${days} DAYS 陪伴纪念`,
+          text: `我和 ${toy.name} 的陪伴纪念`,
+        })
+        showToast(
+          result === 'shared' ? '请选择「存储图像」保存到相册' : '纪念卡片已下载',
+        )
       }
+    } catch {
+      showToast('生成失败，请重试')
+    } finally {
+      setRendering(false)
     }
-    await navigator.clipboard?.writeText(`${text} ${window.location.href}`)
-    showToast('纪念链接已复制')
   }
 
-  async function saveMemoryCard() {
-    const canvas = document.createElement('canvas')
-    canvas.width = 1080
-    canvas.height = 1350
-    const context = canvas.getContext('2d')
-    if (!context) return
-
-    const image = new Image()
-    image.src = currentPhoto.src.startsWith('http')
-      ? '/toy-cards/highlight-1.jpg'
-      : currentPhoto.src
-    await image.decode()
-
-    const gradient = context.createLinearGradient(0, 0, 1080, 1350)
-    gradient.addColorStop(0, '#fff8e8')
-    gradient.addColorStop(1, '#e8f5ee')
-    context.fillStyle = gradient
-    context.fillRect(0, 0, 1080, 1350)
-    context.fillStyle = '#ffffff'
-    context.roundRect(70, 70, 940, 1210, 48)
-    context.fill()
-    context.save()
-    context.beginPath()
-    context.roundRect(110, 110, 860, 720, 34)
-    context.clip()
-    const scale = Math.max(860 / image.width, 720 / image.height)
-    const width = image.width * scale
-    const height = image.height * scale
-    context.drawImage(image, 110 + (860 - width) / 2, 110 + (720 - height) / 2, width, height)
-    context.restore()
-    context.fillStyle = '#4a433c'
-    context.textAlign = 'center'
-    context.font = '700 92px sans-serif'
-    context.fillText(`${days} DAYS`, 540, 950)
-    context.font = '500 34px sans-serif'
-    context.fillText(`我和 ${toyName} 的陪伴纪念`, 540, 1015)
-    context.fillStyle = '#6b635a'
-    context.font = '28px sans-serif'
-    context.fillText('谢谢你，把普通日子变成我们的纪念日。', 540, 1095)
-    context.fillStyle = '#9a8758'
-    context.font = '600 28px sans-serif'
-    context.fillText('Toy Dairy · 把陪伴写进时间里', 540, 1205)
-
-    const link = document.createElement('a')
-    link.download = `Toy-Dairy-${days}-days.png`
-    link.href = canvas.toDataURL('image/png')
-    link.click()
-    showToast('纪念卡片已保存')
+  function onPickExportBg(file: File | null) {
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      showToast('请选择图片')
+      return
+    }
+    if (file.size > 6 * 1024 * 1024) {
+      showToast('背景图请小于 6MB')
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => {
+      // Export-only — does NOT call saveDayCountStyle / site theme
+      setExportBg(String(reader.result || ''))
+      showToast('已设置导出背景（不影响网站样式）')
+    }
+    reader.readAsDataURL(file)
   }
 
   return (
     <>
-      <PageHeader title="回忆展厅" subtitle={`我和 ${toy.name} 的 ${days} 天`} back="/archive" soft />
+      <PageHeader
+        title="回忆展厅"
+        subtitle={`我和 ${toy.name} 的 ${days} 天`}
+        back="/archive"
+        soft
+        right={
+          <button
+            type="button"
+            onClick={() => setShareOpen(true)}
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-paper/95 text-matcha-deep shadow-[var(--shadow-warm-sm)] ring-1 ring-line/40"
+            aria-label="分享纪念图片"
+            title="分享图片"
+          >
+            <Share2 className="h-[18px] w-[18px]" />
+          </button>
+        }
+      />
       <main className="space-y-5 px-4 pb-5 pt-4">
         <section className="memory-stage">
           <img src={currentPhoto.src} alt={currentPhoto.title} />
@@ -167,7 +265,11 @@ export function MemoryHallPage() {
               className="flex h-9 w-9 items-center justify-center rounded-full bg-black/25 text-white backdrop-blur-sm"
               aria-label={musicOn ? '关闭背景音乐' : '开启背景音乐'}
             >
-              {musicOn ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+              {musicOn ? (
+                <Volume2 className="h-4 w-4" />
+              ) : (
+                <VolumeX className="h-4 w-4" />
+              )}
             </button>
           </div>
           <div className="absolute inset-x-0 bottom-0 z-[2] p-4 text-white">
@@ -183,7 +285,12 @@ export function MemoryHallPage() {
         </section>
 
         <div className="flex items-center justify-center gap-4">
-          <button type="button" onClick={() => moveSlide(-1)} className="memory-control" aria-label="上一张">
+          <button
+            type="button"
+            onClick={() => moveSlide(-1)}
+            className="memory-control"
+            aria-label="上一张"
+          >
             <ChevronLeft className="h-5 w-5" />
           </button>
           <button
@@ -192,9 +299,18 @@ export function MemoryHallPage() {
             className="memory-control memory-control--main"
             aria-label={playing ? '暂停幻灯片' : '播放幻灯片'}
           >
-            {playing ? <Pause className="h-5 w-5" /> : <Play className="ml-0.5 h-5 w-5" />}
+            {playing ? (
+              <Pause className="h-5 w-5" />
+            ) : (
+              <Play className="ml-0.5 h-5 w-5" />
+            )}
           </button>
-          <button type="button" onClick={() => moveSlide(1)} className="memory-control" aria-label="下一张">
+          <button
+            type="button"
+            onClick={() => moveSlide(1)}
+            className="memory-control"
+            aria-label="下一张"
+          >
             <ChevronRight className="h-5 w-5" />
           </button>
         </div>
@@ -204,66 +320,188 @@ export function MemoryHallPage() {
             <Sparkles className="h-3.5 w-3.5" />
             自动生成的阶段回忆
           </span>
-          <h2 className="mt-2 font-display text-xl text-ink">这 {days} 天，我们一起……</h2>
+          <h2 className="mt-2 font-display text-xl text-ink">
+            这 {days} 天，我们一起……
+          </h2>
           <div className="mt-3 space-y-2 text-xs leading-6 text-ink-soft">
-            <p>写下了 <strong className="text-ink">{entries.length}</strong> 次心事，留下了 <strong className="text-ink">{photoCount}</strong> 张照片。</p>
+            <p>
+              写下了 <strong className="text-ink">{entries.length}</strong>{' '}
+              次心事，留下了 <strong className="text-ink">{photoCount}</strong>{' '}
+              张照片。
+            </p>
             <p>
               去过 <strong className="text-ink">{cities.length}</strong> 个地方
-              {cities.length > 0 ? `：${cities.slice(0, 3).join('、')}。` : '，下一段旅程正在等待我们。'}
+              {cities.length > 0
+                ? `：${cities.slice(0, 3).join('、')}。`
+                : '，下一段旅程正在等待我们。'}
             </p>
-            <p>你最常在 <strong className="text-ink">深夜 23:00</strong> 和我聊天，那是我们最安静的秘密时间。</p>
           </div>
         </section>
 
         <section className="memory-letter">
-          <img src={toyAvatar(toy, toys.indexOf(toy))} alt="" className="h-12 w-12 rounded-2xl object-cover" />
+          <img
+            src={toyAvatar(toy, toys.indexOf(toy))}
+            alt=""
+            className="h-12 w-12 rounded-2xl object-cover"
+          />
           <div className="min-w-0 flex-1">
-            <p className="font-display text-base text-ink">{toy.name} 写给你</p>
+            <p className="font-display text-base text-ink">
+              {toy.name} 写给你
+            </p>
             <p className="mt-2 text-xs leading-6 text-ink-soft">
-              “这 {days} 天里，我看过你开心，也陪过你难过。谢谢你每次出门都愿意把我装进包里。以后也让我继续待在你身边吧。”
+              “这 {days}{' '}
+              天里，我看过你开心，也陪过你难过。谢谢你每次出门都愿意把我装进包里。以后也让我继续待在你身边吧。”
             </p>
           </div>
         </section>
-
-        <button
-          type="button"
-          onClick={() => setShareOpen(true)}
-          className="btn-primary flex w-full items-center justify-center gap-2 py-3 text-sm"
-        >
-          <Sparkles className="h-4 w-4" />
-          生成纪念卡片
-        </button>
       </main>
 
-      {shareOpen && (
-        <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/35 px-4 pb-4 backdrop-blur-[2px]" onClick={() => setShareOpen(false)}>
-          <div className="w-full max-w-[358px] rounded-[1.75rem] bg-white p-4 shadow-2xl" onClick={(event) => event.stopPropagation()}>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-display text-lg text-ink">纪念卡片</p>
-                <p className="text-[10px] text-ink-muted">保存图片，或和朋友分享这份陪伴</p>
+      {shareOpen &&
+        createPortal(
+          <div
+            className="export-sheet-overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-label="分享纪念图"
+            onClick={() => setShareOpen(false)}
+          >
+            <div
+              data-export-sheet
+              className="export-sheet-panel"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-display text-lg text-ink">分享纪念图</p>
+                  <p className="text-[10px] text-ink-muted">
+                    正数日样式仅用于导出，不会改网站背景
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShareOpen(false)}
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-cream"
+                  aria-label="关闭"
+                >
+                  <X className="h-4 w-4" />
+                </button>
               </div>
-              <button type="button" onClick={() => setShareOpen(false)} className="flex h-8 w-8 items-center justify-center rounded-full bg-cream" aria-label="关闭">
-                <X className="h-4 w-4" />
-              </button>
+
+              <div className="memory-share-preview mt-3 overflow-hidden rounded-2xl bg-cream">
+                {previewUrl ? (
+                  <img
+                    src={previewUrl}
+                    alt="分享预览"
+                    className="max-h-72 w-full object-contain"
+                  />
+                ) : (
+                  <div className="flex h-48 items-center justify-center text-xs text-ink-muted">
+                    {rendering ? '正在生成预览…' : '预览'}
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-3 space-y-2">
+                <p className="text-[10px] font-medium text-ink-muted">
+                  导出背景（可选相册）
+                </p>
+                <input
+                  ref={albumRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    onPickExportBg(e.target.files?.[0] ?? null)
+                    e.target.value = ''
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => albumRef.current?.click()}
+                  className="flex w-full items-center gap-2 rounded-xl border border-line/70 bg-cream/50 px-3 py-2.5 text-left text-xs"
+                >
+                  <ImagePlus className="h-4 w-4 text-matcha-deep" />
+                  从相册选择导出背景
+                </button>
+                {exportBg && (
+                  <button
+                    type="button"
+                    onClick={() => setExportBg(undefined)}
+                    className="text-[10px] text-ink-muted underline"
+                  >
+                    清除自定义导出背景
+                  </button>
+                )}
+              </div>
+
+              <div className="mt-3">
+                <p className="mb-1.5 text-[10px] font-medium text-ink-muted">
+                  事件颜色
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {DAY_COUNT_PALETTES.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setExportPalette(p.id)}
+                      className={`rounded-full px-2.5 py-1 text-[10px] ${
+                        exportPalette === p.id
+                          ? 'bg-matcha text-white'
+                          : 'bg-cream text-ink-soft'
+                      }`}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-3">
+                <p className="mb-1.5 text-[10px] font-medium text-ink-muted">
+                  数字字体
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {DAY_COUNT_FONTS.map((f) => (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onClick={() => setExportFont(f.id)}
+                      className={`rounded-full px-2.5 py-1 text-[10px] ${
+                        exportFont === f.id
+                          ? 'bg-matcha text-white'
+                          : 'bg-cream text-ink-soft'
+                      }`}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  disabled={rendering}
+                  onClick={() => void saveOrShareCard('save')}
+                  className="flex items-center justify-center gap-1.5 rounded-xl bg-mist-soft py-2.5 text-xs font-semibold text-matcha-deep disabled:opacity-50"
+                >
+                  <Download className="h-4 w-4" />
+                  {isMobileClient() ? '保存到相册' : '下载图片'}
+                </button>
+                <button
+                  type="button"
+                  disabled={rendering}
+                  onClick={() => void saveOrShareCard('share')}
+                  className="flex items-center justify-center gap-1.5 rounded-xl bg-mustard-soft py-2.5 text-xs font-semibold text-terra-deep disabled:opacity-50"
+                >
+                  <Share2 className="h-4 w-4" />
+                  分享
+                </button>
+              </div>
             </div>
-            <div className="memory-share-preview mt-3">
-              <img src={currentPhoto.src} alt="" />
-              <p className="mt-3 font-display text-3xl text-ink">{days} DAYS</p>
-              <p className="mt-1 text-xs text-ink-soft">我和 {toy.name} 的陪伴纪念</p>
-              <p className="mt-3 text-[10px] text-matcha-deep">Toy Dairy · 把陪伴写进时间里</p>
-            </div>
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <button type="button" onClick={() => void saveMemoryCard()} className="flex items-center justify-center gap-1.5 rounded-xl bg-mist-soft py-2.5 text-xs font-semibold text-matcha-deep">
-                <Download className="h-4 w-4" /> 保存图片
-              </button>
-              <button type="button" onClick={() => void shareMemory()} className="flex items-center justify-center gap-1.5 rounded-xl bg-mustard-soft py-2.5 text-xs font-semibold text-terra-deep">
-                <Share2 className="h-4 w-4" /> 分享
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
     </>
   )
 }

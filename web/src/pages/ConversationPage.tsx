@@ -109,7 +109,8 @@ export function ConversationPage() {
   )
   const [pendingImage, setPendingImage] = useState<string>()
   const [replying, setReplying] = useState(false)
-  const [clearConfirmOpen, setClearConfirmOpen] = useState(false)
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
   const endRef = useRef<HTMLDivElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
@@ -365,7 +366,47 @@ export function ConversationPage() {
     showToast(next ? '已开启安静模式，不再主动提醒' : '已恢复温柔提醒')
   }
 
-  function clearConversation() {
+  function enterSelectMode() {
+    setSelectMode(true)
+    setSelectedIds([])
+    setToyPickerOpen(false)
+  }
+
+  function exitSelectMode() {
+    setSelectMode(false)
+    setSelectedIds([])
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    )
+  }
+
+  function selectAllMessages() {
+    setSelectedIds(messages.map((m) => m.id))
+  }
+
+  function deleteSelectedMessages() {
+    if (!currentToy) return
+    if (selectedIds.length === 0) {
+      showToast('请先选择要删除的消息')
+      return
+    }
+    const remove = new Set(selectedIds)
+    setMessagesByToy((current) => {
+      const list = (current[currentToy.id] ?? []).filter((m) => !remove.has(m.id))
+      const nextList =
+        list.length > 0 ? list : [createOpeningMessage(currentToy, entries)]
+      const next = { ...current, [currentToy.id]: nextList }
+      saveChats(next)
+      return next
+    })
+    exitSelectMode()
+    showToast(`已删除 ${selectedIds.length} 条消息`)
+  }
+
+  function clearAllConversation() {
     if (!currentToy) return
     const opening = createOpeningMessage(currentToy, entries)
     setMessagesByToy((current) => {
@@ -379,8 +420,8 @@ export function ConversationPage() {
     setDraft('')
     setPendingImage(undefined)
     setReplying(false)
-    setClearConfirmOpen(false)
-    showToast('已删除聊天记录与上下文')
+    exitSelectMode()
+    showToast('已清空全部聊天记录')
   }
 
   if (!currentToy) {
@@ -443,39 +484,60 @@ export function ConversationPage() {
           </button>
 
           <div className="flex shrink-0 items-center gap-1">
-            <button
-              type="button"
-              onClick={() => setClearConfirmOpen(true)}
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-cream text-ink-muted transition-transform active:scale-95"
-              aria-label="删除聊天记录"
-              title="删除聊天记录"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              onClick={toggleQuietMode}
-              className={`flex h-8 w-8 items-center justify-center rounded-full transition-transform active:scale-95 ${
-                quietMode
-                  ? 'bg-mist-soft text-matcha-deep'
-                  : 'bg-cream text-ink-muted'
-              }`}
-              aria-label={quietMode ? '关闭安静模式' : '开启安静模式'}
-              aria-pressed={quietMode}
-            >
-              <BellOff className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setToyPickerOpen((open) => !open)}
-              className="flex h-8 items-center gap-0.5 rounded-full bg-cream px-2.5 text-[10px] font-medium text-matcha-deep transition-transform active:scale-95"
-              aria-expanded={toyPickerOpen}
-            >
-              切换
-              <ChevronDown
-                className={`h-3 w-3 transition-transform ${toyPickerOpen ? 'rotate-180' : ''}`}
-              />
-            </button>
+            {selectMode ? (
+              <>
+                <button
+                  type="button"
+                  onClick={selectAllMessages}
+                  className="rounded-full bg-cream px-2.5 py-1.5 text-[10px] font-medium text-matcha-deep"
+                >
+                  全选
+                </button>
+                <button
+                  type="button"
+                  onClick={exitSelectMode}
+                  className="rounded-full bg-cream px-2.5 py-1.5 text-[10px] font-medium text-ink-muted"
+                >
+                  取消
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={enterSelectMode}
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-cream text-ink-muted transition-transform active:scale-95"
+                  aria-label="选择删除聊天"
+                  title="选择删除"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={toggleQuietMode}
+                  className={`flex h-8 w-8 items-center justify-center rounded-full transition-transform active:scale-95 ${
+                    quietMode
+                      ? 'bg-mist-soft text-matcha-deep'
+                      : 'bg-cream text-ink-muted'
+                  }`}
+                  aria-label={quietMode ? '关闭安静模式' : '开启安静模式'}
+                  aria-pressed={quietMode}
+                >
+                  <BellOff className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setToyPickerOpen((open) => !open)}
+                  className="flex h-8 items-center gap-0.5 rounded-full bg-cream px-2.5 text-[10px] font-medium text-matcha-deep transition-transform active:scale-95"
+                  aria-expanded={toyPickerOpen}
+                >
+                  切换
+                  <ChevronDown
+                    className={`h-3 w-3 transition-transform ${toyPickerOpen ? 'rotate-180' : ''}`}
+                  />
+                </button>
+              </>
+            )}
           </div>
         </div>
 
@@ -527,14 +589,38 @@ export function ConversationPage() {
 
         <div className="space-y-3">
           {messages.map((message) => (
-            <MessageBubble
-              key={message.id}
-              message={message}
-              avatar={avatar}
-              toyName={currentToy.name}
-            />
+            <div key={message.id} className="flex items-start gap-2">
+              {selectMode && (
+                <button
+                  type="button"
+                  onClick={() => toggleSelect(message.id)}
+                  className={`mt-2 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${
+                    selectedIds.includes(message.id)
+                      ? 'border-matcha bg-matcha text-white'
+                      : 'border-line bg-white text-transparent'
+                  }`}
+                  aria-label={
+                    selectedIds.includes(message.id) ? '取消选择' : '选择消息'
+                  }
+                >
+                  <Check className="h-3.5 w-3.5" strokeWidth={3} />
+                </button>
+              )}
+              <div
+                className={`min-w-0 flex-1 ${selectMode ? 'cursor-pointer' : ''}`}
+                onClick={() => {
+                  if (selectMode) toggleSelect(message.id)
+                }}
+              >
+                <MessageBubble
+                  message={message}
+                  avatar={avatar}
+                  toyName={currentToy.name}
+                />
+              </div>
+            </div>
           ))}
-          {replying && (
+          {replying && !selectMode && (
             <div className="flex items-end gap-2.5">
               <img
                 src={avatar}
@@ -552,6 +638,37 @@ export function ConversationPage() {
         </div>
       </main>
 
+      {selectMode ? (
+        <section className="z-10 mt-auto shrink-0 border-t border-line/50 bg-white/96 px-3.5 pb-3 pt-3 backdrop-blur-xl">
+          <p className="mb-2 text-center text-[11px] text-ink-muted">
+            已选 {selectedIds.length} / {messages.length} 条
+          </p>
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              type="button"
+              onClick={selectAllMessages}
+              className="rounded-full bg-cream py-2.5 text-xs font-medium text-ink-soft"
+            >
+              全选
+            </button>
+            <button
+              type="button"
+              onClick={deleteSelectedMessages}
+              disabled={selectedIds.length === 0}
+              className="rounded-full bg-rose-deep py-2.5 text-xs font-medium text-white disabled:opacity-40"
+            >
+              删除所选
+            </button>
+            <button
+              type="button"
+              onClick={clearAllConversation}
+              className="rounded-full bg-peach-soft py-2.5 text-xs font-medium text-rose-deep"
+            >
+              全部清空
+            </button>
+          </div>
+        </section>
+      ) : (
       <section className="z-10 mt-auto shrink-0 border-t border-line/50 bg-white/94 px-3.5 pb-2.5 pt-2.5 backdrop-blur-xl">
         <div className="mb-2 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {QUICK_TOPICS.map((topic) => (
@@ -658,47 +775,6 @@ export function ConversationPage() {
           onChange={onImagePicked}
         />
       </section>
-
-      {clearConfirmOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 px-6 backdrop-blur-[2px]"
-          role="presentation"
-          onClick={() => setClearConfirmOpen(false)}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-label="确认删除聊天记录"
-            className="w-full max-w-[320px] rounded-[1.5rem] bg-white p-5 shadow-[var(--shadow-elevated)]"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-peach-soft text-rose-deep">
-              <Trash2 className="h-5 w-5" />
-            </div>
-            <h2 className="mt-3 text-center font-display text-lg text-ink">
-              删除聊天记录？
-            </h2>
-            <p className="mt-2 text-center text-xs leading-relaxed text-ink-muted">
-              将清空与「{currentToy.name}」的全部对话与上下文，并重新开始一段开场白。此操作不可撤销。
-            </p>
-            <div className="mt-5 grid grid-cols-2 gap-2.5">
-              <button
-                type="button"
-                onClick={() => setClearConfirmOpen(false)}
-                className="btn-secondary py-2.5 text-sm"
-              >
-                取消
-              </button>
-              <button
-                type="button"
-                onClick={clearConversation}
-                className="rounded-full bg-rose-deep py-2.5 text-sm font-medium text-white transition-transform active:scale-95"
-              >
-                确认删除
-              </button>
-            </div>
-          </div>
-        </div>
       )}
     </div>
   )
