@@ -64,3 +64,4 @@ temp/
 # Optional OS / backup
 *~
 *.bak
+web/.env.example
