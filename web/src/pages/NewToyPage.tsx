@@ -1,8 +1,15 @@
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Sparkles } from 'lucide-react'
-import { zodiacFromDate } from '../api/mockStore'
 import { api } from '../api/client'
+import {
+  dateFromZodiac,
+  isZodiacSign,
+  ZODIAC_SIGNS,
+  zodiacFromDate,
+  zodiacRangeLabel,
+  type ZodiacSign,
+} from '../archive/zodiac'
 import { PageHeader } from '../components/PageHeader'
 import { ToyAvatarStudio } from '../components/ToyAvatarStudio'
 import { useApp } from '../context/AppContext'
@@ -12,7 +19,7 @@ const TRAIT_OPTIONS = ['温柔', '胆小', '好奇', '活泼', '话多', '安静
 
 /**
  * Create-toy flow:
- * photo → local AI cutout sticker → name / birthday / traits → save archive
+ * photo → local AI cutout sticker → name / birthday↔zodiac / traits → save archive
  */
 export function NewToyPage() {
   const nav = useNavigate()
@@ -30,7 +37,23 @@ export function NewToyPage() {
   const [avatarConfirmed, setAvatarConfirmed] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
-  const zodiac = useMemo(() => zodiacFromDate(birthDate), [birthDate])
+  // Linked: change date → zodiac; pick zodiac → rewrite date into that sign.
+  const zodiac = useMemo(() => {
+    const z = zodiacFromDate(birthDate)
+    return z === '神秘座' ? '巨蟹座' : z
+  }, [birthDate])
+
+  function onBirthDateChange(next: string) {
+    setBirthDate(next)
+  }
+
+  function onZodiacChange(next: string) {
+    if (!isZodiacSign(next)) return
+    const year = Number(birthDate.slice(0, 4)) || new Date().getFullYear()
+    const matched = dateFromZodiac(next as ZodiacSign, year)
+    setBirthDate(matched)
+    showToast(`已按「${next}」匹配出生日期 ${matched}`)
+  }
 
   function toggleTrait(t: string) {
     setTraits((prev) =>
@@ -112,18 +135,48 @@ export function NewToyPage() {
             maxLength={20}
           />
         </Field>
+
         <Field label="出生日期">
           <input
             type="date"
             className="input !rounded-2xl"
             value={birthDate}
-            onChange={(e) => setBirthDate(e.target.value)}
+            onChange={(e) => onBirthDateChange(e.target.value)}
           />
+          <span className="mt-1 block text-[10px] text-ink-muted">
+            修改日期后，星座会自动联动
+          </span>
         </Field>
-        <div className="rounded-2xl bg-mustard-soft/70 px-3.5 py-2.5 text-xs text-terra-deep">
-          <Sparkles className="mr-1 inline h-3.5 w-3.5" />
-          AI 星座：<strong>{zodiac}</strong>
-        </div>
+
+        <Field label="星座">
+          <div className="rounded-2xl bg-mustard-soft/70 px-3.5 py-2.5">
+            <div className="mb-2 flex items-center gap-1.5 text-xs text-terra-deep">
+              <Sparkles className="h-3.5 w-3.5 shrink-0" />
+              <span>
+                当前：<strong>{zodiac}</strong>
+                <span className="ml-1 text-[10px] text-ink-muted">
+                  （{zodiacRangeLabel(zodiac)}）
+                </span>
+              </span>
+            </div>
+            <select
+              className="input !rounded-2xl !bg-white"
+              value={zodiac}
+              onChange={(e) => onZodiacChange(e.target.value)}
+              aria-label="选择星座"
+            >
+              {ZODIAC_SIGNS.map((sign) => (
+                <option key={sign} value={sign}>
+                  {sign} · {zodiacRangeLabel(sign)}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1.5 text-[10px] leading-relaxed text-ink-muted">
+              可手动选择星座；选择后会自动分配一个匹配该星座的出生日期。
+            </p>
+          </div>
+        </Field>
+
         <Field label="出生地">
           <input
             className="input !rounded-2xl"

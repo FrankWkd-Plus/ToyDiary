@@ -51,6 +51,7 @@ export function ToyAvatarStudio({
     null,
   )
   const rebuildToken = useRef(0)
+  const skipRef = useRef(false)
 
   const rebuildPreview = useCallback(
     async (
@@ -99,20 +100,29 @@ export function ToyAvatarStudio({
       onToast('图片请小于 12MB')
       return
     }
+    skipRef.current = false
     setSourceFile(file)
     setStage('processing')
-    setProgress({ phase: 'loading-model', progress: 0.05 })
+    setProgress({
+      phase: 'import',
+      progress: 0.03,
+      detail: '即将下载约 40MB 最小模型（仅首次）',
+    })
     setOffset({ x: 0, y: 0 })
     setZoom(1)
 
-    const result = await removeToyBackground(file, setProgress)
+    const result = await removeToyBackground(file, (p) => {
+      if (!skipRef.current) setProgress(p)
+    })
+    if (skipRef.current) return
+
     setCutoutBlob(result.blob)
     setRemoved(result.removed)
     if (result.fallback) {
       onToast(result.message || '抠图失败，已切换原图裁切')
     }
 
-    setProgress({ phase: 'done', progress: 0.95 })
+    setProgress({ phase: 'done', progress: 0.95, detail: '生成贴纸…' })
     await rebuildPreview(result.blob, {
       border,
       zoom: 1,
@@ -120,6 +130,7 @@ export function ToyAvatarStudio({
       offsetY: 0,
       useSticker: true,
     })
+    if (skipRef.current) return
     setStage('confirm')
     setProgress(null)
   }
@@ -140,15 +151,17 @@ export function ToyAvatarStudio({
   }, [border, zoom, offset.x, offset.y, cutoutBlob, stage, rebuildPreview])
 
   async function applyOriginalOnly() {
-    if (!sourceFile) {
+    const file = sourceFile
+    if (!file) {
       onToast('请先选择照片')
       return
     }
+    skipRef.current = true
     setStage('processing')
-    setProgress({ phase: 'fallback', progress: 0.5 })
-    setCutoutBlob(sourceFile)
+    setProgress({ phase: 'fallback', progress: 0.6, detail: '使用原图生成贴纸…' })
+    setCutoutBlob(file)
     setRemoved(false)
-    await rebuildPreview(sourceFile, {
+    await rebuildPreview(file, {
       border,
       zoom: 1,
       offsetX: 0,
@@ -157,6 +170,7 @@ export function ToyAvatarStudio({
     })
     setStage('confirm')
     setProgress(null)
+    onToast('已跳过 AI 抠图，使用原图贴纸')
   }
 
   function onPointerDown(e: React.PointerEvent) {
@@ -238,31 +252,48 @@ export function ToyAvatarStudio({
           }}
         />
         <p className="text-[9px] text-ink-muted">
-          本地 AI 抠图 · AGPL 模型仅用于演示原型
+          本地 AI 抠图 · 最小模型约 40MB（仅首次下载）· AGPL 演示用
         </p>
       </div>
     )
   }
 
   if (stage === 'processing') {
-    const pct = Math.round((progress?.progress ?? 0.1) * 100)
+    const pct = Math.round((progress?.progress ?? 0.08) * 100)
+    const label = progress ? progressLabel(progress) : '正在处理…'
+    const detail = progress?.detail
     return (
       <div className="card-paper space-y-3 p-5 text-center">
         <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-mist-soft text-matcha-deep">
           <LoaderCircle className="h-7 w-7 animate-spin" />
         </span>
-        <p className="font-display text-base text-ink">
-          {progress ? progressLabel(progress) : '正在处理…'}
-        </p>
-        <div className="h-2 overflow-hidden rounded-full bg-cream-dark">
+        <p className="font-display text-base text-ink">{label}</p>
+        {detail && (
+          <p className="text-[11px] leading-relaxed text-ink-muted">{detail}</p>
+        )}
+        <div className="h-2.5 overflow-hidden rounded-full bg-cream-dark">
           <span
-            className="block h-full rounded-full bg-matcha transition-[width] duration-300"
-            style={{ width: `${Math.max(8, pct)}%` }}
+            className="block h-full rounded-full bg-matcha transition-[width] duration-200"
+            style={{ width: `${Math.max(6, Math.min(100, pct))}%` }}
           />
         </div>
-        <p className="text-[10px] text-ink-muted">
-          首次会下载识别模型，请稍候（约数十秒）
+        <p className="text-sm font-medium tabular-nums text-matcha-deep">
+          {pct}%
         </p>
+        <p className="text-[10px] leading-relaxed text-ink-muted">
+          使用最小量化模型 <code className="text-[9px]">isnet_quint8</code>
+          （约 40MB）。首次需从 CDN 下载，完成后浏览器会缓存；弱网可能要 1–3 分钟。
+          等不及可点下方跳过。
+        </p>
+        <button
+          type="button"
+          onClick={() => {
+            if (sourceFile) void applyOriginalOnly()
+          }}
+          className="btn-secondary mx-auto py-2 px-4 text-xs"
+        >
+          跳过抠图，直接用原图
+        </button>
       </div>
     )
   }

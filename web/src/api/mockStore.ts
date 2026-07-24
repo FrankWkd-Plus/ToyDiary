@@ -21,31 +21,11 @@ function delay(ms = 0) {
   return new Promise((r) => setTimeout(r, ms))
 }
 
-/** Simple zodiac from birth date (Western, month-day) */
+import { zodiacFromDate as zodiacFromDateShared } from '../archive/zodiac'
+
+/** @deprecated prefer archive/zodiac — kept for existing imports */
 export function zodiacFromDate(isoDate: string): string {
-  const d = new Date(isoDate + 'T12:00:00')
-  if (Number.isNaN(d.getTime())) return '神秘座'
-  const m = d.getMonth() + 1
-  const day = d.getDate()
-  const table: [number, number, string][] = [
-    [1, 20, '摩羯座'],
-    [2, 19, '水瓶座'],
-    [3, 21, '双鱼座'],
-    [4, 20, '白羊座'],
-    [5, 21, '金牛座'],
-    [6, 21, '双子座'],
-    [7, 23, '巨蟹座'],
-    [8, 23, '狮子座'],
-    [9, 23, '处女座'],
-    [10, 23, '天秤座'],
-    [11, 22, '天蝎座'],
-    [12, 22, '射手座'],
-    [12, 32, '摩羯座'],
-  ]
-  for (const [month, lastDay, name] of table) {
-    if (m < month || (m === month && day <= lastDay)) return name
-  }
-  return '摩羯座'
+  return zodiacFromDateShared(isoDate)
 }
 
 function mockProfile(input: CreateToyInput) {
