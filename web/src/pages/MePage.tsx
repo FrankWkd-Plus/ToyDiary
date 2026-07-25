@@ -37,6 +37,7 @@ import { companionDays } from '../archive/archiveUtils'
 import { renderGrowthTimelinePng } from '../share/renderGrowthTimelinePng'
 import { shareOrDownloadFile } from '../share/shareHelpers'
 import { useTheme } from '../theme/ThemeProvider'
+import type { DayCountPalette } from '../daysmatter/dayCountTheme'
 
 const DEFAULT_AVATAR = '/profile/default-avatar.jpg'
 
@@ -149,6 +150,8 @@ export function MePage() {
         ? '游客 · 随便看看'
         : '未登录'
 
+  const themeDayCountPalette: DayCountPalette =
+    theme.id === 'warm' ? 'ink' : theme.id === 'mint' ? 'matcha' : theme.id
 
   return (
     <div className="min-h-full">
@@ -247,6 +250,7 @@ export function MePage() {
           }
           unit="天"
           size="hero"
+          style={{ palette: themeDayCountPalette }}
           photoUrl={entries.find((e) => e.imageUrl)?.imageUrl}
           sublabel="正数日"
           onClick={() => navigate('/days')}
@@ -257,28 +261,44 @@ export function MePage() {
             label="玩偶"
             unit="只"
             size="stat"
-            to="/toys"
+            onClick={() =>
+              navigate('/toys', { state: { from: 'me' } })
+            }
           />
           <DayCountNumber
             value={entries.length}
             label="日记"
             unit="篇"
             size="stat"
-            to="/growth"
+            onClick={() =>
+              navigate(
+                currentToy ? '/growth/stats/moments' : '/growth',
+                { state: { from: 'me' } },
+              )
+            }
           />
           <DayCountNumber
             value={entries.filter((e) => e.imageUrl).length}
             label="照片"
             unit="张"
             size="stat"
-            to={currentToy ? '/growth/stats/moments' : '/growth'}
+            onClick={() =>
+              navigate(currentToy ? '/me/photos' : '/growth', {
+                state: { from: 'me' },
+              })
+            }
           />
           <DayCountNumber
             value={currentToy ? companionDays(currentToy) : 0}
             label="陪伴"
             unit="天"
             size="stat"
-            to={currentToy ? '/growth/stats/companion' : '/growth'}
+            onClick={() =>
+              navigate(
+                currentToy ? '/growth/stats/companion' : '/growth',
+                { state: { from: 'me' } },
+              )
+            }
           />
         </div>
 

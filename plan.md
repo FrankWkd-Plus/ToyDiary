@@ -2,7 +2,7 @@
 
 > 目标：在 **60 人时**（3 人 × 约 20h）内交付 **Web 可演示 MVP**。  
 > 技术路径：**Web 优先**（跨 OS）→ 后期再打包桌面 App。  
-> 产品依据：见 [`readme.md`](./readme.md)（PRD 原文）。
+> 产品依据：见 [`docs/PRD.md`](./docs/PRD.md)；功能全集见 [`feature.md`](./feature.md)。
 
 ---
 

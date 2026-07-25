@@ -7,9 +7,12 @@ import { useApp } from '../context/AppContext'
 
 export function AppLayout() {
   const { loading } = useApp()
-  const { pathname } = useLocation()
+  const { pathname, search } = useLocation()
   const scrollRef = useRef<HTMLDivElement>(null)
-  const lockPageScroll = pathname.startsWith('/conversation')
+  const lockPageScroll =
+    pathname.startsWith('/conversation') ||
+    (pathname === '/growth' &&
+      new URLSearchParams(search).get('tab') === 'map')
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: 0 })

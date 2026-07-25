@@ -18,7 +18,10 @@ const tabs = [
 ] as const
 
 export function BottomNav() {
-  const { pathname } = useLocation()
+  const location = useLocation()
+  const { pathname } = location
+  const fromMe =
+    (location.state as { from?: string } | null)?.from === 'me'
   const [composerOpen, setComposerOpen] = useState(false)
 
   return (
@@ -51,7 +54,11 @@ export function BottomNav() {
           const active =
             pathname === tab.to ||
             (tab.to === '/me' &&
-              (pathname.startsWith('/me') || pathname.startsWith('/toys'))) ||
+              (pathname === '/me' ||
+                pathname.startsWith('/me/') ||
+                pathname === '/toys' ||
+                pathname.startsWith('/toys/') ||
+                fromMe)) ||
             (tab.to === '/conversation' &&
               pathname.startsWith('/conversation')) ||
             (tab.to === '/archive' &&

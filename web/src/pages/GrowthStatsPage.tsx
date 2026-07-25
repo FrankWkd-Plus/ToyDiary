@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import {
   ChevronLeft,
   ChevronRight,
@@ -58,6 +58,7 @@ const META: Record<
 export function GrowthStatsPage() {
   const { kind } = useParams<{ kind: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
   const { currentToy, entries, toys, showToast } = useApp()
   const [sharing, setSharing] = useState(false)
   const statKind = (
@@ -81,15 +82,20 @@ export function GrowthStatsPage() {
   const cityGroups = useMemo(() => groupByCity(entries), [entries])
   const toyIndex = toys.findIndex((t) => t.id === currentToy?.id)
   const photoUrl = entries.find((e) => e.imageUrl)?.imageUrl
+  const fromMe =
+    (location.state as { from?: string } | null)?.from === 'me'
+  const backTo = fromMe ? '/me' : '/growth'
 
   if (!statKind) {
-    return <Empty message="页面不存在" onBack={() => navigate('/growth')} />
+    return <Empty message="页面不存在" onBack={() => navigate(backTo)} />
   }
   if (!currentToy) {
-    return <Empty message="请先选择玩偶" onBack={() => navigate('/growth')} />
+    return <Empty message="请先选择玩偶" onBack={() => navigate(backTo)} />
   }
 
   const meta = META[statKind]
+  const pageTitle =
+    statKind === 'moments' && fromMe ? '我的日记' : meta.title
   const count =
     statKind === 'companion'
       ? days
@@ -143,15 +149,15 @@ export function GrowthStatsPage() {
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => navigate('/growth')}
+            onClick={() => navigate(backTo)}
             className="flex h-9 w-9 items-center justify-center rounded-full bg-cream text-ink-soft"
-            aria-label="返回成长"
+            aria-label={fromMe ? '返回我的' : '返回成长'}
           >
             <ChevronLeft className="h-5 w-5" />
           </button>
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-base font-semibold text-ink">
-              {meta.icon} {meta.title}
+              {meta.icon} {pageTitle}
             </h1>
             <p className="text-[10px] text-ink-muted">
               {currentToy.name} · {meta.subtitle(count)}
@@ -173,43 +179,46 @@ export function GrowthStatsPage() {
       </header>
 
       <div className="space-y-4 px-3.5 py-4">
-        {/* Memorial-style hero card */}
-        <button
-          type="button"
-          onClick={() => navigate(`/memories/${currentToy.id}`)}
-          className="archive-milestone-card w-full overflow-hidden text-left active:scale-[0.99]"
-        >
-          <div className="relative z-[1] max-w-[65%]">
-            <span className="inline-flex items-center gap-1 rounded-full bg-white/65 px-2.5 py-1 text-[10px] font-medium text-terra-deep">
-              <Sparkles className="h-3 w-3" />
-              {meta.title}
-            </span>
-            <p className="mt-3 text-xs font-medium text-ink-soft">
-              {meta.subtitle(count)}
-            </p>
-            <p className="mt-0.5 font-display text-[2.25rem] leading-none text-ink">
-              {count}{' '}
-              <span className="text-lg font-sans text-ink-muted">
-                {meta.unit}
+        {/* The companion page keeps one clear hero; other stats retain the
+            memorial entrance card. */}
+        {statKind !== 'companion' && !(statKind === 'moments' && fromMe) && (
+          <button
+            type="button"
+            onClick={() => navigate(`/memories/${currentToy.id}`)}
+            className="archive-milestone-card w-full overflow-hidden text-left active:scale-[0.99]"
+          >
+            <div className="relative z-[1] max-w-[65%]">
+              <span className="inline-flex items-center gap-1 rounded-full bg-white/65 px-2.5 py-1 text-[10px] font-medium text-terra-deep">
+                <Sparkles className="h-3 w-3" />
+                {meta.title}
               </span>
-            </p>
-            <span className="mt-3 inline-flex items-center text-[10px] font-semibold text-matcha-deep">
-              打开回忆展厅
-              <ChevronRight className="h-3.5 w-3.5" />
-            </span>
-          </div>
-          <div className="absolute -bottom-5 -right-2 h-36 w-36 rotate-6 overflow-hidden rounded-[2rem] border-[5px] border-white bg-white shadow-lg">
-            <img
-              src={toyAvatar(currentToy, toyIndex)}
-              alt=""
-              className="h-full w-full object-cover"
-            />
-          </div>
-        </button>
+              <p className="mt-3 text-xs font-medium text-ink-soft">
+                {meta.subtitle(count)}
+              </p>
+              <p className="mt-0.5 font-display text-[2.25rem] leading-none text-ink">
+                {count}{' '}
+                <span className="text-lg font-sans text-ink-muted">
+                  {meta.unit}
+                </span>
+              </p>
+              <span className="mt-3 inline-flex items-center text-[10px] font-semibold text-matcha-deep">
+                打开回忆展厅
+                <ChevronRight className="h-3.5 w-3.5" />
+              </span>
+            </div>
+            <div className="absolute -bottom-5 -right-2 h-36 w-36 rotate-6 overflow-hidden rounded-[2rem] border-[5px] border-white bg-white shadow-lg">
+              <img
+                src={toyAvatar(currentToy, toyIndex)}
+                alt=""
+                className="h-full w-full object-cover"
+              />
+            </div>
+          </button>
+        )}
 
         <DayCountNumber
           value={count}
-          label={meta.title}
+          label={pageTitle}
           unit={meta.unit}
           size="hero"
           photoUrl={photoUrl}

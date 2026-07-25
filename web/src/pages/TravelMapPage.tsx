@@ -246,7 +246,7 @@ export function TravelMapView({ embedded = false }: { embedded?: boolean }) {
   }
 
   const shellClass = embedded
-    ? 'flex h-[calc(100dvh-14.5rem)] min-h-[22rem] flex-col overflow-hidden bg-cream'
+    ? 'flex h-full min-h-0 flex-col overflow-hidden bg-cream'
     : 'flex h-[calc(100dvh-5.5rem)] flex-col overflow-hidden bg-cream'
 
   return (
@@ -398,71 +398,93 @@ export function TravelMapView({ embedded = false }: { embedded?: boolean }) {
             </button>
           </div>
         ) : (
-          <MapContainer
-            center={[filtered[0].place.lat, filtered[0].place.lng]}
-            zoom={5}
-            className="h-full w-full"
-            scrollWheelZoom
-          >
-            <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
-            <FitBounds
-              points={filtered}
-              active={!replaying}
-              version={overviewTick}
-            />
-            <FlyToStop point={activePoint} active={replaying && !paused} />
-            {linePositions.length > 1 && (
-              <Polyline
-                positions={linePositions}
-                pathOptions={{
-                  color: replaying ? '#c4957a' : '#9a8758',
-                  weight: replaying ? 4 : 3,
-                  dashArray: replaying ? undefined : '8 10',
-                  opacity: 0.85,
-                }}
+          <>
+            <MapContainer
+              center={[filtered[0].place.lat, filtered[0].place.lng]}
+              zoom={5}
+              className="h-full w-full"
+              scrollWheelZoom
+            >
+              <TileLayer
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
+              <FitBounds
+                points={filtered}
+                active={!replaying}
+                version={overviewTick}
+              />
+              <FlyToStop point={activePoint} active={replaying && !paused} />
+              {linePositions.length > 1 && (
+                <Polyline
+                  positions={linePositions}
+                  pathOptions={{
+                    color: replaying ? '#c4957a' : '#9a8758',
+                    weight: replaying ? 4 : 3,
+                    dashArray: replaying ? undefined : '8 10',
+                    opacity: 0.85,
+                  }}
+                />
+              )}
+              {visiblePoints.map((point, index) => {
+                const city = point.place.city || point.place.displayName
+                const count = cityCounts.get(city) || 1
+                const isActive =
+                  replaying && filtered[replayIndex]?.entryId === point.entryId
+                const globalIndex = filtered.findIndex(
+                  (p) => p.entryId === point.entryId,
+                )
+                return (
+                  <Marker
+                    key={point.entryId}
+                    position={[point.place.lat, point.place.lng]}
+                    icon={makeAvatarIcon(
+                      avatar,
+                      `${(globalIndex >= 0 ? globalIndex : index) + 1}. ${city}`,
+                      isActive,
+                    )}
+                    ref={(ref) => {
+                      markerRefs.current[point.entryId] = ref
+                    }}
+                    eventHandlers={{
+                      add: (e) => {
+                        markerRefs.current[point.entryId] = e.target
+                      },
+                    }}
+                  >
+                    <OpenPopupWhenActive
+                      active={isActive}
+                      entryId={point.entryId}
+                      markerRefs={markerRefs}
+                    />
+                    <Popup className="polaroid-popup" maxWidth={240}>
+                      <PolaroidCard point={point} cityCount={count} />
+                    </Popup>
+                  </Marker>
+                )
+              })}
+            </MapContainer>
+            {!replaying && (
+              <div className="pointer-events-none absolute inset-x-3 bottom-7 z-[500]">
+                <div className="flex items-center gap-2.5 rounded-2xl border border-white/80 bg-paper/90 px-3 py-2 shadow-[var(--shadow-elevated)] backdrop-blur-md">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-mustard-soft text-base shadow-sm">
+                    🧭
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <strong className="block truncate text-[11px] text-ink">
+                      {currentToy.name} 的旅行手账
+                    </strong>
+                    <span className="mt-0.5 block truncate text-[9px] text-ink-muted">
+                      最近一站 · {filtered[filtered.length - 1].place.displayName}
+                    </span>
+                  </span>
+                  <span className="shrink-0 rounded-full bg-mist-soft px-2 py-1 text-[9px] font-semibold text-matcha-deep">
+                    {filtered.length} 个足迹
+                  </span>
+                </div>
+              </div>
             )}
-            {visiblePoints.map((point, index) => {
-              const city = point.place.city || point.place.displayName
-              const count = cityCounts.get(city) || 1
-              const isActive =
-                replaying && filtered[replayIndex]?.entryId === point.entryId
-              const globalIndex = filtered.findIndex(
-                (p) => p.entryId === point.entryId,
-              )
-              return (
-                <Marker
-                  key={point.entryId}
-                  position={[point.place.lat, point.place.lng]}
-                  icon={makeAvatarIcon(
-                    avatar,
-                    `${(globalIndex >= 0 ? globalIndex : index) + 1}. ${city}`,
-                    isActive,
-                  )}
-                  ref={(ref) => {
-                    markerRefs.current[point.entryId] = ref
-                  }}
-                  eventHandlers={{
-                    add: (e) => {
-                      markerRefs.current[point.entryId] = e.target
-                    },
-                  }}
-                >
-                  <OpenPopupWhenActive
-                    active={isActive}
-                    entryId={point.entryId}
-                    markerRefs={markerRefs}
-                  />
-                  <Popup className="polaroid-popup" maxWidth={240}>
-                    <PolaroidCard point={point} cityCount={count} />
-                  </Popup>
-                </Marker>
-              )
-            })}
-          </MapContainer>
+          </>
         )}
       </div>
 

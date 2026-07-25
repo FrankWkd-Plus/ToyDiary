@@ -331,6 +331,7 @@ AI_PROVIDER=auto   # 或 openai / anthropic
 
 | 文档 | 内容 |
 |------|------|
+| [`docs/wiki/README.md`](./wiki/README.md) | **Wiki**（导航 + [Home UI](./wiki/03-home-ui.md)） |
 | [`docs/api.md`](./api.md) | HTTP + Mock 契约 |
 | [`docs/cloudflare.md`](./cloudflare.md) | 部署 |
 | [`docs/PRD.md`](./PRD.md) | 产品范围 |
