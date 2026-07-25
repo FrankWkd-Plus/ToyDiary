@@ -18,7 +18,8 @@
     "react-dom": "^19.2.7",
     "react-leaflet": "^5.0.0",
     "react-router-dom": "^7.18.1",
-    "tesseract.js": "^7.0.0"
+    "tesseract.js": "^7.0.0",
+    "viem": "^2.21.54"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
