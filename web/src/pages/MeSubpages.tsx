@@ -9,6 +9,7 @@ import {
   FileText,
   HelpCircle,
   Info,
+  RotateCcw,
   Upload,
   Volume2,
 } from 'lucide-react'
@@ -299,10 +300,17 @@ export function NotifySoundPage() {
 }
 
 /**
- * JSON 备份：导出 / 导入成长轨迹（设置入口）
+ * JSON 备份：导出 / 导入成长轨迹；重置演示数据
  */
 export function DataBackupPage() {
-  const { toys, entries, currentToy, importGrowthData, showToast } = useApp()
+  const {
+    toys,
+    entries,
+    currentToy,
+    importGrowthData,
+    resetDemo,
+    showToast,
+  } = useApp()
   const fileRef = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
 
@@ -361,6 +369,22 @@ export function DataBackupPage() {
     }
   }
 
+  async function onResetDemo() {
+    if (
+      !window.confirm(
+        '将清除当前玩偶与日记，并恢复内置演示数据。主题、正数日样式、对话记录不会清除。继续？',
+      )
+    ) {
+      return
+    }
+    setBusy(true)
+    try {
+      await resetDemo()
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <>
       <PageHeader title="数据备份" back="/me" soft />
@@ -401,6 +425,27 @@ export function DataBackupPage() {
             <ChevronRight className="h-4 w-4 text-ink-muted" />
           </button>
         </section>
+
+        <section className="card-paper overflow-hidden">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void onResetDemo()}
+            className="flex min-h-14 w-full items-center gap-3 px-4 py-3.5 text-left active:bg-cream disabled:opacity-50"
+          >
+            <span className="text-rose-deep">
+              <RotateCcw className="h-4 w-4" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm text-ink">重置演示数据</p>
+              <p className="text-[11px] text-ink-muted">
+                恢复种子玩偶与示例日记（不改主题 / 正数日 / 对话）
+              </p>
+            </div>
+            <ChevronRight className="h-4 w-4 text-ink-muted" />
+          </button>
+        </section>
+
         <input
           ref={fileRef}
           type="file"
