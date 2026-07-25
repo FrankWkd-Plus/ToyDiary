@@ -21,6 +21,7 @@ import {
   Pencil,
   Share2,
   Sparkles,
+  Trash2,
   UserRound,
   X,
 } from 'lucide-react'
@@ -141,6 +142,40 @@ export function MePage() {
     logout()
     showToast(isGuest ? '已退出随便看看' : '已退出登录')
     navigate('/login', { replace: true })
+  }
+
+  /** Wipe all Toy Dairy localStorage keys and hard-reload to factory defaults. */
+  function onFactoryReset() {
+    if (
+      !window.confirm(
+        '将清除本机全部 Toy Diary 数据（玩偶、日记、主题、正数日、对话、登录态等），并恢复出厂默认。此操作不可撤销。继续？',
+      )
+    ) {
+      return
+    }
+    if (
+      !window.confirm(
+        '再次确认：清空 localStorage 并重新加载？页面将回到登录页。',
+      )
+    ) {
+      return
+    }
+    try {
+      const keys: string[] = []
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i)
+        if (k && k.startsWith('toydairy.')) keys.push(k)
+      }
+      for (const k of keys) localStorage.removeItem(k)
+    } catch {
+      try {
+        localStorage.clear()
+      } catch {
+        /* ignore */
+      }
+    }
+    // Full reload so ThemeProvider / Auth / mockStore all re-seed from empty storage
+    window.location.assign('/login')
   }
 
   const displayId =
@@ -404,13 +439,30 @@ export function MePage() {
           <LogOut className="h-4 w-4" />
           退出登录
         </button>
-        <p className="pb-2 text-center text-[10px] text-ink-muted">
+        <p className="text-center text-[10px] text-ink-muted">
           {isGuest
             ? '游客模式 · 退出后将回到登录页'
             : isLoggedIn
               ? '退出后需重新验证码登录'
               : '返回登录页'}
         </p>
+
+        {isLoggedIn && (
+          <>
+            <button
+              type="button"
+              onClick={onFactoryReset}
+              className="flex w-full items-center justify-center gap-2 rounded-full border border-line/80 bg-white py-3 text-sm font-medium text-ink-soft transition-transform active:scale-[0.99]"
+            >
+              <Trash2 className="h-4 w-4 text-rose-deep" />
+              删除本地数据 · 恢复出厂设置
+            </button>
+            <p className="pb-2 text-center text-[10px] leading-relaxed text-ink-muted">
+              清除本机 localStorage 中全部 Toy Diary 数据，包括玩偶、日记、主题、
+              正数日、对话及登录状态
+            </p>
+          </>
+        )}
       </div>
     </div>
   )
