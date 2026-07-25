@@ -1,4 +1,36 @@
-# Toy Dairy
+
+<div align="center">
+
+# 🧸 Toy Diary
+
+**Through toy eyes, your world rewinds. / 换个视角，用玩偶记录生活与情绪**
+
+[![AdvX 2026](https://img.shields.io/badge/Hackathon-AdventureX_2026-6f42c1?style=for-the-badge&logo=github)](https://github.com)
+[![Theme](https://img.shields.io/badge/Theme-Reverse-ff69b4?style=for-the-badge)](#)
+[![Live Demo](https://img.shields.io/badge/Live_Demo-Visit_App-brightgreen?style=for-the-badge&logo=cloudflare)](https://toydiary.outwardly.dpdns.org)
+
+<br/>
+
+![React](https://img.shields.io/badge/Frontend-React_18-61DAFB?style=for-the-badge&logo=react&logoColor=black)
+![TypeScript](https://img.shields.io/badge/Language-TypeScript-3178C6?style=for-the-badge&logo=typescript)
+![Vite](https://img.shields.io/badge/Build-Vite-646CFF?style=for-the-badge&logo=vite)
+![Tailwind CSS](https://img.shields.io/badge/Styling-Tailwind_CSS-06B6D4?style=for-the-badge&logo=tailwindcss)
+
+</div>
+
+---
+
+### 🌟 Project Highlights
+
+* **Reverse Perspective (逆向视角)**: 从玩偶的视角记录旅途与生活，将冷冰冰的“个人日记”翻转为充满温度的“双向陪伴档案”。
+* **Emotional Anchoring (情绪锚点)**: 结合照片与空间上下文，让每一次携带玩偶的出行都成为可回溯的情绪胶囊。
+* **Fast & Responsive**: 基于 React + Vite + Tailwind 构建，轻量级流式体验。
+
+### 🔗 Live Demo
+* **Primary URL**: [https://toydiary.outwardly.dpdns.org](https://toydiary.outwardly.dpdns.org) *(Backup Link)*
+
+
+
 
 让玩偶拥有「灵魂」的 AI 生命手帐：**身份卡 → 双视角日记 → 成长轨迹 → 对话陪伴**。
 
