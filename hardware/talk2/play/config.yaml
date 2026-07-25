@@ -1,0 +1,32 @@
+# talk2 蓝牙播放模块配置（独立于 talk）
+# 播放目标：MINISO 等 A2DP 音箱
+
+bluetooth:
+  # 音箱 MAC（唯一身份）
+  mac: "52:5E:48:6A:8D:26"
+  # A2DP profile
+  profile: "a2dp"
+  # 播放前若未连接则尝试 connect
+  auto_connect: true
+  connect_timeout_s: 20
+
+playback:
+  # 音量 0–100（bluealsa）；null=不改音量
+  volume: 40
+  # 播放前重采样到此采样率/声道（与 bluealsa 协商一致更好）
+  # 当前音箱协商: S16_LE 2ch 48000Hz
+  sample_rate: 48000
+  channels: 2
+  # 临时转换文件目录（相对 play/ 或绝对路径）
+  cache_dir: "cache"
+  # 播放器优先级: ffmpeg | aplay
+  # ffmpeg 写 ALSA 在部分板子更稳；aplay 更通用
+  prefer: "aplay"
+  # aplay 额外参数（一般留空）
+  aplay_buffer_time_us: 0
+  aplay_period_time_us: 0
+
+paths:
+  # 默认测试 wav：仓库 hardware/pi/test.wav
+  # 板子上可改为 /home/talk2/play/test.wav
+  default_wav: "../../pi/test.wav"

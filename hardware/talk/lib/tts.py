@@ -1,11 +1,14 @@
-"""语音合成 TTS — Piper / espeak-ng，并播放到蓝牙音箱（bluealsa）。"""
+"""语音合成 TTS — Piper 优先；蓝牙 A2DP 可调音量 + 低卡顿播放。"""
 
 from __future__ import annotations
 
+import json
+import os
 import re
 import shutil
 import subprocess
 import time
+import wave
 from pathlib import Path
 from typing import Any
 
@@ -21,10 +24,7 @@ def _bt_mac_from_cfg(cfg: dict[str, Any]) -> str | None:
     mac = (tts.get("bluetooth_mac") or tts.get("bt_mac") or "").strip()
     if mac:
         return mac.upper().replace("-", ":")
-    # 回退：读蓝牙持久化配置里的耳机（audio-headset / 名称含 MINISO）
     try:
-        import json
-
         p = Path("/etc/toydairy-bluetooth/devices.json")
         if p.exists():
             data = json.loads(p.read_text(encoding="utf-8"))
@@ -35,7 +35,6 @@ def _bt_mac_from_cfg(cfg: dict[str, Any]) -> str | None:
                     continue
                 if "MINISO" in name.upper() or "A127" in name.upper() or d.get("note") == "speaker":
                     return m.upper()
-            # 非 ring 的第一台
             for d in data.get("devices") or []:
                 name = str(d.get("name") or "").lower()
                 m = str(d.get("mac") or "")
@@ -46,39 +45,61 @@ def _bt_mac_from_cfg(cfg: dict[str, Any]) -> str | None:
     return None
 
 
-def _list_bluealsa_pcms() -> list[str]:
-    if not shutil.which("bluealsa-aplay"):
-        return []
-    r = _run(["bluealsa-aplay", "-L"])
-    text = (r.stdout or "") + (r.stderr or "")
-    # bluealsa:DEV=AA:BB:...,PROFILE=a2dp,SRV=org.bluealsa
-    return re.findall(r"bluealsa:DEV=[0-9A-Fa-f:]{17}[^\\s]*", text)
+def _mac_to_pcm_path(mac: str) -> str:
+    # 52:5E:48:6A:8D:26 -> /org/bluealsa/hci0/dev_52_5E_48_6A_8D_26/a2dpsrc/sink
+    dev = mac.upper().replace(":", "_")
+    return f"/org/bluealsa/hci0/dev_{dev}/a2dpsrc/sink"
 
 
-def _bluealsa_device(cfg: dict[str, Any]) -> str | None:
-    """返回 aplay -D 可用的 bluealsa PCM 名。"""
+def _volume_to_bluealsa(level_0_100: int) -> int:
+    level = max(0, min(100, int(level_0_100)))
+    # bluealsa 音量 0–127
+    return int(round(level * 127 / 100))
+
+
+def _set_bt_volume(cfg: dict[str, Any], mac: str, verbose: bool = True) -> None:
+    """按 config tts.volume(0-100) 设置蓝牙音箱音量。"""
     tts = cfg.get("tts") or {}
-    forced = (tts.get("alsa_device") or "").strip()
-    if forced and forced != "auto":
-        return forced
+    level = tts.get("volume", 35)
+    try:
+        level_i = int(level)
+    except (TypeError, ValueError):
+        level_i = 35
+    level_i = max(0, min(100, level_i))
+    ba_vol = _volume_to_bluealsa(level_i)
+    pcm = _mac_to_pcm_path(mac)
 
-    pcms = _list_bluealsa_pcms()
-    mac = _bt_mac_from_cfg(cfg)
-    if mac:
-        for p in pcms:
-            if mac.upper() in p.upper():
-                # 只要 DEV=MAC,PROFILE=a2dp
-                m = re.search(r"(bluealsa:DEV=[0-9A-Fa-f:]{17},PROFILE=a2dp)", p, re.I)
-                if m:
-                    return m.group(1)
-                return f"bluealsa:DEV={mac},PROFILE=a2dp"
-        # 列表暂时为空但已知 MAC
-        return f"bluealsa:DEV={mac},PROFILE=a2dp"
-    if pcms:
-        m = re.search(r"(bluealsa:DEV=[0-9A-Fa-f:]{17},PROFILE=a2dp)", pcms[0], re.I)
-        if m:
-            return m.group(1)
-    return None
+    ok = False
+    if shutil.which("bluealsa-cli"):
+        # bluealsa-cli volume <pcm> [L] [R]
+        r = _run(["bluealsa-cli", "volume", pcm, str(ba_vol), str(ba_vol)])
+        if r.returncode == 0:
+            ok = True
+        else:
+            # 有的版本只要一个值
+            r = _run(["bluealsa-cli", "volume", pcm, str(ba_vol)])
+            ok = r.returncode == 0
+        if ok and verbose:
+            print(f"[tts] bluealsa volume={level_i}% ({ba_vol}/127) pcm={pcm}")
+        elif verbose:
+            err = ((r.stderr or r.stdout or "")[-200:]).strip()
+            print(f"[tts] bluealsa-cli volume 失败: {err}")
+
+    if shutil.which("amixer"):
+        # amixer -D bluealsa sset 'NAME A2DP' N%
+        r = _run(["amixer", "-D", "bluealsa", "scontrols"])
+        text = (r.stdout or "") + (r.stderr or "")
+        # Simple mixer control 'MINISO-A127 A2DP',0
+        names = re.findall(r"Simple mixer control '([^']+)'", text)
+        target = None
+        for n in names:
+            if "A2DP" in n.upper():
+                target = n
+                break
+        if target:
+            r2 = _run(["amixer", "-D", "bluealsa", "sset", target, f"{level_i}%"])
+            if r2.returncode == 0 and verbose and not ok:
+                print(f"[tts] amixer volume={level_i}% control={target!r}")
 
 
 def _ensure_bt_connected(mac: str) -> None:
@@ -89,104 +110,382 @@ def _ensure_bt_connected(mac: str) -> None:
     if re.search(r"Connected:\s*yes", text, re.I):
         return
     _run(["bluetoothctl", "connect", mac], timeout=30)
+    time.sleep(0.8)
 
 
-def _resample_for_a2dp(wav: Path, out: Path) -> Path:
-    """A2DP 常见 48k stereo；转换失败则返回原文件。"""
+def _ensure_asound_bt(mac: str, delay_us: int = 20000) -> str:
+    """写入 ALSA plug 配置；返回 PCM 名 toydairy_bt。"""
+    pcm_name = "toydairy_bt"
+    conf = f"""# auto-generated by talk/lib/tts.py
+pcm.{pcm_name} {{
+    type plug
+    slave.pcm {{
+        type bluealsa
+        device "{mac}"
+        profile "a2dp"
+        delay {int(delay_us)}
+    }}
+}}
+"""
+    asound = Path.home() / ".asoundrc"
+    try:
+        asound.write_text(conf, encoding="utf-8")
+    except OSError:
+        pass
+    try:
+        if os.geteuid() == 0:
+            Path("/etc/asound.conf").write_text(conf, encoding="utf-8")
+    except Exception:
+        pass
+    return pcm_name
+
+
+def _wav_info(path: Path) -> tuple[int, int, int] | None:
+    try:
+        with wave.open(str(path), "rb") as w:
+            return w.getnchannels(), w.getframerate(), w.getsampwidth()
+    except Exception:
+        return None
+
+
+def _prepare_playback_wav(cfg: dict[str, Any], wav: Path) -> Path:
+    """44.1k 立体声 + 可配置 software_gain，减轻 A2DP 卡顿并控制响度。"""
+    tts = cfg.get("tts") or {}
+    rate = int(tts.get("sample_rate") or 44100)
+    try:
+        gain = float(tts.get("software_gain", 1.0))
+    except (TypeError, ValueError):
+        gain = 1.0
+    gain = max(0.05, min(2.0, gain))
+
+    out = work_path(cfg, "audio", "tts", "_play_a2dp.wav")
+    out.parent.mkdir(parents=True, exist_ok=True)
     if not shutil.which("ffmpeg"):
         return wav
-    out.parent.mkdir(parents=True, exist_ok=True)
-    r = _run(
-        [
-            "ffmpeg", "-y", "-i", str(wav),
-            "-ac", "2", "-ar", "48000", "-sample_fmt", "s16",
-            str(out),
-        ]
-    )
-    if r.returncode == 0 and out.exists() and out.stat().st_size > 44:
+
+    # volume 滤镜 + 立体声 + 目标采样率；短淡入避免爆破音
+    af = f"volume={gain:.3f},afade=t=in:st=0:d=0.02"
+    # 用 apad 很短，避免 drain 问题但不拉长太多
+    cmd = [
+        "ffmpeg", "-y", "-i", str(wav),
+        "-ac", "2",
+        "-ar", str(rate),
+        "-sample_fmt", "s16",
+        "-af", af,
+        str(out),
+    ]
+    r = _run(cmd)
+    if r.returncode == 0 and out.exists() and out.stat().st_size > 1000:
         return out
     return wav
+
+
+def _play_file_bt(
+    dev: str,
+    wav: Path,
+    *,
+    buffer_time_us: int,
+    period_time_us: int,
+    verbose: bool,
+) -> bool:
+    """低卡顿播放：优先 ffmpeg→ALSA，再 aplay（默认缓冲，勿乱加过小 period）。"""
+    # 1) ffmpeg 直写 ALSA：Orange Pi + bluealsa 上往往比 aplay 更顺
+    if shutil.which("ffmpeg"):
+        targets = [dev]
+        if dev.startswith("bluealsa:") and not dev.startswith("plug:"):
+            targets.insert(0, f"plug:{dev}")
+        for target in targets:
+            cmd = [
+                "ffmpeg", "-hide_banner", "-loglevel", "error",
+                "-fflags", "nobuffer",
+                "-i", str(wav),
+                "-f", "alsa",
+                target,
+            ]
+            if verbose:
+                print(f"[tts] exec: {' '.join(cmd)}")
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+            if r.returncode == 0:
+                return True
+            if verbose:
+                err = ((r.stderr or r.stdout or "")[-280:]).strip()
+                print(f"[tts] ffmpeg/alsa 失败: {err}")
+
+    if not shutil.which("aplay"):
+        return False
+
+    def build(device: str, with_buf: bool) -> list[str]:
+        cmd = ["aplay", "-q", "-D", device]
+        if with_buf and buffer_time_us and buffer_time_us > 0:
+            cmd.append(f"--buffer-time={int(buffer_time_us)}")
+        if with_buf and period_time_us and period_time_us > 0:
+            cmd.append(f"--period-time={int(period_time_us)}")
+        cmd.append(str(wav))
+        return cmd
+
+    candidates = [
+        build(dev, False),  # 默认缓冲优先
+        build(f"plug:{dev}", False) if not dev.startswith("plug:") else None,
+        build(dev, True) if buffer_time_us or period_time_us else None,
+    ]
+    if dev.startswith("bluealsa:"):
+        candidates.insert(0, build(f"plug:{dev}", False))
+
+    for cmd in candidates:
+        if not cmd:
+            continue
+        if verbose:
+            print(f"[tts] exec: {' '.join(cmd)}")
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+        if r.returncode == 0:
+            return True
+        if verbose:
+            err = ((r.stderr or r.stdout or "")[-280:]).strip()
+            print(f"[tts] 失败 rc={r.returncode}: {err}")
+    return False
 
 
 def _play(cfg: dict[str, Any], wav: Path) -> None:
     tts = cfg.get("tts") or {}
     player = str(tts.get("player") or "auto").lower()
     verbose = bool((cfg.get("pipeline") or {}).get("verbose", True))
+    # 默认 0：用驱动默认缓冲。错误的 period 会导致「一字一秒」
+    try:
+        buffer_time_us = int(tts.get("buffer_time_us") or 0)
+    except (TypeError, ValueError):
+        buffer_time_us = 0
+    try:
+        period_time_us = int(tts.get("period_time_us") or 0)
+    except (TypeError, ValueError):
+        period_time_us = 0
 
-    # 1) 蓝牙 A2DP（优先）
+    play_wav = _prepare_playback_wav(cfg, wav)
+    if verbose:
+        print(
+            f"[tts] play_wav={play_wav.name} info={_wav_info(play_wav)} "
+            f"volume={tts.get('volume')} gain={tts.get('software_gain')}"
+        )
+
     if player in ("auto", "bluealsa", "bt", "bluetooth"):
-        dev = _bluealsa_device(cfg)
         mac = _bt_mac_from_cfg(cfg)
         if mac:
             _ensure_bt_connected(mac)
-            time.sleep(0.3)
-            # 刷新 pcm 列表
-            dev = _bluealsa_device(cfg) or dev
-        if dev and shutil.which("aplay"):
-            play_wav = _resample_for_a2dp(
-                wav, work_path(cfg, "audio", "tts", "_play_a2dp.wav")
-            )
+            time.sleep(0.35)
+            _set_bt_volume(cfg, mac, verbose=verbose)
+            pcm = _ensure_asound_bt(mac)
+            devices = [
+                f"bluealsa:DEV={mac},PROFILE=a2dp",
+                f"plug:bluealsa:DEV={mac},PROFILE=a2dp",
+                pcm,
+            ]
+            forced = (tts.get("alsa_device") or "").strip()
+            if forced and forced != "auto":
+                devices.insert(0, forced)
+            for dev in devices:
+                if _play_file_bt(
+                    dev,
+                    play_wav,
+                    buffer_time_us=buffer_time_us,
+                    period_time_us=period_time_us,
+                    verbose=verbose,
+                ):
+                    return
             if verbose:
-                print(f"[tts] 播放到蓝牙: aplay -D {dev}")
-            r = _run(["aplay", "-D", dev, str(play_wav)], timeout=120)
-            if r.returncode == 0:
-                return
-            if verbose:
-                err = ((r.stderr or r.stdout or "")[-300:]).strip()
-                print(f"[tts] bluealsa 播放失败: {err}")
+                print("[tts] 所有蓝牙播放路径失败，回退板载")
 
-    # 2) 默认 aplay（板载）
     if player in ("auto", "aplay") and shutil.which("aplay"):
         if verbose:
             print("[tts] 回退板载 aplay")
-        _run(["aplay", "-q", str(wav)], timeout=120)
-        return
-
-    if player == "paplay" and shutil.which("paplay"):
-        _run(["paplay", str(wav)], timeout=120)
+        _run(["aplay", "-q", str(play_wav)], timeout=180)
         return
 
     if shutil.which("ffplay"):
-        _run(
-            ["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet", str(wav)],
-            timeout=120,
-        )
-        return
-
-    if shutil.which("aplay"):
-        _run(["aplay", "-q", str(wav)], timeout=120)
+        _run(["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet", str(play_wav)], timeout=180)
         return
 
     print(f"[tts] 无播放器，文件: {wav}")
 
 
-def _synth_piper(cfg: dict[str, Any], text: str, voice: dict[str, Any], out_wav: Path) -> bool:
+# ---------------------------------------------------------------------------
+# 合成（文本预处理 + Piper 韵律）
+# ---------------------------------------------------------------------------
+
+
+def _normalize_tts_text(text: str) -> str:
+    """让断句更自然：清理括号舞台指示、统一标点、避免碎句。"""
+    t = (text or "").strip()
+    if not t:
+        return t
+
+    # 去掉全角/半角括号里的动作描写：（轻轻把头…） / (smiles)
+    t = re.sub(r"（[^）]*）", "", t)
+    t = re.sub(r"\([^)]*\)", "", t)
+    t = re.sub(r"\[[^\]]*\]", "", t)
+    t = re.sub(r"【[^】]*】", "", t)
+
+    # 统一省略号 / 波浪
+    t = t.replace("……", "…").replace("...", "…").replace("。。", "。")
+    t = t.replace("~", "。").replace("～", "。")
+
+    # 感叹/问号后若直接接汉字，补停顿感（不拆成过碎）
+    t = re.sub(r"([!?！？])([^\s!?！？。…])", r"\1\2", t)
+
+    # 顿号/逗号过多时，把过碎的“，…，…，”适当保留，但去掉重复逗号
+    t = re.sub(r"[，,]{2,}", "，", t)
+    t = re.sub(r"[。\.]{2,}", "。", t)
+    t = re.sub(r"\s+", "", t)  # 中文合成一般不需要空格
+
+    t = t.strip("，,、；; ")
+    if not t:
+        return "嗯。"
+    # 保证句末有结束标点，便于 Piper 句级韵律
+    if t[-1] not in "。！？!?…":
+        t += "。"
+    return t
+
+
+def _merge_piper_cfg(cfg: dict[str, Any], voice: dict[str, Any]) -> dict[str, Any]:
+    tts = cfg.get("tts") or {}
+    base = dict(tts.get("piper") or {})
+    base.update(voice.get("piper") or {})
+    return base
+
+
+def _find_piper_bin() -> str | None:
+    for name in ("piper", "piper-tts"):
+        p = shutil.which(name)
+        if p:
+            return p
+    for p in (
+        Path("/usr/local/bin/piper"),
+        Path.home() / ".local/bin/piper",
+        Path("/home/talk/bin/piper"),
+    ):
+        if p.exists():
+            return str(p)
+    return None
+
+
+def _piper_model_paths(cfg: dict[str, Any], voice: dict[str, Any]) -> tuple[Path | None, Path | None]:
     tts = cfg.get("tts") or {}
     piper_cfg = {**(tts.get("piper") or {}), **(voice.get("piper") or {})}
-    binary = shutil.which(str(piper_cfg.get("bin") or tts.get("piper", {}).get("bin") or "piper"))
-    if not binary:
-        binary = shutil.which("piper-tts")
+    model = piper_cfg.get("model") or ""
+    conf = piper_cfg.get("config") or ""
+    model_p = work_path(cfg, model) if model else None
+    conf_p = work_path(cfg, conf) if conf else None
+    if model_p and model_p.exists() and model_p.stat().st_size > 1_000_000:
+        # 自动发现同名 .onnx.json
+        if conf_p is None or not conf_p.exists() or conf_p.stat().st_size < 10:
+            alt = Path(str(model_p) + ".json")
+            conf_p = alt if alt.exists() and alt.stat().st_size > 10 else None
+        # 校验 JSON 可读，否则宁可不用 config（部分 piper 版本可旁路）
+        if conf_p is not None:
+            try:
+                import json as _json
+
+                _json.loads(conf_p.read_text(encoding="utf-8"))
+            except Exception:
+                conf_p = None
+        return model_p, conf_p
+    return None, None
+
+
+def _synth_piper_cli(cfg: dict[str, Any], text: str, voice: dict[str, Any], out_wav: Path) -> bool:
+    binary = _find_piper_bin()
     if not binary:
         return False
-    model = work_path(cfg, piper_cfg.get("model") or "")
-    if not model.exists():
+    model_p, conf_p = _piper_model_paths(cfg, voice)
+    if not model_p:
         return False
     out_wav.parent.mkdir(parents=True, exist_ok=True)
-    cmd = [binary, "--model", str(model), "--output_file", str(out_wav)]
-    conf = piper_cfg.get("config")
-    if conf:
-        conf_p = work_path(cfg, conf)
-        if conf_p.exists():
-            cmd.extend(["--config", str(conf_p)])
-    for key, flag in (
-        ("length_scale", "--length_scale"),
-        ("noise_scale", "--noise_scale"),
-        ("noise_w", "--noise_w"),
-    ):
-        if key in piper_cfg and piper_cfg[key] is not None:
-            cmd.extend([flag, str(piper_cfg[key])])
-    r = _run(cmd, input=text)
-    return r.returncode == 0 and out_wav.exists() and out_wav.stat().st_size > 44
+    piper_cfg = _merge_piper_cfg(cfg, voice)
+    text_in = _normalize_tts_text(text)
+    if (cfg.get("pipeline") or {}).get("verbose", True) and text_in != text.strip():
+        print(f"[tts] 文本规范化: {text_in!r}")
+
+    cmd = [binary, "--model", str(model_p), "--output_file", str(out_wav)]
+    if conf_p:
+        cmd.extend(["--config", str(conf_p)])
+
+    # 句间静音：略缩短，减少「一顿一顿」；可在 config 调 sentence_silence
+    silence = piper_cfg.get("sentence_silence", 0.18)
+    try:
+        silence_f = float(silence)
+    except (TypeError, ValueError):
+        silence_f = 0.18
+    silence_f = max(0.05, min(0.6, silence_f))
+    cmd.extend(["--sentence-silence", str(silence_f)])
+
+    # length_scale 略降 → 语速更顺、断句不那么拖
+    length = piper_cfg.get("length_scale", 1.0)
+    noise = piper_cfg.get("noise_scale", 0.667)
+    noise_w = piper_cfg.get("noise_w", piper_cfg.get("noise_w_scale", 0.8))
+    try:
+        length_f = float(length)
+    except (TypeError, ValueError):
+        length_f = 1.0
+    # 防止配置过大导致「一字一顿」感
+    length_f = max(0.85, min(1.15, length_f))
+    cmd.extend(["--length-scale", f"{length_f:.3f}"])
+    if noise is not None:
+        cmd.extend(["--noise-scale", str(noise)])
+    if noise_w is not None:
+        # CLI 参数名
+        cmd.extend(["--noise-w-scale", str(noise_w)])
+
+    r = _run(cmd, input=text_in)
+    if r.returncode != 0 and (cfg.get("pipeline") or {}).get("verbose", True):
+        err = ((r.stderr or r.stdout or "")[-300:]).strip()
+        print(f"[tts] piper-cli 失败: {err}")
+    return r.returncode == 0 and out_wav.exists() and out_wav.stat().st_size > 1000
+
+
+def _synth_piper_python(cfg: dict[str, Any], text: str, voice: dict[str, Any], out_wav: Path) -> bool:
+    try:
+        from piper import PiperVoice  # type: ignore
+        from piper.config import SynthesisConfig  # type: ignore
+    except Exception:
+        return False
+    model_p, conf_p = _piper_model_paths(cfg, voice)
+    if not model_p:
+        return False
+    try:
+        v = (
+            PiperVoice.load(str(model_p), config_path=str(conf_p))
+            if conf_p
+            else PiperVoice.load(str(model_p))
+        )
+        out_wav.parent.mkdir(parents=True, exist_ok=True)
+        text_in = _normalize_tts_text(text)
+        piper_cfg = _merge_piper_cfg(cfg, voice)
+        try:
+            length_f = float(piper_cfg.get("length_scale", 1.0))
+        except (TypeError, ValueError):
+            length_f = 1.0
+        length_f = max(0.85, min(1.15, length_f))
+        try:
+            noise_f = float(piper_cfg.get("noise_scale", 0.667))
+        except (TypeError, ValueError):
+            noise_f = 0.667
+        try:
+            noise_w_f = float(piper_cfg.get("noise_w", piper_cfg.get("noise_w_scale", 0.8)))
+        except (TypeError, ValueError):
+            noise_w_f = 0.8
+
+        syn = SynthesisConfig(
+            length_scale=length_f,
+            noise_scale=noise_f,
+            noise_w_scale=noise_w_f,
+            normalize_audio=True,
+            volume=1.0,
+        )
+        with wave.open(str(out_wav), "wb") as wav_file:
+            v.synthesize_wav(text_in, wav_file, syn_config=syn)
+        return out_wav.exists() and out_wav.stat().st_size > 1000
+    except Exception as exc:
+        if (cfg.get("pipeline") or {}).get("verbose", True):
+            print(f"[tts] piper-python 失败: {exc}")
+        return False
 
 
 def _synth_espeak(cfg: dict[str, Any], text: str, voice: dict[str, Any], out_wav: Path) -> bool:
@@ -199,14 +498,15 @@ def _synth_espeak(cfg: dict[str, Any], text: str, voice: dict[str, Any], out_wav
     cmd = [
         binary,
         "-v", str(es.get("voice") or "zh"),
-        "-s", str(int(es.get("speed") or 150)),
-        "-p", str(int(es.get("pitch") or 50)),
+        "-s", str(int(es.get("speed") or 130)),
+        "-p", str(int(es.get("pitch") or 45)),
         "-a", str(int(es.get("amplitude") or 100)),
+        "-g", "4",
         "-w", str(out_wav),
         text,
     ]
     r = _run(cmd)
-    return r.returncode == 0 and out_wav.exists() and out_wav.stat().st_size > 44
+    return r.returncode == 0 and out_wav.exists() and out_wav.stat().st_size > 1000
 
 
 def synthesize(cfg: dict[str, Any], text: str, *, voice_id: str | None = None) -> Path:
@@ -215,6 +515,7 @@ def synthesize(cfg: dict[str, Any], text: str, *, voice_id: str | None = None) -
         raise ValueError("空文本无法合成")
 
     tts = cfg.get("tts") or {}
+    verbose = bool((cfg.get("pipeline") or {}).get("verbose", True))
     if voice_id:
         voices = tts.get("voices") or {}
         if voice_id not in voices:
@@ -231,20 +532,26 @@ def synthesize(cfg: dict[str, Any], text: str, *, voice_id: str | None = None) -
     out_wav = out_dir / f"{vid}_{stamp}.wav"
 
     ok = False
+    used = ""
     if engine in ("piper", "auto"):
-        ok = _synth_piper(cfg, text, voice, out_wav)
-        if ok and (cfg.get("pipeline") or {}).get("verbose", True):
-            print(f"[tts] piper ok → {out_wav.name} ({vid})")
+        if _synth_piper_cli(cfg, text, voice, out_wav):
+            ok, used = True, "piper-cli"
+        elif _synth_piper_python(cfg, text, voice, out_wav):
+            ok, used = True, "piper-python"
+        elif engine == "piper":
+            raise RuntimeError("Piper 不可用，请安装 piper-tts 并下载音色模型")
+
     if not ok and engine in ("espeak", "auto", "piper"):
-        ok = _synth_espeak(cfg, text, voice, out_wav)
-        if ok and (cfg.get("pipeline") or {}).get("verbose", True):
-            print(f"[tts] espeak ok → {out_wav.name} ({vid})")
+        if verbose and engine == "auto":
+            print("[tts] Piper 不可用，暂用 espeak")
+        if _synth_espeak(cfg, text, voice, out_wav):
+            ok, used = True, "espeak"
+
     if not ok:
-        raise RuntimeError(
-            "TTS 失败：请安装 espeak-ng 或 piper，并检查 tts.voices 模型路径。\n"
-            "  sudo apt install -y espeak-ng\n"
-            "  或 bash scripts/setup_pi.sh"
-        )
+        raise RuntimeError("TTS 失败：需要 piper-tts 或 espeak-ng")
+
+    if verbose:
+        print(f"[tts] {used} ok → {out_wav.name} ({vid}) {_wav_info(out_wav)}")
     return out_wav
 
 

@@ -63,30 +63,44 @@ if [[ ! -f "$TALK_ROOT/ring_sound.py" ]]; then
 fi
 [[ -f "$TALK_ROOT/ring_sound.py" ]] && echo "ring_sound.py ok" || echo "请手动放入 ring_sound.py"
 
-echo "== Piper 中文音色（可选，体积较大）=="
+echo "== Piper TTS（自然中文，强烈推荐）=="
+python3 -c "from piper import PiperVoice" 2>/dev/null || \
+  python3 -m pip install --break-system-packages --resume-retries 20 \
+    -i https://pypi.tuna.tsinghua.edu.cn/simple piper-tts || \
+  python3 -m pip install --break-system-packages --resume-retries 20 piper-tts || true
+
 VOICES="$TALK_ROOT/voices"
 mkdir -p "$VOICES"
-# HuggingFace rhasspy piper voices — 中文 huayan medium
 PIPER_ONNX="$VOICES/zh_CN-huayan-medium.onnx"
-if [[ ! -f "$PIPER_ONNX" ]]; then
-  echo "尝试下载 Piper zh_CN-huayan-medium …"
-  BASE="https://huggingface.co/rhasspy/piper-voices/resolve/main/zh/zh_CN/huayan/medium"
-  wget -O "$PIPER_ONNX" "$BASE/zh_CN-huayan-medium.onnx" || \
-    curl -L -o "$PIPER_ONNX" "$BASE/zh_CN-huayan-medium.onnx" || \
-    echo "Piper 模型下载失败，将使用 espeak-ng 降级"
-  wget -O "$PIPER_ONNX.json" "$BASE/zh_CN-huayan-medium.onnx.json" || \
-    curl -L -o "$PIPER_ONNX.json" "$BASE/zh_CN-huayan-medium.onnx.json" || true
+PIPER_JSON="$VOICES/zh_CN-huayan-medium.onnx.json"
+if [[ ! -f "$PIPER_ONNX" || $(stat -c%s "$PIPER_ONNX" 2>/dev/null || echo 0) -lt 1000000 ]]; then
+  echo "下载 Piper 中文音色 zh_CN-huayan-medium …"
+  for BASE in \
+    "https://hf-mirror.com/rhasspy/piper-voices/resolve/main/zh/zh_CN/huayan/medium" \
+    "https://huggingface.co/rhasspy/piper-voices/resolve/main/zh/zh_CN/huayan/medium"
+  do
+    wget -c -O "$PIPER_ONNX" "$BASE/zh_CN-huayan-medium.onnx" && \
+    wget -c -O "$PIPER_JSON" "$BASE/zh_CN-huayan-medium.onnx.json" && break
+    curl -L --retry 10 -C - -o "$PIPER_ONNX" "$BASE/zh_CN-huayan-medium.onnx" && \
+    curl -L --retry 5 -C - -o "$PIPER_JSON" "$BASE/zh_CN-huayan-medium.onnx.json" && break
+  done
+  ls -la "$VOICES"
 else
-  echo "Piper 模型已存在"
+  echo "Piper 模型已存在: $PIPER_ONNX"
 fi
 
-# 安装 piper 二进制（若无）
-if ! command -v piper >/dev/null 2>&1; then
-  echo "未检测到 piper 可执行文件。可选："
-  echo "  pip install piper-tts"
-  echo "  或从 https://github.com/rhasspy/piper/releases 下载 aarch64"
-  python3 -m pip install --break-system-packages piper-tts 2>/dev/null || true
-fi
+python3 - <<'PY' || true
+from pathlib import Path
+try:
+    from piper import PiperVoice
+    p = Path("/home/talk/voices/zh_CN-huayan-medium.onnx")
+    if p.exists() and p.stat().st_size > 1_000_000:
+        print("piper import+model OK", p.stat().st_size)
+    else:
+        print("piper import OK but model missing/small")
+except Exception as e:
+    print("piper not ready:", e)
+PY
 
 mkdir -p "$TALK_ROOT/audio/tts" "$TALK_ROOT/history"
 chmod +x "$TALK_ROOT/main.py" "$TALK_ROOT/scripts/"*.sh 2>/dev/null || true

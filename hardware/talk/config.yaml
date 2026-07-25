@@ -68,48 +68,55 @@ tts:
   # 当前启用的音色 id（见下方 voices）
   active_voice: "girl_soft"
   # piper | espeak | auto
-  # auto：有 piper 模型用 piper，否则 espeak-ng
+  # auto：优先 Piper（自然中文），失败才 espeak
   engine: "auto"
   # 播放：auto=优先蓝牙 bluealsa，失败再板载 aplay
-  # 可选: auto | bluealsa | aplay | paplay
   player: "auto"
-  # 蓝牙音箱 MAC（空=自动从 /etc/toydairy-bluetooth/devices.json 选非 ring 设备）
+  # 蓝牙音箱 MAC
   bluetooth_mac: "52:5E:48:6A:8D:26"
-  # 强制 ALSA 设备；auto 时用 bluealsa:DEV=<mac>,PROFILE=a2dp
   alsa_device: "auto"
+  # 播放音量 0–100（写入 bluealsa；默认偏小 35）
+  volume: 35
+  # 软件增益（ffmpeg volume，1.0=不额外放大）
+  software_gain: 0.85
+  # A2DP 重采样：44100 通常更稳
+  sample_rate: 44100
+  # ALSA 缓冲（微秒）。0=驱动默认（推荐，避免错误 period 导致「一字一秒」）
+  buffer_time_us: 0
+  period_time_us: 0
   piper:
     bin: "piper"
-    # 合成 wav 采样率提示（播放侧）
-    length_scale: 1.0
+    # 语速/韵律：1.0=正常；>1 更慢。过大易显「一顿一顿」
+    length_scale: 0.98
     noise_scale: 0.667
     noise_w: 0.8
+    # 句间静音秒数（Piper --sentence-silence）；略小更连贯
+    sentence_silence: 0.16
   espeak:
     bin: "espeak-ng"
-    # 中文
     voice_prefix: "zh"
-  # 合成与播放的临时目录
   output_dir: "audio/tts"
   # ---- 音色预设（男女各二，偏玩偶/手帐陪伴感）----
   voices:
-    # 女 · 软萌棉柔：慢一点、软一点，适合贴耳朵讲悄悄话
+    # 女 · 软萌棉柔：略慢仍连贯
     girl_soft:
       label: "软萌小棉（女）"
       gender: "female"
       style: "soft"
       engine: "auto"
       piper:
-        # 下载脚本会拉取；没有模型时自动降级 espeak
         model: "voices/zh_CN-huayan-medium.onnx"
         config: "voices/zh_CN-huayan-medium.onnx.json"
-        length_scale: 1.08
-        noise_scale: 0.6
+        length_scale: 1.02
+        noise_scale: 0.62
+        sentence_silence: 0.15
       espeak:
         voice: "zh"
         speed: 145
         pitch: 55
         amplitude: 100
 
-    # 女 · 明亮雀跃：稍快、音调略高，像开心跳跳
+    # 女 · 明亮雀跃
     girl_bright:
       label: "雀跃小糖（女）"
       gender: "female"
@@ -118,33 +125,34 @@ tts:
       piper:
         model: "voices/zh_CN-huayan-medium.onnx"
         config: "voices/zh_CN-huayan-medium.onnx.json"
-        length_scale: 0.95
+        length_scale: 0.94
         noise_scale: 0.7
+        sentence_silence: 0.12
       espeak:
         voice: "zh"
         speed: 165
         pitch: 70
         amplitude: 110
 
-    # 男 · 温柔少年：偏低沉但干净，像会脸红的男孩玩偶
+    # 男 · 温柔少年
     boy_soft:
       label: "温柔阿柚（男）"
       gender: "male"
       style: "soft"
       engine: "auto"
       piper:
-        # 若无单独男声中文 piper，可与女模共用并用 length 拉低语速；优先 espeak 男声
         model: "voices/zh_CN-huayan-medium.onnx"
         config: "voices/zh_CN-huayan-medium.onnx.json"
-        length_scale: 1.12
+        length_scale: 1.05
         noise_scale: 0.55
+        sentence_silence: 0.16
       espeak:
         voice: "zh"
         speed: 140
         pitch: 28
         amplitude: 100
 
-    # 男 · 元气少年：稍快、中高音，像背包旅行的小搭档
+    # 男 · 元气少年
     boy_bright:
       label: "元气阿栗（男）"
       gender: "male"
@@ -153,8 +161,9 @@ tts:
       piper:
         model: "voices/zh_CN-huayan-medium.onnx"
         config: "voices/zh_CN-huayan-medium.onnx.json"
-        length_scale: 0.98
+        length_scale: 0.96
         noise_scale: 0.65
+        sentence_silence: 0.12
       espeak:
         voice: "zh"
         speed: 160

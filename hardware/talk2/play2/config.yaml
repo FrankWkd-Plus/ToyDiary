@@ -1,0 +1,22 @@
+# talk2/play2 — 有线音频播放（板载 3.5mm / RK809）
+# 不走蓝牙 A2DP
+
+playback:
+  # ALSA 设备。常用：
+  #   plughw:CARD=RK809,DEV=0   # 板载模拟输出（推荐，自动格式转换）
+  #   default:CARD=RK809
+  #   hw:CARD=RK809,DEV=0       # 硬设备，格式必须匹配
+  #   plughw:CARD=HDMI,DEV=0    # HDMI 音频
+  device: "plughw:CARD=RK809,DEV=0"
+  # 音量 0–100；null=不改 amixer
+  volume: 50
+  # 混音控件名（amixer scontrols 可见）；auto=自动找 Master/Playback/DAC 等
+  mixer_control: "auto"
+  # 播放前是否用 ffmpeg 转成统一格式（一般 plughw 不需要）
+  resample: false
+  sample_rate: 44100
+  channels: 2
+
+paths:
+  # 本地开发可指向 ../../pi/test.wav；板子上用 test.wav
+  default_wav: "test.wav"

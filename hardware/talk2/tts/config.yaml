@@ -1,0 +1,99 @@
+# talk2/tts — 文本 → 对话 API → edge-tts → wav（可播放）
+# 对齐 docs/api.md：POST /api/chat
+
+# ---------------------------------------------------------------------------
+# 对话 API
+# ---------------------------------------------------------------------------
+chat:
+  base_url: "https://toydiary.pages.dev"
+  path: "/api/chat"
+  # 非空则覆盖 base_url+path
+  url: ""
+  timeout_s: 60
+  retries: 3
+  quiet_mode: false
+  history_limit: 12
+  # 玩偶人格（写入 /api/chat 的 toy 字段）
+  toy:
+    name: "小棉"
+    role: "口袋里的旅行玩偶"
+    traits:
+      - "软萌"
+      - "元气"
+      - "像小朋友"
+    bio: "喜欢被装进口袋到处走，说话轻快，会撒娇也会打气。"
+    monologue: "有我在，今天也要开开心心的！"
+  memories: []
+  offline_reply: "呜，我好像走神了…你再说一次好不好？"
+
+# ---------------------------------------------------------------------------
+# edge-tts
+# ---------------------------------------------------------------------------
+tts:
+  # 当前音色 id（见 voices）
+  active_voice: "girl_soft"
+  # 输出目录（相对本目录）
+  output_dir: "output"
+  # 合成后是否默认播放（可用 --no-play 覆盖）
+  auto_play: true
+  # edge-tts 语速/音调默认（可被各 voice 覆盖）
+  # 例: "+10%" / "-5%" / "+0Hz" / "+2st"
+  default_rate: "+6%"
+  default_pitch: "+6Hz"
+  default_volume: "+0%"
+  # 文本清理：去掉（动作描写）等，避免念出台词外内容
+  strip_stage_directions: true
+
+  # 两女两男 · 可爱元气偏小孩 · 标准普通话（非方言腔）
+  voices:
+    girl_soft:
+      label: "软萌豆豆（女·小孩）"
+      gender: "female"
+      style: "soft_kid"
+      # 晓伊：标准普通话，年轻偏软
+      edge_voice: "zh-CN-XiaoyiNeural"
+      rate: "+4%"
+      pitch: "+8Hz"
+      volume: "+0%"
+
+    girl_bright:
+      label: "元气糖糖（女·小孩）"
+      gender: "female"
+      style: "bright_kid"
+      # 晓双：标准普通话，童声/少年感（非东北腔）
+      edge_voice: "zh-CN-XiaoshuangNeural"
+      rate: "+10%"
+      pitch: "+12Hz"
+      volume: "+0%"
+
+    boy_soft:
+      label: "软乎阿团（男·小孩）"
+      gender: "male"
+      style: "soft_kid"
+      # 云夏：标准普通话，偏儿童/少年
+      edge_voice: "zh-CN-YunxiaNeural"
+      rate: "+5%"
+      pitch: "+10Hz"
+      volume: "+0%"
+
+    boy_bright:
+      label: "蹦蹦阿栗（男·小孩）"
+      gender: "male"
+      style: "bright_kid"
+      # 云希：标准普通话年轻男声，提速提调更元气
+      edge_voice: "zh-CN-YunxiNeural"
+      rate: "+8%"
+      pitch: "+14Hz"
+      volume: "+0%"
+
+# ---------------------------------------------------------------------------
+# 播放（有线，复用 talk2/play2/wire_play.py）
+# 设备/音量也可写在 ../play2/config.yaml；此处可覆盖
+# ---------------------------------------------------------------------------
+playback:
+  enabled: true
+  # 与 play2 相同字段，传给 wire_play 子进程
+  device: "plughw:CARD=RK809,DEV=0"
+  volume: 100
+  mixer_control: "auto"
+  resample: false
