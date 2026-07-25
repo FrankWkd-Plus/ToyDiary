@@ -4,25 +4,30 @@
 
 ```
 --text "今天我好累"
-    → POST https://toydiary.pages.dev/api/chat   （docs/api.md）
-    → edge-tts 合成
-    → output/*.wav
-    → 子进程: python3 ../play2/wire_play.py <wav>  有线播放
+    → POST /api/chat
+    → edge-tts 流式音频块
+    → 管道写入 mpv（边下边播，降低首音延迟）
+    → 可选同时保存 output/*.mp3|wav
 ```
 
-播放通过**命令行调用** `python3 wire_play.py`（与手动执行一致），不 import 模块。
+回退模式（`--no-stream` 或 mpv/流式失败）：
+
+```
+edge-tts 完整 save → wire_play.py 播放
+```
 
 ## 用法
 
 ```bash
 cd /home/talk2/tts
+python3 tts.py --text "今天我好累"          # 默认流式
+python3 tts.py --say "你好" --stream
+python3 tts.py --say "你好" --no-stream     # 旧路径：完整生成+wire_play
+python3 tts.py --say "你好" --no-save       # 流式不落盘
 python3 tts.py --list-voices
-python3 tts.py --text "今天我好累"
-python3 tts.py --text "你好" --voice boy_soft
-python3 tts.py --set-voice girl_bright
-python3 tts.py --say "只朗读不调API"
-python3 tts.py --text "嗨" --no-chat --no-play
 ```
+
+依赖：`edge-tts`、`mpv`（流式）、`ffmpeg`（可选转 wav）、`alsa-utils`。
 
 ## 音色（config.yaml）
 

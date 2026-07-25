@@ -300,6 +300,216 @@ async def edge_tts_save(
     return mp3_path
 
 
+async def edge_tts_stream_play(
+    text: str,
+    *,
+    voice: str,
+    rate: str = "+0%",
+    pitch: str = "+0Hz",
+    volume: str = "+0%",
+    save_path: Path | None = None,
+    alsa_device: str | None = None,
+    mpv_volume: int | None = 100,
+) -> Path | None:
+    """edge-tts 流式 → mpv stdin 边下边播。
+
+    注意：Orange Pi 上 mpv 对 stdin+复杂参数很敏感，参数保持最小。
+    """
+    try:
+        import edge_tts
+    except ImportError as exc:
+        raise SystemExit(
+            "未安装 edge-tts。请: python3 -m pip install --break-system-packages edge-tts"
+        ) from exc
+
+    if not shutil.which("mpv"):
+        raise RuntimeError("未找到 mpv，请: sudo apt install -y mpv")
+
+    # 最小参数集。注意：stdin 模式下 --volume 会导致本机 mpv 秒退，音量改用 amixer。
+    mpv_cmd = [
+        "mpv",
+        "--no-video",
+        "--demuxer-lavf-format=mp3",
+    ]
+    if alsa_device:
+        dev = alsa_device.strip()
+        audio_dev = dev if dev.startswith("alsa/") else f"alsa/{dev}"
+        mpv_cmd.append(f"--audio-device={audio_dev}")
+    mpv_cmd.append("-")  # stdin 必须最后
+
+    # 有线音量走 amixer（与 wire_play 一致），勿给 mpv 传 --volume
+    if mpv_volume is not None and shutil.which("amixer"):
+        try:
+            r = subprocess.run(
+                ["amixer", "scontrols"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            names = re.findall(r"Simple mixer control '([^']+)'", r.stdout or "")
+            ctrl = None
+            for n in names:
+                if any(k in n.lower() for k in ("master", "playback", "dac", "pcm")):
+                    ctrl = n
+                    break
+            if ctrl is None and names:
+                ctrl = names[0]
+            if ctrl:
+                subprocess.run(
+                    ["amixer", "sset", ctrl, f"{int(mpv_volume)}%"],
+                    capture_output=True,
+                    timeout=10,
+                )
+                print(f"[stream] amixer {ctrl}={int(mpv_volume)}%")
+        except Exception as exc:
+            eprint(f"[stream] amixer 跳过: {exc}")
+
+    print(f"[stream] mpv: {' '.join(mpv_cmd)}")
+
+    communicate = edge_tts.Communicate(
+        text, voice=voice, rate=rate, pitch=pitch, volume=volume
+    )
+
+    save_fh = None
+    saved: Path | None = None
+    if save_path is not None:
+        save_path = Path(save_path)
+        saved = (
+            save_path.with_suffix(".mp3")
+            if save_path.suffix.lower() == ".wav"
+            else save_path
+        )
+        saved.parent.mkdir(parents=True, exist_ok=True)
+        save_fh = open(saved, "wb")
+
+    # 预缓冲：等攒够再开 mpv，避免 demuxer 还没见到有效帧就退出
+    prebuffer = bytearray()
+    prebuffer_target = 16 * 1024
+    bytes_total = 0
+    t0 = time.time()
+    first_chunk_at: float | None = None
+    proc: subprocess.Popen | None = None
+    pipe_broken = False
+
+    def start_mpv(initial: bytes) -> subprocess.Popen:
+        p = subprocess.Popen(
+            mpv_cmd,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            bufsize=0,
+        )
+        assert p.stdin is not None
+        p.stdin.write(initial)
+        p.stdin.flush()
+        return p
+
+    try:
+        async for chunk in communicate.stream():
+            if chunk.get("type") != "audio":
+                continue
+            data = chunk.get("data") or b""
+            if not data:
+                continue
+            if first_chunk_at is None:
+                first_chunk_at = time.time()
+                print(
+                    f"[stream] 首包 {len(data)}B，网络 {first_chunk_at - t0:.2f}s"
+                )
+            if save_fh is not None:
+                save_fh.write(data)
+            bytes_total += len(data)
+
+            if proc is None:
+                prebuffer.extend(data)
+                if len(prebuffer) < prebuffer_target:
+                    continue
+                proc = start_mpv(bytes(prebuffer))
+                print(
+                    f"[stream] 预缓冲 {len(prebuffer)}B 后起播，"
+                    f"总延迟 {time.time() - t0:.2f}s"
+                )
+                prebuffer.clear()
+                continue
+
+            if not pipe_broken and proc.stdin:
+                try:
+                    proc.stdin.write(data)
+                    # 前段多 flush，利于尽快出声
+                    if bytes_total < 64 * 1024:
+                        proc.stdin.flush()
+                except BrokenPipeError:
+                    pipe_broken = True
+                    eprint("[stream] mpv 管道关闭，继续收完并落盘")
+    finally:
+        if proc is None and prebuffer:
+            try:
+                proc = start_mpv(bytes(prebuffer))
+                print(f"[stream] 短音频 {len(prebuffer)}B 启动 mpv")
+            except Exception as exc:
+                eprint(f"[stream] 启动 mpv 失败: {exc}")
+        if proc is not None and proc.stdin:
+            try:
+                proc.stdin.close()
+            except Exception:
+                pass
+        if save_fh is not None:
+            save_fh.close()
+
+    if proc is None:
+        raise RuntimeError("未收到音频数据，无法播放")
+
+    try:
+        rc = proc.wait(timeout=180)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        rc = -1
+
+    err = b""
+    try:
+        if proc.stderr:
+            err = proc.stderr.read() or b""
+    except Exception:
+        pass
+
+    elapsed = time.time() - t0
+    print(f"[stream] 完成 bytes={bytes_total} elapsed={elapsed:.2f}s mpv_rc={rc}")
+    if err:
+        eprint(f"[stream] mpv stderr: {err.decode('utf-8', 'replace')[-400:]}")
+
+    if bytes_total < 500:
+        raise RuntimeError(f"流式无足够音频 bytes={bytes_total} mpv_rc={rc}")
+    if rc not in (0, None):
+        # 有数据且非 0：仍可能已播完
+        eprint(f"[stream] mpv 退出码 {rc}（bytes={bytes_total}）")
+        if bytes_total < prebuffer_target:
+            raise RuntimeError(f"mpv 播放失败 rc={rc}")
+
+    if saved is not None and saved.exists() and saved.stat().st_size > 100:
+        wav_out = saved.with_suffix(".wav")
+        if shutil.which("ffmpeg") and saved.suffix.lower() == ".mp3":
+            r = subprocess.run(
+                [
+                    "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+                    "-i", str(saved),
+                    "-ac", "2", "-ar", "44100", "-sample_fmt", "s16",
+                    str(wav_out),
+                ],
+                capture_output=True,
+                text=True,
+            )
+            if r.returncode == 0 and wav_out.exists():
+                print(f"[stream] 已另存 wav: {wav_out}")
+                try:
+                    saved.unlink()
+                except OSError:
+                    pass
+                return wav_out
+        return saved
+    return saved
+
+
+
 def _find_wire_play() -> Path:
     """定位 play2/wire_play.py。"""
     candidates = [
@@ -358,6 +568,26 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--out", type=Path, default=None, help="输出 wav 路径")
     p.add_argument("--no-play", action="store_true")
     p.add_argument("--play", action="store_true", help="强制播放")
+    p.add_argument(
+        "--stream",
+        action="store_true",
+        help="强制 edge-tts→mpv 流式边下边播",
+    )
+    p.add_argument(
+        "--no-stream",
+        action="store_true",
+        help="强制完整生成后再用 wire_play 播放",
+    )
+    p.add_argument(
+        "--save",
+        action="store_true",
+        help="流式模式下仍保存到 output/（默认流式也保存）",
+    )
+    p.add_argument(
+        "--no-save",
+        action="store_true",
+        help="流式模式不落盘",
+    )
     args = p.parse_args(argv)
 
     cfg = load_config(args.config)
@@ -403,47 +633,85 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     print(f"[tts] speak={speak_text!r}")
 
-    # 2) edge-tts
-    out_dir = ROOT / str(tts_cfg.get("output_dir") or "output")
-    stamp = time.strftime("%Y%m%d_%H%M%S")
-    out_path = args.out or (out_dir / f"{vid}_{stamp}.wav")
-    if not out_path.is_absolute():
-        out_path = (ROOT / out_path).resolve() if not str(out_path).startswith(str(ROOT)) else out_path
-
     rate = str(vmeta.get("rate") or tts_cfg.get("default_rate") or "+0%")
     pitch = str(vmeta.get("pitch") or tts_cfg.get("default_pitch") or "+0Hz")
     volume = str(vmeta.get("volume") or tts_cfg.get("default_volume") or "+0%")
     edge_voice = str(vmeta.get("edge_voice") or "zh-CN-XiaoyiNeural")
-
     print(f"[tts] edge-tts rate={rate} pitch={pitch} volume={volume}")
-    audio = asyncio.run(
-        edge_tts_save(
-            speak_text,
-            out_path,
-            voice=edge_voice,
-            rate=rate,
-            pitch=pitch,
-            volume=volume,
-        )
-    )
-    print(f"[tts] saved {audio} ({audio.stat().st_size} bytes)")
 
-    # 3) play — 复用 talk2/play2 有线播放模块
     pb = cfg.get("playback") or {}
     do_play = bool(pb.get("enabled", True) and tts_cfg.get("auto_play", True))
     if args.no_play:
         do_play = False
     if args.play:
         do_play = True
-    if do_play:
+
+    # 流式：默认开（config tts.stream）；--stream / --no-stream 覆盖
+    use_stream = bool(tts_cfg.get("stream", True))
+    if args.stream:
+        use_stream = True
+    if args.no_stream:
+        use_stream = False
+    # 不播放时没必要 stream
+    if not do_play:
+        use_stream = False
+
+    out_dir = ROOT / str(tts_cfg.get("output_dir") or "output")
+    stamp = time.strftime("%Y%m%d_%H%M%S")
+    out_path = args.out or (out_dir / f"{vid}_{stamp}.wav")
+    if not out_path.is_absolute():
+        out_path = ROOT / out_path if not out_path.is_absolute() else out_path
+
+    want_save = bool(tts_cfg.get("stream_save", True))
+    if args.save:
+        want_save = True
+    if args.no_save:
+        want_save = False
+
+    # 2) 流式 或 完整生成
+    if use_stream and do_play:
+        print("[tts] 模式=stream (edge-tts → mpv 边下边播)")
         try:
-            ok = play_with_play2(audio, pb)
-            if not ok:
-                eprint("[play] play2 播放失败")
-                return 1
+            saved = asyncio.run(
+                edge_tts_stream_play(
+                    speak_text,
+                    voice=edge_voice,
+                    rate=rate,
+                    pitch=pitch,
+                    volume=volume,
+                    save_path=out_path if want_save else None,
+                    alsa_device=str(pb.get("device") or "plughw:CARD=RK809,DEV=0"),
+                    mpv_volume=int(pb.get("volume") if pb.get("volume") is not None else 100),
+                )
+            )
+            if saved:
+                print(f"[tts] saved {saved}")
         except Exception as exc:
-            eprint(f"[play] play2 调用异常: {exc}")
-            return 1
+            eprint(f"[stream] 失败: {exc}；回退完整生成+wire_play")
+            use_stream = False
+
+    if not use_stream:
+        print("[tts] 模式=file (完整生成 → wire_play)")
+        audio = asyncio.run(
+            edge_tts_save(
+                speak_text,
+                out_path,
+                voice=edge_voice,
+                rate=rate,
+                pitch=pitch,
+                volume=volume,
+            )
+        )
+        print(f"[tts] saved {audio} ({audio.stat().st_size} bytes)")
+        if do_play:
+            try:
+                ok = play_with_play2(audio, pb)
+                if not ok:
+                    eprint("[play] wire_play 播放失败")
+                    return 1
+            except Exception as exc:
+                eprint(f"[play] 调用异常: {exc}")
+                return 1
 
     return 0
 

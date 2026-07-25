@@ -36,12 +36,15 @@ tts:
   output_dir: "output"
   # 合成后是否默认播放（可用 --no-play 覆盖）
   auto_play: true
+  # 流式边下边播（edge-tts → mpv stdin）。失败自动回退完整生成+wire_play
+  stream: true
+  # 流式时是否仍保存文件到 output/
+  stream_save: true
   # edge-tts 语速/音调默认（可被各 voice 覆盖）
-  # 例: "+10%" / "-5%" / "+0Hz" / "+2st"
   default_rate: "+6%"
   default_pitch: "+6Hz"
   default_volume: "+0%"
-  # 文本清理：去掉（动作描写）等，避免念出台词外内容
+  # 文本清理：去掉（动作描写）等
   strip_stage_directions: true
 
   # 两女两男 · 可爱元气偏小孩 · 标准普通话（非方言腔）
