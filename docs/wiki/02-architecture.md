@@ -9,26 +9,25 @@
 ```
 ┌─────────────────────────────────────────────────────────┐
 │  Browser (React SPA)                                    │
-│  ┌──────────────┐  ┌─────────────┐  ┌────────────────┐  │
-│  │ UI Pages     │  │ mockStore   │  │ Local AI       │  │
-│  │ + Context    │◄─┤ localStorage│  │ 抠图 / OCR     │  │
-│  └──────┬───────┘  └─────────────┘  └────────────────┘  │
-│         │ fetch /api/*                                   │
-└─────────┼───────────────────────────────────────────────┘
+│  ┌──────────────┐  ┌─────────────────┐  ┌────────────┐  │
+│  │ UI Pages     │  │ Repository      │  │ Local AI   │  │
+│  │ + Context    │◄─┤ api.* 契约      │  │ 抠图/OCR   │  │
+│  └──────┬───────┘  │ mockStore=演示库│  └────────────┘  │
+│         │          │ (localStorage)  │                  │
+│         │ fetch /api/* (AI·地点 only)│                  │
+└─────────┼────────────────────────────┴──────────────────┘
           ▼
 ┌─────────────────────────────────────────────────────────┐
 │  Cloudflare Pages · project: toydiary                   │
 │  ┌─────────────────────┐  ┌──────────────────────────┐  │
 │  │ Static dist/        │  │ Pages Functions          │  │
-│  │ (Vite build)        │  │ /api/chat                │  │
-│  │                     │  │ /api/analyze-entry       │  │
-│  │                     │  │ /api/places/*            │  │
+│  │                     │  │ /api/chat · analyze ·    │  │
+│  │                     │  │ places                   │  │
 │  └─────────────────────┘  └───────────┬──────────────┘  │
+│  已开通（设计保留）：D1 toydairy-db · KV · R2 media        │
 └───────────────────────────────────────┼─────────────────┘
                                         ▼
-                     OpenAI-compatible / Anthropic gateway
-                     Nominatim (OSM geocoding)
-                     (预留) D1 / KV / R2
+                     OpenAI / Anthropic · Nominatim
 ```
 
 ### 原则
@@ -36,7 +35,8 @@
 | 原则 | 说明 |
 |------|------|
 | **密钥只在 Functions** | `OPENAI_*` 永不进 `VITE_*` |
-| **CRUD 默认 mock** | 演示不依赖真库；KV/D1/R2 已在 `wrangler.jsonc` 预留 |
+| **数据库契约一等公民** | 表结构 / REST / `ToyDairyRepository` 写在 `contracts.ts` + migration + [Wiki 13](./13-database.md) |
+| **演示 = local 实现** | `PERSISTENCE = 'localStorage'`；不删接口、不假装没库 |
 | **重模块懒加载** | Leaflet、抠图 ONNX 不进冷启动主包 |
 
 ---
@@ -65,7 +65,7 @@
 | AI 适配 | `functions/_shared/aiProvider.ts` |
 | 地理 | Nominatim 服务端代理 |
 | 配置 | `web/wrangler.jsonc` |
-| 未来存储 | D1 / KV / R2 bindings 已声明，业务未接 |
+| 未来存储 | **D1 / KV / R2** bindings 已声明；schema + Repository 契约齐全；演示走 local 实现 |
 
 ---
 
@@ -142,20 +142,21 @@ TravelMapPage → api.getTravelMap → Leaflet markers + Polyline
 
 ---
 
-## 预留云资源
+## 预留云资源（数据库相关）
 
-| 资源 | Binding | 规划用途 |
-|------|---------|----------|
-| D1 `toydairy-db` | `DB` | toys / entries |
+| 资源 | Binding | 用途 |
+|------|---------|------|
+| D1 `toydairy-db` | `DB` | toys / entries（见 [13-database](./13-database.md)） |
 | KV `TOYDAIRY_KV` | `TOYDAIRY_KV` | 缓存 / 会话 |
 | R2 `toydairy-media` | `MEDIA` | 头像与日记图 |
 
-当前：`USE_MOCK = true`，业务不读这些 binding。
+当前：`PERSISTENCE = 'localStorage'`，业务不写这些 binding；**接口与 schema 仍完整保留**。
 
 ---
 
 ## 下一步
 
+- [数据库设计](./13-database.md)  
 - [Home UI](./03-home-ui.md)  
 - [前端路由](./04-frontend.md)  
 - [API](./07-api.md)  

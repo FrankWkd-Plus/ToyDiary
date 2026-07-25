@@ -26,6 +26,8 @@ export interface Toy {
   traits: string[]
   /** AI-filled / user-edited */
   zodiac?: string
+  /** Short public-facing line shown consistently across toy identity surfaces. */
+  signature?: string
   bio?: string
   monologue?: string
   avatarUrl?: string
@@ -38,6 +40,7 @@ export interface CreateToyInput {
   birthPlace: string
   role: string
   traits: string[]
+  signature?: string
   bio?: string
   monologue?: string
   avatarUrl?: string

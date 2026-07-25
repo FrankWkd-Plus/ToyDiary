@@ -6,12 +6,14 @@ import {
   Camera,
   ChevronRight,
   MapPinned,
+  Pencil,
   Sparkles,
 } from 'lucide-react'
 import {
   archivePhotos,
   companionDays,
   toyAvatar,
+  toySignature,
 } from '../archive/archiveUtils'
 import { getToyVitality } from '../archive/toyVitality'
 import { PageHeader } from '../components/PageHeader'
@@ -70,7 +72,16 @@ export function ToyArchiveDetailPage() {
           </div>
           <div className="p-4">
             <div className="flex gap-4">
-              <div className="relative h-28 w-28 shrink-0">
+              <button
+                type="button"
+                className="group relative h-28 w-28 shrink-0 text-left"
+                onClick={() =>
+                  navigate(`/toys/${toy.id}/edit`, {
+                    state: { from: 'archive' },
+                  })
+                }
+                aria-label={`编辑${toy.name}的档案`}
+              >
                 <div className="h-full w-full overflow-hidden rounded-[1.3rem] border-[5px] border-white bg-cream shadow-md">
                   <img
                     src={toyAvatar(toy, toyIndex)}
@@ -85,7 +96,10 @@ export function ToyArchiveDetailPage() {
                 >
                   {vitality.emoji}
                 </span>
-              </div>
+                <span className="absolute left-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-white/90 text-matcha-deep shadow-sm ring-1 ring-line/50 transition-transform group-active:scale-90">
+                  <Pencil className="h-3.5 w-3.5" />
+                </span>
+              </button>
               <div className="min-w-0 flex-1 pt-1">
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span className="rounded-full bg-mist-soft px-2 py-1 text-[10px] font-semibold text-matcha-deep">
@@ -110,9 +124,9 @@ export function ToyArchiveDetailPage() {
             <p className="text-xs font-medium text-matcha-deep">
               {vitality.emoji} {vitality.line}
             </p>
-            <p className="mt-3 text-xs font-semibold text-ink">玩偶独白</p>
+            <p className="mt-3 text-xs font-semibold text-ink">个性签名</p>
             <p className="mt-1.5 text-xs leading-6 text-ink-soft">
-              “{toy.monologue || '谢谢你，让我的每一天都有了名字。'}”
+              “{toySignature(toy)}”
             </p>
           </div>
         </section>

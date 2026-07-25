@@ -17,12 +17,13 @@
 ---
 > ### 基本信息：
 > - 名称：**Toy Diary**
-> - 技术栈：**`React` + `TypeScript` + `Vite` + `Tailwind`**
+> - 技术栈：**`React` + `TypeScript` + `Vite` + `Tailwind` + `Python`**
 > - 比赛主题：**Reverse**
 > - DEMO Link：[LINK](https://toydiary.outwardly.dpdns.org) || [BACKUP LINK](https://toydiary.pages.dev)
 > -  目标用户：**喜欢收藏 / 携带玩偶旅行、拍照，并希望用玩偶记录生活与情绪的年轻人**
 > - 赛道：**【待补充】**
 > - Slogan：**「Through toy eyes, your world rewinds. / 换个视角，用玩偶记录生活与情绪」**
+> - 数据：**演示 CRUD → localStorage**（REST/D1 契约保留）；AI 日记 / 对话可走 Pages Function
 
 ---
 
@@ -30,7 +31,8 @@
 
 | 文档 | 说明 |
 |------|------|
-| [`docs/wiki/README.md`](./docs/wiki/README.md) | **Wiki 知识库**（技术全览 + **Home/档案界面**深挖） |
+| [**GitHub Wiki**](https://github.com/FrankWkd-Plus/ToyDiary/wiki) | **线上 Wiki**（技术全览 + Home/档案界面；侧边栏导航） |
+| [`docs/wiki/README.md`](./docs/wiki/README.md) | Wiki 源文件（含 **[13 · 数据库](./docs/wiki/13-database.md)**） |
 | [`feature.md`](./feature.md) | **完整功能说明**（用户能力 + 后端 / DB / AI / 地址） |
 | [`docs/PRD.md`](./docs/PRD.md) | **产品需求文档**（定位、原则、MVP 范围、演示脚本） |
 | [`docs/api.md`](./docs/api.md) | HTTP API 与 Mock 契约 |
@@ -150,7 +152,7 @@ npm run dev
 | 变量 | 说明 |
 |------|------|
 | `VITE_AI_ANALYZE_ENDPOINT` | AI 分析接口，默认 `/api/analyze-entry` |
-| `VITE_API_BASE` | 将来真 REST API（`USE_MOCK` 关闭时用） |
+| `VITE_API_BASE` | 将来真 REST（仅当 `PERSISTENCE = 'remote'`） |
 
 **不要**把模型厂商的 API Key 写成 `VITE_*`（会打进浏览器包）。
 

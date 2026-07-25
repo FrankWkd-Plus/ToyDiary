@@ -37,7 +37,7 @@ API 契约详见 [`docs/api.md`](./api.md)。
 **原则：**
 
 - **密钥只在 Functions**：`OPENAI_*` 永不进 `VITE_*`。
-- **CRUD 默认 mock**：黑客松可演示；KV/D1/R2 已在 `wrangler.jsonc` 预留。
+- **CRUD 默认 localStorage**：演示可离线保存；REST/D1 **接口契约保留**（`api/contracts.ts` + migration）；KV/D1/R2 已在 `wrangler.jsonc` 预留。
 - **重模块懒加载**：地图 Leaflet、抠图 ONNX 不进冷启动主包。
 
 ---
@@ -146,30 +146,32 @@ ToyDairy/
 
 ## 5. 数据层
 
-### 5.1 类型（`src/types.ts`）
+### 5.1 类型与数据库契约
 
-- `Toy`：身份、星座、人设、`avatarUrl`
-- `Entry`：类型、日期、`location` + 结构化 `place`、双视角文案
-- `Place`：国家/省/市/区/POI/坐标/provider
-- `TravelMapPoint` / `TravelMapResponse`
+- Domain：`src/types.ts` — `Toy` · `Entry` · `Place` · `TravelMap*`
+- **DB 契约（保留）**：`src/api/contracts.ts` — `ToyDairyRepository` · `REST_PATHS` · `ToyRow`/`EntryRow` · mappers · D1/R2 资源 ID  
+- **D1 SQL**：`web/migrations/0001_init.sql`  
+- **Wiki**：[`docs/wiki/13-database.md`](./wiki/13-database.md)
 
-### 5.2 Mock 存储
+### 5.2 localStorage 演示库
 
 | Key | 内容 |
 |-----|------|
-| `toydairy.mock.v3` | toys / entries / currentToyId |
+| `toydairy.mock.v3` | **主库** toys / entries / currentToyId（`mockStore`） |
 | `toydairy.conversations.v1` | 按 toyId 的聊天消息 |
 | `toydairy.quietMode` | 安静模式 |
-| profile storage | 用户昵称/头像（`profileStorage`） |
+| `toydairy.community.v1` | 社区 mock |
+| profile / auth / theme / daycount | 见 feature.md |
 
-`mockStore` 启动时 seed 演示玩偶与带坐标地点；`attachPlace` 把纯文本地点映射到 seed 坐标以便地图演示。
+`mockStore` 实现 `ToyDairyRepository`（与 REST/D1 方法对齐）；启动时 seed 演示数据；`attachPlace` 把纯文本地点映射到 seed 坐标以便地图演示。  
+**所有 create/update/import/reset 只写 localStorage**，不调用 D1。
 
 ### 5.3 切换真后端
 
-1. 实现第 6 节 REST（见 `api.md`）  
-2. `client.ts`：`USE_MOCK = false`  
+1. 实现 REST（见 `api.md` / `contracts.ts`）  
+2. `client.ts`：`PERSISTENCE = 'remote'`  
 3. 设置 `VITE_API_BASE`  
-4. 头像/图片上传到 R2，库内只存 URL（代码已 `REPLACE_WITH_BACKEND` 标注）
+4. 执行 `migrations/0001_init.sql`；头像/图片上 R2
 
 ---
 

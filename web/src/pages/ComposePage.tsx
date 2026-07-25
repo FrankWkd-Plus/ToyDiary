@@ -160,6 +160,7 @@ export function ComposePage() {
     try {
       const savedType: EntryType =
         entryType === 'heart' ? 'daily' : analysis.entryType || entryType
+      // Persist diary to localStorage (demo DB) — REST/D1 contract kept on api.*
       await api.createEntry(currentToy.id, {
         type: savedType,
         date,
@@ -174,7 +175,7 @@ export function ComposePage() {
         imageAnalysis: analysis.imageAnalysis,
       })
       await refreshEntries(currentToy.id)
-      showToast(`${currentToy.name} 已把这一刻放进成长轨迹`)
+      showToast(`${currentToy.name} 已把这一刻存进本机手帐`)
       nav(place ? '/growth?tab=map' : '/growth')
     } catch (error) {
       showToast(error instanceof Error ? error.message : '保存失败')

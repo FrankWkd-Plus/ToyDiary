@@ -76,8 +76,17 @@
 
 ---
 
+## 数据与库（简述）
+
+- **逻辑库**：`toys` / `entries`（D1 schema + Repository 接口保留）  
+- **演示**：localStorage `toydairy.mock.v3` 实现同一 `api.*`  
+- 详解：[13 · 数据库](./13-database.md) · [06 · 数据模型](./06-data-model.md)
+
+---
+
 ## 下一步
 
 - [数据模型](./06-data-model.md)  
+- [数据库](./13-database.md)  
 - [API](./07-api.md)  
 - [AI](./08-ai.md)  

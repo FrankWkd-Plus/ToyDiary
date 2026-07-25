@@ -170,7 +170,9 @@ export function ToyNudgeHost() {
   const toyIndex = toys.findIndex((t) => t.id === toy?.id)
   const avatar = toy ? toyAvatar(toy, toyIndex >= 0 ? toyIndex : 0) : ''
   const suppressOnRoute =
-    pathname.startsWith('/conversation') || pathname.startsWith('/login')
+    pathname.startsWith('/conversation') ||
+    pathname.startsWith('/login') ||
+    pathname.startsWith('/toys/')
 
   const quiet = useMemo(() => {
     try {

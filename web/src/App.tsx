@@ -108,6 +108,7 @@ export default function App() {
                       </RequireLogin>
                     }
                   />
+                  <Route path="toys/:id/edit" element={<NewToyPage />} />
                   <Route path="entries/:id" element={<EntryDetailPage />} />
                   <Route path="me" element={<MePage />} />
                   <Route path="me/photos" element={<MePhotosPage />} />

@@ -3,9 +3,11 @@ import {
   Camera,
   ChevronRight,
   MessageCircle,
+  Pencil,
+  Quote,
   Sparkles,
 } from 'lucide-react'
-import { companionDays } from '../archive/archiveUtils'
+import { companionDays, toySignature } from '../archive/archiveUtils'
 import { uniqueCities } from '../places/placeUtils'
 import type { Entry, Place, Toy } from '../types'
 
@@ -28,6 +30,7 @@ export function ToyCard({
   onOpenHighlight,
   chatPreview,
   entries,
+  onEditToy,
 }: {
   toy: Toy
   photos: ToyCardPhotos
@@ -36,6 +39,7 @@ export function ToyCard({
   onOpenHighlight?: (entryId: string) => void
   chatPreview: string
   entries: Entry[]
+  onEditToy: () => void
 }) {
   const cityCount = uniqueCities(
     entries
@@ -64,12 +68,23 @@ export function ToyCard({
       <div className="p-3.5 pb-4">
         <section className="grid grid-cols-[42%_1fr] gap-3">
           <div className="min-w-0">
-            <div className="toy-profile-photo relative">
+            <button
+              type="button"
+              className="toy-profile-photo group relative block w-full text-left"
+              onClick={(event) => {
+                event.stopPropagation()
+                onEditToy()
+              }}
+              aria-label={`编辑${toy.name}的档案`}
+            >
               <img src={photos.profile} alt={`${toy.name}的介绍照`} />
               <span className="absolute bottom-2 left-2 rounded-full bg-white/90 px-2 py-1 text-[9px] font-semibold text-matcha-deep shadow-sm">
                 MY TOY
               </span>
-            </div>
+              <span className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white/92 text-matcha-deep shadow-sm ring-1 ring-line/50 transition-transform group-active:scale-90">
+                <Pencil className="h-3.5 w-3.5" strokeWidth={2.2} />
+              </span>
+            </button>
           </div>
 
           <div className="min-w-0 py-0.5">
@@ -97,6 +112,10 @@ export function ToyCard({
             <p className="mt-3 flex items-center gap-1.5 text-[10px] text-ink-muted">
               <CalendarDays className="h-3.5 w-3.5 shrink-0 text-matcha-deep" />
               出生日期 {toy.birthDate.replaceAll('-', '.')}
+            </p>
+            <p className="mt-2 flex items-start gap-1.5 rounded-xl bg-cream px-2 py-1.5 text-[10px] leading-4 text-ink-soft ring-1 ring-line/35">
+              <Quote className="mt-0.5 h-3 w-3 shrink-0 text-terra-deep" />
+              <span className="line-clamp-2">{toySignature(toy)}</span>
             </p>
           </div>
         </section>

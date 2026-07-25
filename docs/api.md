@@ -2,12 +2,13 @@
 
 > 线上站点：`https://toydiary.pages.dev`  
 > 实现位置：`web/functions/api/*`（Cloudflare Pages Functions）  
-> 前端数据层：`web/src/api/client.ts`（默认 `USE_MOCK = true`，玩偶/日记走 localStorage）
+> 前端数据层：`web/src/api/client.ts`  
+> **演示持久化：`PERSISTENCE = 'localStorage'`**（玩偶/日记/社区等 CRUD 只写浏览器；**接口契约保留**见 §6 与 `web/src/api/contracts.ts`）
 
 本文档覆盖：
 
-1. **真实 HTTP API**（Pages Functions，可部署后直接调用）
-2. **Mock / 本地数据契约**（`api.*` 与 REST 对齐，便于日后替换后端）
+1. **真实 HTTP API**（Pages Functions：AI / 地点，可部署后直接调用）
+2. **数据契约 + localStorage 实现**（`api.*` 方法与 REST 对齐；演示一律落盘 localStorage，不写 D1）
 
 所有 JSON 响应均为 `Content-Type: application/json; charset=utf-8`。  
 CORS：`Access-Control-Allow-Origin: *`（Functions 层）。
@@ -307,10 +308,24 @@ interface Place {
 
 ---
 
-## 6. Mock / 未来 REST 契约（`api` 客户端）
+## 6. 数据契约 + 数据库（`api` 客户端）
 
-文件：`web/src/api/client.ts` · 实现：`mockStore.ts`  
-开关：`USE_MOCK = true`；关闭后需 `VITE_API_BASE`。
+| 文件 | 职责 |
+|------|------|
+| `web/src/api/contracts.ts` | **数据库契约**：REST 路径、`ToyDairyRepository`、D1 `ToyRow`/`EntryRow`、mapper、R2 key、资源 ID |
+| `web/src/api/client.ts` | 对外 `api.*`；`PERSISTENCE = 'localStorage'` 时用演示库实现 |
+| `web/src/api/mockStore.ts` | **演示库驱动**：localStorage key `toydairy.mock.v3`（≡ toys+entries dump） |
+| `web/migrations/0001_init.sql` | **D1 权威 schema**（演示不执行 SQL） |
+| `docs/wiki/13-database.md` | Wiki：ER、表、映射、接库清单 |
+
+开关：`PERSISTENCE = 'localStorage' | 'remote'`（`client.ts`）。  
+演示/路演务必保持 **`localStorage`**（接口与表设计仍完整）。仅在有真后端且设置 `VITE_API_BASE` 时才改为 `remote`。  
+兼容别名：`USE_MOCK === (PERSISTENCE === 'localStorage')`。
+
+**逻辑表：** `toys` · `entries`（详见 migration / Wiki 13）。  
+**演示存储 key：** `toydairy.mock.v3`。写操作均 `localStorage.setItem`；配额满会抛中文错误。
+
+社区 `communityStore` 同样 localStorage（`toydairy.community.v1`）；产品入口已导向对话。
 
 | 客户端方法 | 建议 REST | 说明 |
 |------------|-----------|------|
@@ -321,6 +336,7 @@ interface Place {
 | `listEntries(toyId)` | `GET /toys/:toyId/entries` | 日志列表 |
 | `getEntry(id)` | `GET /entries/:id` | 单条日志 |
 | `createEntry(toyId, input)` | `POST /toys/:toyId/entries` | 创建日志（可含 `place`） |
+| `updateEntry(id, patch)` | `PATCH /entries/:id` | 更新日记字段 |
 | `regenerateEntry(id)` | `POST /entries/:id/regenerate` | 重写 AI 日记 |
 | `getTravelMap(toyId)` | `GET /toys/:toyId/travel-map` | 旅行地图点位 |
 
@@ -380,9 +396,7 @@ interface Place {
 }
 ```
 
-Mock storage key：`toydairy.mock.v3`（localStorage）。
-
-社区相关 `communityStore` 同样 mock-first，接口见 `client.ts` 后半段（点赞/关注/私信等），当前产品主路径已将社区入口重定向到对话。
+逻辑表与 D1 列映射见 Wiki [13-database](./wiki/13-database.md)。社区接口见 `client.ts` 后半段。
 
 ---
 

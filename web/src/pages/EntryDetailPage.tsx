@@ -182,19 +182,14 @@ export function EntryDetailPage() {
         mood: entry.mood || analysis.mood,
       }
 
-      let next: Entry
-      try {
-        next = await api.updateEntry(entry.id, patch)
-      } catch {
-        // Persist path unavailable — still show the rewrite in UI
-        next = { ...entry, ...patch }
-      }
+      // Always persist rewrite to localStorage via api.updateEntry
+      const next = await api.updateEntry(entry.id, patch)
       setEntry(next)
       if (currentToy) await refreshEntries(currentToy.id)
       showToast(
         analysis.source === 'api'
-          ? '已用 AI 重新生成玩偶日记'
-          : '已重新生成（本地模板）',
+          ? '已用 AI 重新生成并保存到本机'
+          : '已重新生成（本地模板）并保存到本机',
       )
     } catch (err) {
       showToast(err instanceof Error ? err.message : '生成失败')
