@@ -101,7 +101,8 @@ export const api = {
     id: string,
     input: Partial<CreateToyInput>,
   ): Promise<Toy> {
-    if (USE_MOCK) return mockStore.updateToy(id, input)
+    assertLocalForDemo('updateToy')
+    if (PERSISTENCE === 'localStorage') return localRepo.updateToy(id, input)
     return http(`/toys/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },

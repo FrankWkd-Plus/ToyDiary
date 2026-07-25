@@ -46,6 +46,7 @@ export const REST_PATHS = {
   listToys: 'GET /toys',
   getToy: 'GET /toys/:id',
   createToy: 'POST /toys',
+  updateToy: 'PATCH /toys/:id',
   generateProfile: 'POST /toys/:id/generate-profile',
   listEntries: 'GET /toys/:toyId/entries',
   createEntry: 'POST /toys/:toyId/entries',
@@ -68,6 +69,7 @@ export interface ToyDairyRepository {
   listToys(): Promise<Toy[]>
   getToy(id: string): Promise<Toy | undefined>
   createToy(input: CreateToyInput): Promise<Toy>
+  updateToy(id: string, input: Partial<CreateToyInput>): Promise<Toy>
   generateProfile(id: string): Promise<Toy>
 
   listEntries(toyId: string): Promise<Entry[]>
