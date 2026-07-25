@@ -355,13 +355,13 @@ export function MePage() {
           />
         </SectionCard>
 
-        {/* 数据备份 */}
+        {/* 数据备份 / 重置 */}
         <SectionCard title="数据">
           <LinkRow
             to="/me/data"
             icon={<Database className="h-4 w-4" />}
-            label="导出 / 导入成长轨迹"
-            hint="JSON"
+            label="备份与重置"
+            hint="导出 · 导入 · 重置演示"
             last
           />
         </SectionCard>
