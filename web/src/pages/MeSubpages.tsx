@@ -497,8 +497,10 @@ export function HelpAboutPage() {
     <SimpleDoc
       title="关于我们"
       body={[
-        'Toy Dairy · 让玩偶拥有「灵魂」的 AI 生命手帐。',
-        '目标：身份卡 → 双视角日记 → 成长轨迹 → 对话陪伴。',
+        'Toy Dairy · 玩偶生命手帐。把「人看玩偶」反转成「玩偶看世界」——让陪伴物从被记录的物品，变成共同生活的叙事主角。',
+        '核心链路：身份卡（谁）→ 记一笔（发生了什么）→ 双视角日记（我怎么说 / 它怎么说）→ 成长时间轴与旅行地图 → 对话陪伴、正数日与分享卡片。',
+        'Slogan：Through toy eyes, your world rewinds. / Reverse the gaze. 从物品到陪伴。',
+        '面向喜欢收藏、携带玩偶旅行拍照，并希望用玩偶记录生活与情绪的年轻人。演示数据保存在本机浏览器；AI 日记与对话可走服务端接口。',
         'Made with 🧸 for travelers and toy lovers.',
       ]}
     />

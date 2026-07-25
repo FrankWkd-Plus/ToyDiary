@@ -1,6 +1,7 @@
 /**
  * Days Matter–style 正数日 (count-up) presentation.
- * Custom backgrounds, color themes, digit fonts.
+ * Palettes are built from global theme CSS variables so they follow
+ * mint / warm / sky / peach / lavender when the site theme changes.
  */
 
 import type { CSSProperties } from 'react'
@@ -32,69 +33,83 @@ export interface DayCountStyle {
   customBgUrl?: string
 }
 
-export const DAY_COUNT_PALETTES: {
+/** Solid + surface tokens as CSS (var / color-mix / gradient). Safe for DOM. */
+export interface DayCountPaletteColors {
   id: DayCountPalette
   label: string
-  /** CSS color tokens used on the card */
   number: string
   labelColor: string
   unit: string
   surface: string
   border: string
-}[] = [
+}
+
+/**
+ * All daycount color roles point at global theme tokens
+ * (`web/src/theme/themes.ts` / `index.css` @theme).
+ * Switching site theme re-tints every palette automatically.
+ */
+export const DAY_COUNT_PALETTES: DayCountPaletteColors[] = [
   {
     id: 'matcha',
-    label: '抹茶',
-    number: '#6b8f5e',
-    labelColor: '#6b635a',
-    unit: '#9a8758',
-    surface: 'linear-gradient(145deg, #f3f8ee 0%, #e8f5ee 55%, #fff6e0 100%)',
-    border: 'rgb(184 196 168 / 0.65)',
+    label: '主色',
+    number: 'var(--color-matcha-deep)',
+    labelColor: 'var(--color-ink-soft)',
+    unit: 'var(--color-matcha)',
+    surface:
+      'linear-gradient(145deg, var(--color-cream) 0%, var(--color-mist-soft) 55%, var(--color-mustard-soft) 100%)',
+    border: 'color-mix(in srgb, var(--color-matcha) 38%, transparent)',
   },
   {
     id: 'peach',
     label: '蜜桃',
-    number: '#d48878',
-    labelColor: '#6b524c',
-    unit: '#e8a090',
-    surface: 'linear-gradient(145deg, #fff5f2 0%, #ffe8e2 50%, #fff4ec 100%)',
-    border: 'rgb(240 200 190 / 0.7)',
+    number: 'var(--color-rose-deep)',
+    labelColor: 'var(--color-ink-soft)',
+    unit: 'var(--color-coral)',
+    surface:
+      'linear-gradient(145deg, var(--color-cream) 0%, var(--color-peach-soft) 50%, var(--color-mustard-soft) 100%)',
+    border: 'color-mix(in srgb, var(--color-peach) 55%, transparent)',
   },
   {
     id: 'sky',
     label: '雾蓝',
-    number: '#54809a',
-    labelColor: '#4a5a66',
-    unit: '#6a9ab5',
-    surface: 'linear-gradient(145deg, #f0f6f9 0%, #e0f0f6 55%, #e8f4fa 100%)',
-    border: 'rgb(180 208 224 / 0.7)',
+    // Deepen sky/mist so digits stay readable across all site themes
+    number: 'color-mix(in srgb, var(--color-sky) 58%, var(--color-ink))',
+    labelColor: 'var(--color-ink-soft)',
+    unit: 'var(--color-mist)',
+    surface:
+      'linear-gradient(145deg, var(--color-cream) 0%, var(--color-mist-soft) 55%, color-mix(in srgb, var(--color-sky) 18%, white) 100%)',
+    border: 'color-mix(in srgb, var(--color-sky) 42%, transparent)',
   },
   {
     id: 'lavender',
     label: '薰衣',
-    number: '#7a6898',
-    labelColor: '#5a5468',
-    unit: '#9a88b8',
-    surface: 'linear-gradient(145deg, #f6f3fa 0%, #eeeaf6 55%, #f4f0fa 100%)',
-    border: 'rgb(200 190 220 / 0.7)',
+    number: 'color-mix(in srgb, var(--color-lavender) 42%, var(--color-ink))',
+    labelColor: 'var(--color-ink-soft)',
+    unit: 'color-mix(in srgb, var(--color-lavender) 55%, var(--color-matcha-deep))',
+    surface:
+      'linear-gradient(145deg, var(--color-cream) 0%, color-mix(in srgb, var(--color-lavender) 55%, white) 55%, var(--color-peach-soft) 100%)',
+    border: 'color-mix(in srgb, var(--color-lavender) 60%, transparent)',
   },
   {
     id: 'ink',
     label: '墨色',
-    number: '#3c2f26',
-    labelColor: '#5c4a3c',
-    unit: '#8a7563',
-    surface: 'linear-gradient(145deg, #f7f0e6 0%, #efe4d4 60%, #f5ead0 100%)',
-    border: 'rgb(200 184 168 / 0.65)',
+    number: 'var(--color-ink)',
+    labelColor: 'var(--color-ink-soft)',
+    unit: 'var(--color-ink-muted)',
+    surface:
+      'linear-gradient(145deg, var(--color-cream) 0%, var(--color-cream-dark) 60%, var(--color-almond) 100%)',
+    border: 'color-mix(in srgb, var(--color-ink) 16%, transparent)',
   },
   {
     id: 'sunset',
     label: '晚霞',
-    number: '#c47850',
-    labelColor: '#6b4a38',
-    unit: '#d4a07e',
-    surface: 'linear-gradient(145deg, #fff8f0 0%, #ffe8d4 45%, #ffd8c8 100%)',
-    border: 'rgb(232 196 168 / 0.7)',
+    number: 'var(--color-terra-deep)',
+    labelColor: 'var(--color-ink-soft)',
+    unit: 'var(--color-terra)',
+    surface:
+      'linear-gradient(145deg, var(--color-mustard-soft) 0%, var(--color-terra-soft) 45%, var(--color-peach-soft) 100%)',
+    border: 'color-mix(in srgb, var(--color-terra) 40%, transparent)',
   },
 ]
 
@@ -194,7 +209,71 @@ export function getFont(id: DayCountFont) {
   return DAY_COUNT_FONTS.find((f) => f.id === id) || DAY_COUNT_FONTS[0]
 }
 
-/** Background layer CSS (on top of palette surface). */
+/** Resolve a CSS color expression against the live document theme. */
+export function resolveCssColor(
+  cssColor: string,
+  fallback = '#4a433c',
+): string {
+  if (typeof document === 'undefined') return fallback
+  // Bare hex / rgb already canvas-safe
+  if (/^#|^rgb|^hsl/i.test(cssColor.trim())) return cssColor.trim()
+  try {
+    const probe = document.createElement('span')
+    probe.style.color = cssColor
+    probe.style.position = 'absolute'
+    probe.style.visibility = 'hidden'
+    probe.style.pointerEvents = 'none'
+    document.documentElement.appendChild(probe)
+    const resolved = getComputedStyle(probe).color
+    probe.remove()
+    return resolved && resolved !== 'rgba(0, 0, 0, 0)' ? resolved : fallback
+  } catch {
+    return fallback
+  }
+}
+
+/** Read a theme custom property from :root (e.g. '--color-cream'). */
+export function resolveThemeVar(
+  varName: string,
+  fallback: string,
+): string {
+  if (typeof document === 'undefined') return fallback
+  const name = varName.startsWith('--') ? varName : `--${varName}`
+  try {
+    const v = getComputedStyle(document.documentElement)
+      .getPropertyValue(name)
+      .trim()
+    return v || fallback
+  } catch {
+    return fallback
+  }
+}
+
+/**
+ * Canvas-safe solid colors for a daycount palette (vars resolved).
+ * Use in PNG export paths only — DOM should keep CSS var strings.
+ */
+export function resolvePaletteForCanvas(id: DayCountPalette = 'matcha') {
+  const p = getPalette(id)
+  return {
+    id: p.id,
+    label: p.label,
+    number: resolveCssColor(p.number, '#9a8758'),
+    labelColor: resolveCssColor(p.labelColor, '#6b635a'),
+    unit: resolveCssColor(p.unit, '#b5a06a'),
+    border: resolveCssColor(p.border, 'rgba(184,196,168,0.65)'),
+    cream: resolveThemeVar('--color-cream', '#f3f8ee'),
+    creamDark: resolveThemeVar('--color-cream-dark', '#e5efdc'),
+    mistSoft: resolveThemeVar('--color-mist-soft', '#e8f5ee'),
+    mustardSoft: resolveThemeVar('--color-mustard-soft', '#fff6e0'),
+    ink: resolveThemeVar('--color-ink', '#4a433c'),
+    matcha: resolveThemeVar('--color-matcha', '#b5a06a'),
+    headerFrom: resolveThemeVar('--header-from', '#d4ecc8'),
+    headerMid: resolveThemeVar('--header-mid', '#e8f5dc'),
+  }
+}
+
+/** Background layer CSS (on top of palette surface) — theme-aware. */
 export function bgLayerStyle(
   bg: DayCountBg,
   photoUrl?: string,
@@ -204,47 +283,47 @@ export function bgLayerStyle(
     case 'cream':
       return {
         backgroundImage:
-          'radial-gradient(ellipse 80% 60% at 20% 0%, rgb(255 255 255 / 0.7), transparent 55%)',
+          'radial-gradient(ellipse 80% 60% at 20% 0%, color-mix(in srgb, var(--color-paper) 70%, transparent), transparent 55%)',
       }
     case 'mesh':
       return {
         backgroundImage:
-          'radial-gradient(circle at 12% 20%, rgb(255 255 255 / 0.75) 0%, transparent 42%), radial-gradient(circle at 88% 10%, rgb(255 246 224 / 0.9) 0%, transparent 40%), radial-gradient(circle at 70% 90%, rgb(255 255 255 / 0.5) 0%, transparent 45%)',
+          'radial-gradient(circle at 12% 20%, color-mix(in srgb, var(--color-paper) 75%, transparent) 0%, transparent 42%), radial-gradient(circle at 88% 10%, color-mix(in srgb, var(--color-mustard-soft) 90%, transparent) 0%, transparent 40%), radial-gradient(circle at 70% 90%, color-mix(in srgb, var(--color-paper) 50%, transparent) 0%, transparent 45%)',
       }
     case 'dots':
       return {
         backgroundImage:
-          'radial-gradient(rgb(74 67 60 / 0.07) 1px, transparent 1px)',
+          'radial-gradient(color-mix(in srgb, var(--color-ink) 7%, transparent) 1px, transparent 1px)',
         backgroundSize: '10px 10px',
       }
     case 'stripes':
       return {
         backgroundImage:
-          'repeating-linear-gradient(-12deg, rgb(74 67 60 / 0.04) 0 2px, transparent 2px 10px)',
+          'repeating-linear-gradient(-12deg, color-mix(in srgb, var(--color-ink) 4%, transparent) 0 2px, transparent 2px 10px)',
       }
     case 'custom': {
       const url = customBgUrl || photoUrl
       return url
         ? {
-            backgroundImage: `linear-gradient(180deg, rgb(255 255 255 / 0.55), rgb(255 255 255 / 0.78)), url(${url})`,
+            backgroundImage: `linear-gradient(180deg, color-mix(in srgb, var(--color-paper) 55%, transparent), color-mix(in srgb, var(--color-paper) 78%, transparent)), url(${url})`,
             backgroundSize: 'cover',
             backgroundPosition: 'center',
           }
         : {
             backgroundImage:
-              'radial-gradient(circle at 50% 0%, rgb(255 255 255 / 0.6), transparent 60%)',
+              'radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--color-paper) 60%, transparent), transparent 60%)',
           }
     }
     case 'photo':
       return photoUrl
         ? {
-            backgroundImage: `linear-gradient(180deg, rgb(255 255 255 / 0.72), rgb(255 255 255 / 0.88)), url(${photoUrl})`,
+            backgroundImage: `linear-gradient(180deg, color-mix(in srgb, var(--color-paper) 72%, transparent), color-mix(in srgb, var(--color-paper) 88%, transparent)), url(${photoUrl})`,
             backgroundSize: 'cover',
             backgroundPosition: 'center',
           }
         : {
             backgroundImage:
-              'radial-gradient(circle at 50% 0%, rgb(255 255 255 / 0.6), transparent 60%)',
+              'radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--color-paper) 60%, transparent), transparent 60%)',
           }
     case 'paper':
     default:

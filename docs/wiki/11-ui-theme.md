@@ -73,6 +73,8 @@ Tailwind 4：`@theme` 中注册默认色；运行时变量覆盖同名 custom pr
 独立持久化：`toydairy.daycount.style`（配色板、背景图案、数字字体）。  
 导出时可另选相册背景，**不写回**全站主题。组件：`DayCountNumber` · `DayCountStudioPage`。
 
+配色板的色值**引用全局主题 CSS 变量**（`--color-matcha` / `--color-cream` 等），因此切换 `/me/theme` 的抹茶绿 · 暖杏 · 雾蓝 · 蜜桃 · 薰衣时，正数日卡片会同步改色；用户仍可在 `/days` 选「主色 / 蜜桃 / 雾蓝 / 薰衣 / 墨色 / 晚霞」等强调变体。Canvas 导出通过 `resolvePaletteForCanvas` 解析当前主题色。
+
 ---
 
 ## 无障碍与触控
