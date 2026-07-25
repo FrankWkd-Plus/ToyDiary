@@ -17,7 +17,7 @@
 ---
 > ### 基本信息：
 > - 名称：**Toy Diary**
-> - 技术栈：**`React` + `TypeScript` + `Vite` + `Tailwind`**
+> - 技术栈：**`React` + `TypeScript` + `Vite` + `Tailwind` + `Python`**
 > - 比赛主题：**Reverse**
 > - DEMO Link：[LINK](https://toydiary.outwardly.dpdns.org) || [BACKUP LINK](https://toydiary.pages.dev)
 > -  目标用户：**喜欢收藏 / 携带玩偶旅行、拍照，并希望用玩偶记录生活与情绪的年轻人**
