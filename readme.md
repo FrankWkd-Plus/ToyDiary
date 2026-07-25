@@ -1,44 +1,28 @@
 
+<img width="2438" height="466" alt="image" src="https://github.com/user-attachments/assets/6133f07b-d5db-4939-bef1-af340defea3a" />
+
 <div align="center">
+  
+[![AdvX 2026](https://img.shields.io/badge/Hackathon-AdventureX_2026-6f42c1?style=flat-square&logo=github)]()
+[![Theme](https://img.shields.io/badge/Theme-Reverse-ff69b4?style=flat-square)]()
+[![Live Demo](https://img.shields.io/badge/Live_Demo-Visit_App-00b4d8?style=flat-square&logo=cloudflare)](https://toydiary.outwardly.dpdns.org)
+  
 
-# 🧸 Toy Diary
-
-**Through toy eyes, your world rewinds. / 换个视角，用玩偶记录生活与情绪**
-
-[![AdvX 2026](https://img.shields.io/badge/Hackathon-AdventureX_2026-6f42c1?style=for-the-badge&logo=github)](https://github.com)
-[![Theme](https://img.shields.io/badge/Theme-Reverse-ff69b4?style=for-the-badge)](#)
-[![Live Demo](https://img.shields.io/badge/Live_Demo-Visit_App-brightgreen?style=for-the-badge&logo=cloudflare)](https://toydiary.outwardly.dpdns.org)
-
-<br/>
-
-![React](https://img.shields.io/badge/Frontend-React_18-61DAFB?style=for-the-badge&logo=react&logoColor=black)
-![TypeScript](https://img.shields.io/badge/Language-TypeScript-3178C6?style=for-the-badge&logo=typescript)
-![Vite](https://img.shields.io/badge/Build-Vite-646CFF?style=for-the-badge&logo=vite)
-![Tailwind CSS](https://img.shields.io/badge/Styling-Tailwind_CSS-06B6D4?style=for-the-badge&logo=tailwindcss)
-
+![React](https://img.shields.io/badge/React_18-61DAFB?style=flat-square&logo=react&logoColor=black)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite-646CFF?style=flat-square&logo=vite&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)
 </div>
 
 ---
-
-### 🌟 Project Highlights
-
-* **Reverse Perspective (逆向视角)**: 从玩偶的视角记录旅途与生活，将冷冰冰的“个人日记”翻转为充满温度的“双向陪伴档案”。
-* **Emotional Anchoring (情绪锚点)**: 结合照片与空间上下文，让每一次携带玩偶的出行都成为可回溯的情绪胶囊。
-* **Fast & Responsive**: 基于 React + Vite + Tailwind 构建，轻量级流式体验。
-
-### 🔗 Live Demo
-* **Primary URL**: [https://toydiary.outwardly.dpdns.org](https://toydiary.outwardly.dpdns.org) *(Backup Link)*
-
-
-
-
-让玩偶拥有「灵魂」的 AI 生命手帐：**身份卡 → 双视角日记 → 成长轨迹 → 对话陪伴**。
-
-| | |
-|--|--|
-| **线上** | https://toydiary.pages.dev |
-| **技术** | React + TypeScript + Vite + Tailwind · Cloudflare Pages (+ Functions) |
-| **数据** | 浏览器 Mock（localStorage）；AI 日记 / 对话可走 Pages Function |
+> ### 基本信息：
+> - 名称：**Toy Diary**
+> - 技术栈：**`React` + `TypeScript` + `Vite` + `Tailwind`**
+> - 比赛主题：**Reverse**
+> - DEMO Link：[LINK](https://toydiary.outwardly.dpdns.org) || [BACKUP LINK](https://toydiary.pages.dev)
+> -  目标用户：**喜欢收藏 / 携带玩偶旅行、拍照，并希望用玩偶记录生活与情绪的年轻人**
+> - 赛道：**【待补充】**
+> - Slogan：**「Through toy eyes, your world rewinds. / 换个视角，用玩偶记录生活与情绪」**
 
 ---
 
