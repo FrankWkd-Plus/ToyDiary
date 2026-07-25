@@ -1,0 +1,20 @@
+# hardware/record — 板子侧戒指录音监听
+
+ring:
+  # 与蓝牙配对信息一致；请填板子上实际连接的戒指标识
+  mac: ""
+  # 等待录音触发的超时（秒）
+  record_timeout_s: 120
+  # 连接扫描超时（秒）
+  scan_seconds: 25
+  # 是否在连接后自动回复校时
+  auto_time_sync: false
+
+pipeline:
+  # 输出到 hardware/ring/input（相对 hardware/record 运行目录）
+  audio_dir: "../ring/input"
+  verbose: true
+
+log:
+  enabled: true
+  level: "INFO"
