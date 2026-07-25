@@ -544,6 +544,7 @@ curl -sS 'https://toydiary.pages.dev/api/places/search?q=%E5%A4%A7%E7%90%86&limi
 | 文档 | 内容 |
 |------|------|
 | **`feature.md`（本文）** | 用户功能全集 + 库/地址/AI |
+| [`docs/wiki/README.md`](./docs/wiki/README.md) | **Wiki**：技术导航 + [Home/档案界面](./docs/wiki/03-home-ui.md) |
 | [`docs/PRD.md`](./docs/PRD.md) | 产品需求与冲刺范围 |
 | [`docs/api.md`](./docs/api.md) | HTTP 与 Mock 契约 |
 | [`docs/tech.md`](./docs/tech.md) | 前后端技术细节 |

@@ -199,6 +199,7 @@
 | 文档 | 用途 |
 |------|------|
 | **`docs/PRD.md`（本文）** | 产品定义 + 冲刺「什么算做完」 |
+| [`docs/wiki/README.md`](./wiki/README.md) | **Wiki 知识库**（技术全览 + [Home 界面](./wiki/03-home-ui.md)） |
 | [`feature.md`](../feature.md) | **用户功能全集** + 后端/DB/AI/地址 |
 | [`readme.md`](../readme.md) | 仓库入口与**项目结构** |
 | [`plan.md`](../plan.md) | 三人分工、接口、60h 排期 |

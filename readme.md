@@ -14,6 +14,7 @@
 
 | 文档 | 说明 |
 |------|------|
+| [`docs/wiki/README.md`](./docs/wiki/README.md) | **Wiki 知识库**（技术全览 + **Home/档案界面**深挖） |
 | [`feature.md`](./feature.md) | **完整功能说明**（用户能力 + 后端 / DB / AI / 地址） |
 | [`docs/PRD.md`](./docs/PRD.md) | **产品需求文档**（定位、原则、MVP 范围、演示脚本） |
 | [`docs/api.md`](./docs/api.md) | HTTP API 与 Mock 契约 |
@@ -37,6 +38,10 @@ ToyDairy/
 ├── daysmatter_feature.md     # 正数日/纪念日扩展 PRD 草案
 │
 ├── docs/
+│   ├── wiki/                 # ★ Wiki 知识库（技术 + Home 界面）
+│   │   ├── README.md         # Wiki 目录
+│   │   ├── 03-home-ui.md     # 档案 Home 界面详解
+│   │   └── …                 # 产品 / 架构 / API / 部署 / 排障
 │   ├── PRD.md                # 产品需求（从 readme 迁入整理）
 │   ├── api.md                # API 文档
 │   ├── tech.md               # 技术架构说明
