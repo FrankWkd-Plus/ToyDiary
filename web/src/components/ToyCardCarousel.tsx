@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import { latestToyChatLine } from '../conversation/chatStorage'
 import { useApp } from '../context/AppContext'
@@ -67,6 +67,7 @@ export function ToyCardCarousel({
   onVisibleToyChange?: (toy: Toy) => void
 }) {
   const navigate = useNavigate()
+  const location = useLocation()
   const { toys, currentToy, entries, setCurrentToyId } = useApp()
   const carouselRef = useRef<HTMLDivElement>(null)
   const [entriesByToy, setEntriesByToy] = useState<Record<string, Entry[]>>({})
@@ -140,6 +141,17 @@ export function ToyCardCarousel({
                 onOpenConversation={() => {
                   setCurrentToyId(toy.id)
                   navigate('/conversation')
+                }}
+                onEditToy={() => {
+                  setCurrentToyId(toy.id)
+                  navigate(`/toys/${toy.id}/edit`, {
+                    state: {
+                      from:
+                        location.pathname === '/toys'
+                          ? 'me'
+                          : 'archive',
+                    },
+                  })
                 }}
                 onOpenHighlight={(entryId) => {
                   setCurrentToyId(toy.id)

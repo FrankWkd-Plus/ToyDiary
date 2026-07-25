@@ -38,6 +38,17 @@ export function toyAvatar(toy: Toy | null | undefined, index = 0) {
     : '/toy-cards/highlight-1.jpg'
 }
 
+/** One source of truth for the line shown beneath a toy's birthday. */
+export function toySignature(toy: Toy | null | undefined) {
+  if (!toy) return '把每一个一起走过的日子，都好好收藏起来。'
+  return (
+    toy.signature?.trim() ||
+    toy.monologue?.trim() ||
+    toy.bio?.trim() ||
+    `${toy.name}会一直陪你收藏生活里的小小闪光。`
+  )
+}
+
 /** Memory-hall card copy — always first-person from the toy's POV. */
 export function toyPerspectiveNarration(entry: Entry): string {
   const diaryLine = entry.aiDiary

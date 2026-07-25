@@ -59,6 +59,18 @@ export const api = {
     })
   },
 
+  async updateToy(
+    id: string,
+    input: Partial<CreateToyInput>,
+  ): Promise<Toy> {
+    if (USE_MOCK) return mockStore.updateToy(id, input)
+    return http(`/toys/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    })
+  },
+
   async generateProfile(id: string): Promise<Toy> {
     if (USE_MOCK) return mockStore.generateProfile(id)
     return http(`/toys/${id}/generate-profile`, { method: 'POST' })

@@ -298,6 +298,41 @@ export function ToyAvatarStudio({
     )
   }
 
+  const isSavedAvatar = Boolean(value && !sourceFile && !cutoutBlob)
+  if (isSavedAvatar) {
+    return (
+      <div className="card-paper flex items-center gap-4 overflow-hidden p-4">
+        <div className="relative h-24 w-24 shrink-0 rounded-[1.55rem] bg-gradient-to-br from-cream to-mist-soft p-2 shadow-[var(--shadow-warm-sm)] ring-1 ring-line/50">
+          <img
+            src={value}
+            alt="当前玩偶头像"
+            className="h-full w-full rounded-[1.2rem] object-contain"
+          />
+          <span className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-white text-matcha-deep shadow-sm ring-1 ring-line/50">
+            <Check className="h-3.5 w-3.5" />
+          </span>
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="font-display text-base text-ink">现在的档案照</p>
+          <p className="mt-1 text-[11px] leading-5 text-ink-muted">
+            保留这张照片，或重新制作一枚玩偶贴纸头像。
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setStage('pick')
+              setPreviewUrl(undefined)
+            }}
+            className="mt-2.5 inline-flex items-center gap-1.5 rounded-full bg-mist-soft px-3 py-1.5 text-[11px] font-medium text-matcha-deep"
+          >
+            <ImagePlus className="h-3.5 w-3.5" />
+            更换照片
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   // confirm
   return (
     <div className="card-paper space-y-3 p-4">

@@ -1,8 +1,9 @@
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { LoaderCircle, Sparkles, Wand2 } from 'lucide-react'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import { Heart, LoaderCircle, Sparkles, Wand2 } from 'lucide-react'
 import { generateToyProfileCopy } from '../ai/generateToyProfile'
 import { api } from '../api/client'
+import { toyAvatar, toySignature } from '../archive/archiveUtils'
 import {
   dateFromZodiac,
   isZodiacSign,
@@ -15,7 +16,7 @@ import { PageHeader } from '../components/PageHeader'
 import { ToyAvatarStudio } from '../components/ToyAvatarStudio'
 import { useApp } from '../context/AppContext'
 
-const ROLE_OPTIONS = ['旅行搭子', '童年伙伴', '治愈小宠', '冒险伙伴']
+const DEFAULT_ROLE = '陪伴伙伴'
 const TRAIT_OPTIONS = [
   '温柔',
   '胆小',
@@ -33,18 +34,46 @@ const TRAIT_OPTIONS = [
  */
 export function NewToyPage() {
   const nav = useNavigate()
-  const { refreshToys, showToast } = useApp()
-  const [name, setName] = useState('')
-  const [birthDate, setBirthDate] = useState(() =>
-    new Date().toISOString().slice(0, 10),
+  const location = useLocation()
+  const { id: editingToyId } = useParams()
+  const { toys, refreshToys, showToast } = useApp()
+  const editingToy = editingToyId
+    ? toys.find((toy) => toy.id === editingToyId)
+    : undefined
+  const editing = Boolean(editingToyId)
+  const backTarget =
+    (location.state as { from?: string } | null)?.from === 'me'
+      ? '/toys'
+      : '/archive'
+  const traitOptions = Array.from(
+    new Set([...(editingToy?.traits || []), ...TRAIT_OPTIONS]),
   )
-  const [birthPlace, setBirthPlace] = useState('')
-  const [role, setRole] = useState(ROLE_OPTIONS[0])
-  const [traits, setTraits] = useState<string[]>(['温柔', '好奇'])
-  const [bio, setBio] = useState('')
-  const [monologue, setMonologue] = useState('')
-  const [avatarUrl, setAvatarUrl] = useState<string>()
-  const [avatarConfirmed, setAvatarConfirmed] = useState(false)
+  const [name, setName] = useState(() => editingToy?.name || '')
+  const [birthDate, setBirthDate] = useState(() =>
+    editingToy?.birthDate || new Date().toISOString().slice(0, 10),
+  )
+  const [birthPlace, setBirthPlace] = useState(
+    () => editingToy?.birthPlace || '',
+  )
+  const role = editingToy?.role || DEFAULT_ROLE
+  const [traits, setTraits] = useState<string[]>(
+    () => editingToy?.traits || ['温柔', '好奇'],
+  )
+  const [signature, setSignature] = useState(() =>
+    editingToy ? toySignature(editingToy) : '',
+  )
+  const [avatarUrl, setAvatarUrl] = useState<string | undefined>(
+    () =>
+      editingToy
+        ? toyAvatar(
+            editingToy,
+            toys.findIndex((toy) => toy.id === editingToy.id),
+          )
+        : undefined,
+  )
+  const [avatarConfirmed, setAvatarConfirmed] = useState(
+    () => Boolean(editingToy),
+  )
   const [submitting, setSubmitting] = useState(false)
   const [aiWriting, setAiWriting] = useState(false)
 
@@ -94,12 +123,11 @@ export function NewToyPage() {
         zodiac,
         birthDate,
       })
-      setBio(result.bio)
-      setMonologue(result.monologue)
+      setSignature(result.monologue)
       showToast(
         result.source === 'api'
-          ? 'AI 已写好人设与独白'
-          : '远程 AI 暂不可用，已用本地模板生成',
+          ? 'AI 已写好个性签名'
+          : '远程 AI 暂不可用，已生成一条温暖签名',
       )
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'AI 生成失败')
@@ -124,20 +152,27 @@ export function NewToyPage() {
     }
     setSubmitting(true)
     try {
-      const toy = await api.createToy({
+      const payload = {
         name: name.trim(),
         birthDate,
         birthPlace: birthPlace.trim(),
         role,
         traits,
-        bio: bio.trim() || undefined,
-        monologue: monologue.trim() || undefined,
+        signature: signature.trim() || undefined,
         avatarUrl,
         zodiac,
-      })
+      }
+      const toy =
+        editing && editingToyId
+          ? await api.updateToy(editingToyId, payload)
+          : await api.createToy(payload)
       await refreshToys()
-      showToast(`${toy.name} 的档案已生成`)
-      nav(`/archive/toys/${toy.id}`)
+      showToast(editing ? `${toy.name} 的档案已更新` : `${toy.name} 的档案已生成`)
+      if (editing) {
+        nav(backTarget, { replace: true })
+      } else {
+        nav(`/archive/toys/${toy.id}`)
+      }
     } catch (err) {
       showToast(err instanceof Error ? err.message : '创建失败')
     } finally {
@@ -147,8 +182,30 @@ export function NewToyPage() {
 
   return (
     <>
-      <PageHeader title="新增玩偶" back="/archive" soft />
+      <PageHeader
+        title={editing ? '编辑玩偶' : '新增玩偶'}
+        back={editing ? backTarget : '/archive'}
+        soft
+      />
       <form onSubmit={onSubmit} className="space-y-4 px-4 py-4">
+        <section className="toy-profile-form-hero">
+          <span className="toy-profile-form-hero__eyebrow">
+            <Heart className="h-3.5 w-3.5" fill="currentColor" />
+            {editing ? 'OUR LITTLE STORY' : 'A NEW LITTLE LIFE'}
+          </span>
+          <div className="relative z-[1] mt-3 max-w-[78%]">
+            <h1 className="font-display text-xl leading-tight text-ink">
+              {editing
+                ? `把 ${editingToy?.name || '玩偶'} 的故事写得更像 TA`
+                : '为新伙伴写下第一张生命档案'}
+            </h1>
+            <p className="mt-2 text-[11px] leading-5 text-ink-muted">
+              照片、生日、性格与一句专属签名，会一起成为 TA 的身份。
+            </p>
+          </div>
+          <Sparkles className="toy-profile-form-hero__sparkle" />
+        </section>
+
         <ToyAvatarStudio
           value={avatarUrl}
           onToast={showToast}
@@ -158,7 +215,7 @@ export function NewToyPage() {
           }}
         />
 
-        {avatarConfirmed && avatarUrl && (
+        {!editing && avatarConfirmed && avatarUrl && (
           <div className="flex items-center gap-3 rounded-2xl bg-mist-soft px-3 py-2.5 text-xs text-matcha-deep">
             <img
               src={avatarUrl}
@@ -228,23 +285,9 @@ export function NewToyPage() {
             maxLength={40}
           />
         </Field>
-        <Field label="身份">
-          <div className="flex flex-wrap gap-2">
-            {ROLE_OPTIONS.map((r) => (
-              <button
-                key={r}
-                type="button"
-                onClick={() => setRole(r)}
-                className={role === r ? 'chip chip-active' : 'chip'}
-              >
-                {r}
-              </button>
-            ))}
-          </div>
-        </Field>
         <Field label="性格关键词（最多 4 个）">
           <div className="flex flex-wrap gap-2">
-            {TRAIT_OPTIONS.map((t) => {
+            {traitOptions.map((t) => {
               const on = traits.includes(t)
               return (
                 <button
@@ -260,8 +303,8 @@ export function NewToyPage() {
           </div>
         </Field>
 
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-xs font-medium text-ink-soft">人设与独白</span>
+        <div className="flex items-center justify-between gap-2 pt-1">
+          <span className="text-xs font-medium text-ink-soft">个性签名</span>
           <button
             type="button"
             onClick={() => void onAiWrite()}
@@ -276,27 +319,17 @@ export function NewToyPage() {
             {aiWriting ? 'AI 书写中…' : 'AI 帮写'}
           </button>
         </div>
-        <p className="text-[10px] text-ink-muted">
-          使用与对话相同的 /api/chat 接口；失败时自动本地模板。
-        </p>
-
-        <Field label="人设简介（可选）">
+        <Field label="写一句最像 TA 的话（可选）">
           <textarea
-            className="input min-h-[72px] resize-none !rounded-2xl"
-            placeholder="不写的话会根据性格自动生成"
-            value={bio}
-            onChange={(e) => setBio(e.target.value)}
-            maxLength={160}
-          />
-        </Field>
-        <Field label="AI 独白（可选）">
-          <textarea
-            className="input min-h-[64px] resize-none !rounded-2xl"
-            placeholder="例如：今天也想和你一起出门～"
-            value={monologue}
-            onChange={(e) => setMonologue(e.target.value)}
+            className="input min-h-[68px] resize-none !rounded-2xl"
+            placeholder='例如：人 熊生是旷野'
+            value={signature}
+            onChange={(e) => setSignature(e.target.value)}
             maxLength={80}
           />
+          <span className="mt-1.5 block text-[10px] leading-4 text-ink-muted">
+            会同步展示在档案卡、对话档案与“我的玩偶”中。
+          </span>
         </Field>
 
         <button
@@ -305,9 +338,13 @@ export function NewToyPage() {
           className="btn-primary w-full py-3.5 text-sm disabled:opacity-60"
         >
           {submitting
-            ? '生成档案中…'
+            ? editing
+              ? '保存修改中…'
+              : '生成档案中…'
             : avatarConfirmed
-              ? '保存并生成档案'
+              ? editing
+                ? '保存档案修改'
+                : '保存并生成档案'
               : '请先确认贴纸头像'}
         </button>
       </form>

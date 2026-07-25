@@ -36,7 +36,11 @@ function mockProfile(input: CreateToyInput) {
   const monologue =
     input.monologue?.trim() ||
     `我是${input.name}，最大的梦想是和主人一起把路上的光都记下来。`
-  return { zodiac, bio, monologue }
+  const signature =
+    input.signature?.trim() ||
+    input.monologue?.trim() ||
+    `和你一起，把路上的光都记下来。`
+  return { zodiac, bio, monologue, signature }
 }
 
 function attachPlace(entry: Entry): Entry {
@@ -201,15 +205,11 @@ function applyDemoUpdates(data: StoreData) {
   )
   const geese = data.toys.find((toy) => toy.id === 'toy_bean_demo')
   if (geese) {
-    Object.assign(geese, {
-      name: '鹅鹅鹅',
-      avatarUrl: '/toy-cards/geese-avatar.jpg',
-      birthPlace: '旅行箱里',
-      role: '狂野旅行鹅',
-      traits: ['狂野', '好奇', '爱出发'],
-      bio: '一只看起来像企鹅、坚持自称小鹅的旅行家。鹅生信条是：风景可以很远，妈妈必须在旁边。',
-      monologue: '妈妈，今天我们去哪里狂野？',
-    })
+    geese.signature ||= '鹅鹅鹅，曲"鹅"向天歌'
+  }
+  const luna = data.toys.find((toy) => toy.id === 'toy_luna_demo')
+  if (luna) {
+    luna.signature ||= '人 熊生是旷野'
   }
   if (
     data.currentToyId &&
@@ -254,6 +254,7 @@ function seed(): StoreData {
       zodiac: '巨蟹座',
       bio: '一只相信世界很大的熊，最大的梦想是看遍世界所有日落。',
       monologue: '第 1 天啦，谢谢你把我带回家～',
+      signature: '人 熊生是旷野',
       createdAt: '2026-07-23T10:00:00.000Z',
     },
     {
@@ -266,6 +267,7 @@ function seed(): StoreData {
       zodiac: '射手座',
       bio: '一只看起来像企鹅、坚持自称小鹅的旅行家。鹅生信条是：风景可以很远，妈妈必须在旁边。',
       monologue: '妈妈，今天我们去哪里狂野？',
+      signature: '鹅鹅鹅，曲"鹅"向天歌',
       avatarUrl: '/toy-cards/geese-avatar.jpg',
       createdAt: '2026-01-10T08:00:00.000Z',
     },
@@ -620,6 +622,25 @@ export const mockStore = {
     }
     data.toys.unshift(toy)
     data.currentToyId = toy.id
+    save(data)
+    return toy
+  },
+
+  async updateToy(id: string, input: Partial<CreateToyInput>): Promise<Toy> {
+    await delay(40)
+    const data = load()
+    const toy = data.toys.find((item) => item.id === id)
+    if (!toy) throw new Error('玩偶不存在')
+    Object.assign(toy, {
+      ...input,
+      name: input.name?.trim() || toy.name,
+      birthPlace: input.birthPlace?.trim() || toy.birthPlace,
+      signature:
+        input.signature?.trim() || toy.signature || toy.monologue || toy.bio,
+      zodiac:
+        input.zodiac?.trim() ||
+        (input.birthDate ? zodiacFromDate(input.birthDate) : toy.zodiac),
+    })
     save(data)
     return toy
   },

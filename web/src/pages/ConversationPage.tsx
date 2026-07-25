@@ -26,7 +26,11 @@ import {
   formatChatApiError,
   localPersonaReply,
 } from '../ai/chatToyReply'
-import { companionDays, toyAvatar } from '../archive/archiveUtils'
+import {
+  companionDays,
+  toyAvatar,
+  toySignature,
+} from '../archive/archiveUtils'
 import {
   getToyVitality,
 } from '../archive/toyVitality'
@@ -126,10 +130,7 @@ export function ConversationPage() {
   const vitality = currentToy
     ? getToyVitality(currentToy, entries)
     : null
-  const signature =
-    currentToy?.monologue?.trim() ||
-    currentToy?.bio?.trim() ||
-    `${currentToy?.name || '玩偶'}会一直陪你收藏生活里的小小闪光。`
+  const signature = toySignature(currentToy)
   const structuredCities = entries
     .map((entry) => entry.place?.city)
     .filter((city): city is string => Boolean(city))
