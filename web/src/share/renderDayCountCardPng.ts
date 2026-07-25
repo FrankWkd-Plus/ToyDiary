@@ -4,9 +4,9 @@
  *
  * Layout is intentionally compact: the white card should not dominate the whole image.
  */
-import { companionDays, toyAvatar } from '../archive/archiveUtils'
+import { toyAvatar } from '../archive/archiveUtils'
 import {
-  DAY_COUNT_PALETTES,
+  resolvePaletteForCanvas,
   type DayCountFont,
   type DayCountPalette,
 } from '../daysmatter/dayCountTheme'
@@ -23,10 +23,6 @@ export interface DayCountCardExportOptions {
   palette?: DayCountPalette
   font?: DayCountFont
   title?: string
-}
-
-function paletteColors(id: DayCountPalette = 'matcha') {
-  return DAY_COUNT_PALETTES.find((p) => p.id === id) || DAY_COUNT_PALETTES[0]
 }
 
 /** Canvas-safe font stack (no CSS variables — canvas cannot resolve them). */
@@ -76,7 +72,8 @@ export async function renderDayCountCardPng(
     /* ignore font load failures */
   }
 
-  const pal = paletteColors(opts.palette)
+  // Resolve live theme tokens so export matches current site palette
+  const pal = resolvePaletteForCanvas(opts.palette)
   const numberValue = opts.isFuture
     ? Math.max(0, opts.daysUntil ?? 0)
     : Math.max(0, opts.days)
@@ -99,10 +96,10 @@ export async function renderDayCountCardPng(
       ctx.fillStyle = 'rgba(255,255,255,0.38)'
       ctx.fillRect(0, 0, W, H)
     } else {
-      fillFallbackBg(ctx, W, H)
+      fillFallbackBg(ctx, W, H, pal)
     }
   } else {
-    fillFallbackBg(ctx, W, H)
+    fillFallbackBg(ctx, W, H, pal)
   }
 
   // Compact centered card (not full-bleed)
@@ -123,7 +120,7 @@ export async function renderDayCountCardPng(
   ctx.fill()
   ctx.restore()
 
-  // Header bar
+  // Header bar — theme accent
   ctx.fillStyle = pal.number
   roundRect(ctx, cardX, cardY, cardW, headerH, radius)
   ctx.fill()
@@ -145,7 +142,7 @@ export async function renderDayCountCardPng(
   const digits = String(numberValue)
   let numberSize = numberFontSize(fontId, digits.length)
   const family = fontFamily(fontId)
-  ctx.fillStyle = '#2a2622'
+  ctx.fillStyle = pal.ink
   ctx.textAlign = 'center'
   ctx.textBaseline = 'alphabetic'
   ctx.font = `700 ${numberSize}px ${family}`
@@ -175,7 +172,7 @@ export async function renderDayCountCardPng(
 
   // Divider
   const divY = cardY + cardH - 160
-  ctx.strokeStyle = '#ece6dc'
+  ctx.strokeStyle = pal.creamDark
   ctx.lineWidth = 1.5
   ctx.setLineDash([6, 8])
   ctx.beginPath()
@@ -185,7 +182,7 @@ export async function renderDayCountCardPng(
   ctx.setLineDash([])
 
   // Footer meta inside card
-  ctx.fillStyle = '#8a7563'
+  ctx.fillStyle = pal.labelColor
   ctx.font = '500 18px "Noto Sans SC", sans-serif'
   const birth = opts.toy.birthDate
   ctx.fillText(
@@ -213,7 +210,7 @@ export async function renderDayCountCardPng(
     ctx.beginPath()
     ctx.arc(W / 2, avCy, avR, 0, Math.PI * 2)
     ctx.stroke()
-    ctx.strokeStyle = 'rgba(154, 135, 88, 0.35)'
+    ctx.strokeStyle = pal.border
     ctx.lineWidth = 1.5
     ctx.beginPath()
     ctx.arc(W / 2, avCy, avR + 1, 0, Math.PI * 2)
@@ -237,14 +234,15 @@ function fillFallbackBg(
   ctx: CanvasRenderingContext2D,
   W: number,
   H: number,
+  pal: ReturnType<typeof resolvePaletteForCanvas>,
 ) {
   const g = ctx.createLinearGradient(0, 0, W, H)
-  g.addColorStop(0, '#f3e6d0')
-  g.addColorStop(0.5, '#e8f0e4')
-  g.addColorStop(1, '#f7efe4')
+  g.addColorStop(0, pal.mustardSoft)
+  g.addColorStop(0.45, pal.headerMid)
+  g.addColorStop(1, pal.cream)
   ctx.fillStyle = g
   ctx.fillRect(0, 0, W, H)
-  ctx.strokeStyle = 'rgba(120,90,60,0.06)'
+  ctx.strokeStyle = pal.border
   ctx.lineWidth = 2
   for (let y = 0; y < H; y += 28) {
     ctx.beginPath()
@@ -272,6 +270,3 @@ export async function renderMemorialSharePng(opts: {
     title: opts.caption || `和 ${opts.toy.name} 相遇`,
   })
 }
-
-// keep companionDays import used for callers convenience re-export
-export { companionDays }
