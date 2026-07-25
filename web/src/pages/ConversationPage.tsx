@@ -6,6 +6,7 @@ import {
   type ChangeEvent,
   type FormEvent,
 } from 'react'
+import { createPortal } from 'react-dom'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   BellOff,
@@ -28,7 +29,6 @@ import {
 import { companionDays, toyAvatar } from '../archive/archiveUtils'
 import {
   getToyVitality,
-  vitalityStatusLine,
 } from '../archive/toyVitality'
 import {
   loadChats,
@@ -111,6 +111,7 @@ export function ConversationPage() {
   const [replying, setReplying] = useState(false)
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [archiveOpen, setArchiveOpen] = useState(false)
   const endRef = useRef<HTMLDivElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
@@ -125,9 +126,20 @@ export function ConversationPage() {
   const vitality = currentToy
     ? getToyVitality(currentToy, entries)
     : null
-  const status = currentToy && vitality
-    ? vitalityStatusLine(vitality, currentToy.name)
-    : ''
+  const signature =
+    currentToy?.monologue?.trim() ||
+    currentToy?.bio?.trim() ||
+    `${currentToy?.name || '玩偶'}会一直陪你收藏生活里的小小闪光。`
+  const structuredCities = entries
+    .map((entry) => entry.place?.city)
+    .filter((city): city is string => Boolean(city))
+  const cityCount = new Set(
+    structuredCities.length > 0
+      ? structuredCities
+      : entries
+          .map((entry) => entry.location)
+          .filter((place): place is string => Boolean(place)),
+  ).size
 
   const conversationDraft = useMemo(
     () =>
@@ -443,13 +455,14 @@ export function ConversationPage() {
     <div className="conversation-page">
       <header className="relative z-20 shrink-0 border-b border-line/60 bg-white/92 px-3.5 pb-2 pt-2 backdrop-blur-xl">
         <div className="flex items-center justify-between gap-2">
-          <button
-            type="button"
-            onClick={() => navigate(`/archive/toys/${currentToy.id}`)}
-            className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
-            aria-label={`查看${currentToy.name}的身份卡`}
-          >
-            <span className="relative h-9 w-9 shrink-0">
+          <div className="flex min-w-0 flex-1 items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => setArchiveOpen(true)}
+              className="relative h-9 w-9 shrink-0 transition-transform active:scale-95"
+              aria-label={`查看${currentToy.name}的玩偶档案`}
+            >
+            <span className="relative block h-9 w-9 shrink-0">
               <span className="block h-full w-full overflow-hidden rounded-[0.85rem] border-2 border-white bg-cream shadow-[var(--shadow-warm-sm)] ring-1 ring-line/50">
                 <img
                   src={avatar}
@@ -464,6 +477,7 @@ export function ConversationPage() {
                 {vitality?.emoji ?? '🟢'}
               </span>
             </span>
+            </button>
             <span className="min-w-0">
               <span className="flex items-center gap-1.5">
                 <strong className="truncate font-display text-[15px] text-ink">
@@ -474,14 +488,10 @@ export function ConversationPage() {
                 </span>
               </span>
               <span className="mt-0.5 block truncate text-[10px] text-ink-muted">
-                {quietMode
-                  ? '安静陪伴中'
-                  : vitality
-                    ? `${vitality.label} · ${status}`
-                    : status}
+                {signature}
               </span>
             </span>
-          </button>
+          </div>
 
           <div className="flex shrink-0 items-center gap-1">
             {selectMode ? (
@@ -776,6 +786,112 @@ export function ConversationPage() {
         />
       </section>
       )}
+
+      {archiveOpen &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[90] flex items-end justify-center bg-ink/25 px-3 pt-16 backdrop-blur-[2px]"
+            role="presentation"
+            onClick={() => setArchiveOpen(false)}
+          >
+            <section
+              role="dialog"
+              aria-modal="true"
+              aria-label={`${currentToy.name}的玩偶档案`}
+              className="w-full max-w-[390px] overflow-hidden rounded-t-[2rem] border border-white/80 bg-paper shadow-[0_-18px_50px_rgb(74_67_60_/_0.2)]"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="flex items-center justify-between border-b border-line/60 bg-gradient-to-r from-mist-soft via-paper to-mustard-soft px-4 py-3">
+                <span>
+                  <span className="block text-[9px] font-semibold tracking-[0.2em] text-matcha-deep">
+                    TOY ARCHIVE
+                  </span>
+                  <strong className="mt-0.5 block text-base text-ink">
+                    玩偶档案
+                  </strong>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setArchiveOpen(false)}
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-white/85 text-ink-muted shadow-sm"
+                  aria-label="关闭玩偶档案"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="px-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] pt-4">
+                <div className="flex gap-3.5">
+                  <div className="-rotate-2 rounded-[1.25rem] bg-white p-1.5 shadow-[var(--shadow-warm)] ring-1 ring-line/50">
+                    <img
+                      src={avatar}
+                      alt={currentToy.name}
+                      className="h-24 w-24 rounded-[1rem] object-cover"
+                    />
+                  </div>
+                  <div className="min-w-0 flex-1 pt-1">
+                    <span className="inline-flex rounded-full bg-mustard-soft px-2 py-1 text-[9px] font-semibold text-terra-deep">
+                      {currentToy.role}
+                    </span>
+                    <h2 className="mt-1.5 truncate font-display text-xl text-ink">
+                      {currentToy.name}
+                    </h2>
+                    <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-ink-muted">
+                      “{signature}”
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid grid-cols-3 gap-2">
+                  {[
+                    { value: `${days}`, label: '陪伴天数' },
+                    { value: `${entries.length}`, label: '共同日记' },
+                    { value: `${cityCount}`, label: '到访城市' },
+                  ].map((item) => (
+                    <div
+                      key={item.label}
+                      className="rounded-2xl bg-cream px-2 py-2.5 text-center ring-1 ring-line/40"
+                    >
+                      <strong className="font-display text-lg text-matcha-deep">
+                        {item.value}
+                      </strong>
+                      <span className="mt-0.5 block text-[9px] text-ink-muted">
+                        {item.label}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-3 rounded-2xl bg-mist-soft/70 p-3.5">
+                  <p className="text-[10px] text-ink-muted">
+                    {currentToy.birthDate.replaceAll('-', '.')} ·{' '}
+                    {currentToy.zodiac || '专属星座'} · 出生于
+                    {currentToy.birthPlace}
+                  </p>
+                  <p className="mt-2 text-xs leading-5 text-ink-soft">
+                    {currentToy.bio ||
+                      `${currentToy.name}是一位认真收藏共同回忆的陪伴伙伴。`}
+                  </p>
+                  <div className="mt-2.5 flex flex-wrap gap-1.5">
+                    {currentToy.traits.map((trait) => (
+                      <span
+                        key={trait}
+                        className="rounded-full bg-white/85 px-2 py-1 text-[9px] text-matcha-deep"
+                      >
+                        # {trait}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <p className="mt-3 text-center text-[10px] text-ink-muted">
+                  档案已展开，对话仍然留在这里
+                </p>
+              </div>
+            </section>
+          </div>,
+          document.body,
+        )}
     </div>
   )
 }

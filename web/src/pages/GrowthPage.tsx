@@ -104,7 +104,7 @@ export function GrowthPage() {
   }
 
   return (
-    <div className={tab === 'map' ? 'flex min-h-full flex-col' : 'min-h-full'}>
+    <div className={tab === 'map' ? 'flex h-full min-h-0 flex-col' : 'min-h-full'}>
       <PageHeader title="成长" subtitle="和玩偶一起走过的日子" soft />
 
       <div className="relative z-20 px-3.5 pt-3">
@@ -339,7 +339,7 @@ export function GrowthPage() {
           )}
         </div>
       ) : (
-        <div className="min-h-0 flex-1" role="tabpanel">
+        <div className="min-h-0 flex-1 overflow-hidden" role="tabpanel">
           <Suspense
             fallback={
               <div className="flex min-h-[40vh] items-center justify-center text-sm text-ink-muted">

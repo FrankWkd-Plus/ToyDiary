@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { Plus } from 'lucide-react'
 import { useAuth } from '../auth/AuthContext'
 import { EmptyState } from '../components/EmptyState'
@@ -7,9 +7,12 @@ import { ToyCardCarousel } from '../components/ToyCardCarousel'
 import { useApp } from '../context/AppContext'
 
 export function ToysPage() {
+  const location = useLocation()
   const navigate = useNavigate()
   const { isLoggedIn } = useAuth()
   const { toys, showToast } = useApp()
+  const fromMe =
+    (location.state as { from?: string } | null)?.from === 'me'
 
   function goNewToy() {
     if (!isLoggedIn) {
@@ -24,6 +27,7 @@ export function ToysPage() {
       <PageHeader
         title="我的玩偶"
         subtitle={`${toys.length} 位陪伴伙伴`}
+        back={fromMe ? '/me' : '/archive'}
         soft
         right={
           <button

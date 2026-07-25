@@ -11,6 +11,7 @@ import { EntryDetailPage } from './pages/EntryDetailPage'
 import { GrowthPage } from './pages/GrowthPage'
 import { LoginPage } from './pages/LoginPage'
 import { MePage } from './pages/MePage'
+import { MePhotosPage } from './pages/MePhotosPage'
 import { DayCountStudioPage } from './pages/DayCountStudioPage'
 import {
   DataBackupPage,
@@ -109,6 +110,7 @@ export default function App() {
                   />
                   <Route path="entries/:id" element={<EntryDetailPage />} />
                   <Route path="me" element={<MePage />} />
+                  <Route path="me/photos" element={<MePhotosPage />} />
                   <Route path="days" element={<DayCountStudioPage />} />
                   <Route path="me/profile" element={<ProfileSettingsPage />} />
                   <Route path="me/theme" element={<ThemePickerPage />} />
