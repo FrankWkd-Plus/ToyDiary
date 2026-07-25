@@ -15,6 +15,10 @@ import {
   type CommunityToy,
 } from '../community/communityData'
 
+/**
+ * Community feed mock — also localStorage for demo.
+ * Product entry redirects to /conversation; code kept for completeness.
+ */
 const STORAGE_KEY = 'toydairy.community.v1'
 
 export interface CommunitySnapshot {
@@ -91,7 +95,12 @@ function load(): CommunitySnapshot {
 }
 
 function save(data: CommunitySnapshot) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+  } catch (err) {
+    console.error('[communityStore] localStorage save failed', err)
+    throw new Error('本机存储已满，社区数据无法保存')
+  }
 }
 
 function sortPosts(posts: CommunityPost[]) {

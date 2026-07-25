@@ -29,14 +29,15 @@
 
 ---
 
-## 数据 / Mock
+## 数据 / 演示库
 
 | 现象 | 排查 |
 |------|------|
-| 刷新数据丢 | 是否清了站点数据；key 是否仍为 `toydairy.mock.v3` |
+| 刷新数据丢 | 是否清了站点数据；主库 key 是否仍为 `toydairy.mock.v3` |
 | 统计为 0 | Home 上查看卡 ≠ 当前玩偶时 `statsReady=false` |
 | 导入失败 | JSON 是否为 `toydairy.growth` 结构；我的 → 数据 |
 | localStorage 满 | Data URL 头像过大；压缩 webp / 清演示数据 |
+| 误以为没有数据库 | **有设计**：见 [13-database](./13-database.md)；演示只是 local 实现 |
 
 ---
 

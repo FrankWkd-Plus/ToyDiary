@@ -1,3 +1,15 @@
+/**
+ * Demo database driver — localStorage implementation of `ToyDairyRepository`.
+ *
+ * Logical schema (D1) is defined in:
+ *   - `web/migrations/0001_init.sql`
+ *   - `web/src/api/contracts.ts` (ToyRow / EntryRow / REST_PATHS)
+ *   - `docs/wiki/13-database.md`
+ *
+ * This file stores a JSON dump equivalent to tables `toys` + `entries`
+ * (+ session field `currentToyId`) under DEMO_DB_STORAGE_KEY.
+ * All mutations → `save()` → localStorage.setItem.
+ */
 import type {
   CreateEntryInput,
   CreateToyInput,
@@ -6,11 +18,15 @@ import type {
   Toy,
   TravelMapResponse,
 } from '../types'
+import type { ToyDairyRepository } from './contracts'
+import { DEMO_DB_STORAGE_KEY } from './contracts'
 import { zodiacFromDate as zodiacFromDateShared } from '../archive/zodiac'
 import { seedPlaceForLabel } from '../places/placeUtils'
 import { uniqueCities } from '../places/placeUtils'
 
-const STORAGE_KEY = 'toydairy.mock.v3'
+/** @deprecated use DEMO_DB_STORAGE_KEY from contracts — same value */
+export const LOCAL_DB_KEY = DEMO_DB_STORAGE_KEY
+const STORAGE_KEY = DEMO_DB_STORAGE_KEY
 
 function uid(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36).slice(-4)}`
@@ -591,10 +607,19 @@ function load(): StoreData {
 }
 
 function save(data: StoreData) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+  } catch (err) {
+    // QuotaExceeded — common when avatar/entry images are large data URLs
+    console.error('[mockStore] localStorage save failed', err)
+    throw new Error(
+      '本机存储已满，无法保存。请到「我的 → 数据」清理或导出后重置演示数据。',
+    )
+  }
 }
 
-export const mockStore = {
+/** Demo local DB — satisfies ToyDairyRepository (REST/D1 contract shape). */
+export const mockStore: ToyDairyRepository = {
   async listToys(): Promise<Toy[]> {
     await delay()
     return load().toys

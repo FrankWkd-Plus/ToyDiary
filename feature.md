@@ -34,8 +34,8 @@
 | 后端 | Cloudflare **Pages Functions**（`web/functions`） |
 | AI | OpenAI / Anthropic 兼容网关（密钥仅服务端） |
 | 地理 | Nominatim（OSM）服务端代理 |
-| 当前业务数据 | **浏览器 localStorage Mock**（`USE_MOCK = true`） |
-| 预留云资源 | D1 / KV / R2（已 provision，业务未接线） |
+| 当前业务数据 | **浏览器 localStorage**（`PERSISTENCE = 'localStorage'`；CRUD 接口契约保留） |
+| 预留云资源 | D1 / KV / R2（已 provision；schema 在 `migrations/`，演示不写库） |
 
 ---
 
@@ -296,16 +296,29 @@ provider?: nominatim | manual | exif | geolocation | seed
 
 ---
 
-## 5. 存储与「数据库」
+## 5. 存储与数据库
 
-### 5.1 当前实际存储（演示 / 线上默认）
+> **数据库设计是一等公民**（表 / REST / Repository / D1 资源 ID 均在仓库）。  
+> 演示运行时用 localStorage **实现**同一套接口，不执行 D1 SQL。  
+> 总览：[`docs/wiki/13-database.md`](./docs/wiki/13-database.md) · 契约：`web/src/api/contracts.ts`
 
-业务 CRUD **不走服务端库**，全部在浏览器：
+### 5.1 逻辑库（始终存在）
 
-| localStorage Key | 内容 |
-|------------------|------|
-| `toydairy.mock.v3` | toys / entries / currentToyId |
-| `toydairy.conversations.v1` | 按 toyId 的聊天记录 |
+| 表 | 含义 | Domain 类型 |
+|----|------|-------------|
+| **toys** | 玩偶身份卡 | `Toy` |
+| **entries** | 双视角日记 / 事件 | `Entry`（含 `place` JSON） |
+
+接口：`ToyDairyRepository` + REST（`GET/POST /toys`、`/entries`…）— 见 `contracts.ts` / `docs/api.md` §6。
+
+### 5.2 演示实现（localStorage）
+
+业务 CRUD **经 `api.*` 写入浏览器**，不连 D1：
+
+| localStorage Key | 逻辑角色 |
+|------------------|----------|
+| `toydairy.mock.v3` | **主库 dump** ≡ toys + entries + currentToyId |
+| `toydairy.conversations.v1` | 对话消息（将来 messages 表） |
 | `toydairy.quietMode` | 对话安静模式 |
 | `toydairy.auth.session` | 登录 / 游客 |
 | `toydairy.user.prefs` | 通知、手机微信备注等 |
@@ -313,49 +326,51 @@ provider?: nominatim | manual | exif | geolocation | seed
 | `toydairy.theme` | 主题 id |
 | `toydairy.daycount.style` | 正数日样式 |
 | `toydairy.nudge.lastAt` | 上次主动提醒时间 |
-| `toydairy.community.v1` | 社区 Mock（入口已关） |
+| `toydairy.community.v1` | 社区（入口已关） |
 
-种子数据：演示玩偶（如 Luna 等）+ 带地点的日记，便于地图与双视角演示。  
-**重置演示数据**：我的页相关入口 / mock 重置逻辑（以 UI 文案为准）。
+种子数据：演示玩偶（如 Luna）+ 带地点的日记。  
+**重置演示数据**：我的页相关入口。
 
-### 5.2 已开通的 Cloudflare 云资源（预留，业务未接）
+### 5.3 已开通的 Cloudflare 数据库资源
 
-配置：`web/wrangler.jsonc` · 说明：`docs/cloudflare.md`
+配置：`web/wrangler.jsonc` · 说明：`docs/cloudflare.md` · Wiki：`13-database`
 
-| 资源 | 名称 / ID | Binding | 用途（规划） |
-|------|-----------|---------|--------------|
-| **D1** | `toydairy-db` · `6ccd35b5-c08a-4eea-9e10-4a04dc577e99` | `DB` | toys / entries 结构化存储 |
+| 资源 | 名称 / ID | Binding | 用途 |
+|------|-----------|---------|------|
+| **D1** | `toydairy-db` · `6ccd35b5-c08a-4eea-9e10-4a04dc577e99` | `DB` | toys / entries |
 | **KV** | `TOYDAIRY_KV` · `f7455bde32684c789bc19a9e6eb01c63` | `TOYDAIRY_KV` | 缓存 / 会话 |
 | **R2** | `toydairy-media` | `MEDIA` | 头像与日记图片 |
 
-### 5.3 D1 Schema Stub
+### 5.4 D1 Schema（设计权威 · 演示不强制执行）
 
-文件：`web/migrations/0001_init.sql`（**尚未作为运行时强制依赖**）
+文件：`web/migrations/0001_init.sql`
 
 ```sql
 -- toys: id, name, birth_date, birth_place, role, traits(JSON),
 --       zodiac, bio, monologue, avatar_url, created_at
--- entries: id, toy_id, type, date, location, title, user_note,
---          mood, image_url, ai_diary, created_at
+-- entries: id, toy_id, type, date, location, place(JSON), title,
+--          user_note, mood, image_url, ai_diary, tags, image_analysis, created_at
 -- INDEX idx_entries_toy_date (toy_id, date DESC)
+-- INDEX idx_toys_created (created_at DESC)
 ```
 
-应用示例（未来）：
+应用示例（接真库时）：
 
 ```bash
 wrangler d1 execute toydairy-db --remote --file=./migrations/0001_init.sql
 ```
 
-> 注：当前 stub **尚未包含** `place` JSON 列；接真库时需扩展 migration。
+代码侧已有 `ToyRow` / `EntryRow` 与 `toyToRow` / `rowToEntry` 映射（`contracts.ts`）。
 
-### 5.4 切换真后端时的约定
+### 5.5 切换真后端时的约定
 
-1. 实现 REST（见 §6.3 / `docs/api.md` §6）  
-2. `web/src/api/client.ts`：`USE_MOCK = false`  
+1. 实现 REST / D1 Repository（见 `docs/api.md` §6 / `contracts.ts` / Wiki 13）  
+2. `web/src/api/client.ts`：`PERSISTENCE = 'remote'`（**勿在演示环境改**）  
 3. 设置 `VITE_API_BASE`  
-4. 图片上传 R2，库内只存 URL  
+4. 跑 D1 migration；图片上传 R2，库内只存 URL  
+5. 演示/路演请保持 **`PERSISTENCE = 'localStorage'`**
 
-规划对象 key（`plan.md`）：
+规划对象 key：
 
 ```
 toys/{userId}/{toyId}/avatar/{uuid}.jpg
@@ -460,13 +475,13 @@ web/functions/
 | 变量 | 含义 |
 |------|------|
 | `VITE_AI_ANALYZE_ENDPOINT` | 默认 `/api/analyze-entry` |
-| `VITE_API_BASE` | 将来真 REST 基址（mock 关闭时） |
+| `VITE_API_BASE` | 将来真 REST 基址（仅 `PERSISTENCE = 'remote'`） |
 
 示例文件：`web/env.example.txt`。
 
 ### 6.3 Mock / 未来 REST 契约（`api` 客户端）
 
-`USE_MOCK = true` 时以下**不发 HTTP**，走 `mockStore`：
+`PERSISTENCE = 'localStorage'` 时以下**不发 HTTP**，走 `mockStore`（localStorage）：
 
 | 客户端方法 | 建议 REST |
 |------------|-----------|

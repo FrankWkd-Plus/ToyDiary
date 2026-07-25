@@ -1,6 +1,6 @@
 # Toy Dairy · Web（前端）
 
-React + TypeScript + Vite + Tailwind。数据默认 **localStorage Mock**；智能记录可走 Cloudflare Pages Function（密钥不在前端）。
+React + TypeScript + Vite + Tailwind。业务数据默认 **localStorage**（`PERSISTENCE = 'localStorage'`，REST/D1 接口契约保留）；智能记录可走 Cloudflare Pages Function（密钥不在前端）。
 
 更完整的仓库说明与 **部署流程** 见根目录 [`readme.md`](../readme.md) 与 [`docs/cloudflare.md`](../docs/cloudflare.md)。
 
@@ -34,7 +34,7 @@ npm run dev
 | 变量 | 说明 |
 |------|------|
 | `VITE_AI_ANALYZE_ENDPOINT` | AI 接口，默认 `/api/analyze-entry` |
-| `VITE_API_BASE` | 将来真 REST（`USE_MOCK = false` 时） |
+| `VITE_API_BASE` | 将来真 REST（仅 `PERSISTENCE = 'remote'` 时） |
 
 **不要**把 OpenAI 等厂商 API Key 写进 `VITE_*`。
 

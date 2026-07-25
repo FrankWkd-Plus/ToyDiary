@@ -152,6 +152,7 @@ export function NewToyPage() {
     }
     setSubmitting(true)
     try {
+      // Demo: localStorage via api.*; contract = POST/PATCH /toys
       const payload = {
         name: name.trim(),
         birthDate,
@@ -167,7 +168,11 @@ export function NewToyPage() {
           ? await api.updateToy(editingToyId, payload)
           : await api.createToy(payload)
       await refreshToys()
-      showToast(editing ? `${toy.name} 的档案已更新` : `${toy.name} 的档案已生成`)
+      showToast(
+        editing
+          ? `${toy.name} 的档案已更新（本机）`
+          : `${toy.name} 的档案已保存到本机`,
+      )
       if (editing) {
         nav(backTarget, { replace: true })
       } else {

@@ -75,4 +75,6 @@ OPENAI_MODEL=your-model-id
 
 Config: `web/wrangler.jsonc`
 
-Current frontend still uses browser mock store (`USE_MOCK = true`). AI diary can still call `/api/analyze-entry` when the Function + secrets are configured.
+Current frontend persists **all demo CRUD to localStorage** (`PERSISTENCE = 'localStorage'` in `web/src/api/client.ts`).  
+REST/D1 contracts are kept in code (`api/contracts.ts`, `migrations/0001_init.sql`) but **not written at runtime**.  
+AI diary / chat / places still call Pages Functions when configured.

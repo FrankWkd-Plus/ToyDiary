@@ -76,21 +76,21 @@ AI_PROVIDER=auto
 
 ---
 
-## 预留存储（已 provision）
+## 存储（数据库资源 · 设计保留）
 
-配置：`web/wrangler.jsonc`
+| Resource | Name / ID | Binding | 演示 | 设计文档 |
+|----------|-----------|---------|------|----------|
+| **D1** | `toydairy-db` / `6ccd35b5-…` | `DB` | 不写入 | [13-database](./13-database.md) |
+| **KV** | `TOYDAIRY_KV` / `f7455bde…` | `TOYDAIRY_KV` | 不写入 | 同上 |
+| **R2** | `toydairy-media` | `MEDIA` | 不写入 | R2 key 约定见 13 |
 
-| Resource | Name / ID | Binding |
-|----------|-----------|---------|
-| KV | `TOYDAIRY_KV` / `f7455bde…` | `TOYDAIRY_KV` |
-| D1 | `toydairy-db` / `6ccd35b5-…` | `DB` |
-| R2 | `toydairy-media` | `MEDIA` |
+配置：`web/wrangler.jsonc` · Schema：`web/migrations/0001_init.sql` · 代码契约：`web/src/api/contracts.ts`
 
-当前前端仍 mock-first。
-
-D1 迁移示例（未来）：
+**演示**：`PERSISTENCE = 'localStorage'`，主库 dump = `toydairy.mock.v3`。  
+**接口与表结构不删**；接真库时执行 migration + 换 Repository 实现。
 
 ```bash
+# 仅在接真后端时执行（演示勿跑也可）
 wrangler d1 execute toydairy-db --remote --file=./migrations/0001_init.sql
 ```
 

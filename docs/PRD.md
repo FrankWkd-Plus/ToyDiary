@@ -23,7 +23,7 @@
 | **差异化** | 玩偶是主角，不是滤镜；主人叙述与玩偶第一视角**并列**，不混成一段 AI 文案 |
 | **主路径** | 档案 → ＋记一笔 → 成长时间轴 → 双视角详情 →（可选）对话 / 正数日 / 分享 |
 | **技术栈** | React + TypeScript + Vite + Tailwind · Cloudflare Pages (+ Functions) |
-| **数据策略** | 演示以浏览器 Mock（localStorage）为主；AI 日记 / 对话可走 Pages Function |
+| **数据策略** | 演示 CRUD 一律 **localStorage**（接口契约对齐 REST/D1）；AI 日记 / 对话可走 Pages Function |
 
 ### Reverse 如何落在产品里
 
@@ -134,7 +134,7 @@
 | API | 对齐 plan：`/toys`、`/entries`、generate-profile / regenerate |
 | 存储 | D1 存元数据；R2 存图（资源已可预建） |
 | AI | 服务端按性格生成 `aiDiary` / 对话；前端只展示 |
-| 未就绪时 | 保持 `USE_MOCK = true` + localStorage，**演示照常** |
+| 未就绪时 | 保持 `PERSISTENCE = 'localStorage'`，**演示照常** |
 
 ---
 

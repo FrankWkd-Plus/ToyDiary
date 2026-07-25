@@ -1,7 +1,9 @@
 # Toy Dairy · Wiki
 
 > 项目知识库：产品、技术架构、API、部署，以及 **Home（档案）界面** 的完整说明。  
-> 线上：https://toydiary.pages.dev · 仓库主路径：`web/`
+> **GitHub Wiki**：https://github.com/FrankWkd-Plus/ToyDiary/wiki  
+> Demo：https://toydiary.pages.dev · 仓库主路径：`web/`  
+> 本目录为 Wiki **源文件**；推送到 `ToyDiary.wiki.git` 后在 GitHub 展示。
 
 ---
 
@@ -15,7 +17,8 @@
 | 查全部路由与页面 | [04 · 前端路由与页面](./04-frontend.md) |
 | 查用户功能清单 | [05 · 功能地图](./05-features.md) |
 | 查数据模型 | [06 · 数据模型](./06-data-model.md) |
-| 调 HTTP / Mock API | [07 · API](./07-api.md) |
+| **查数据库 / D1 设计** | [13 · 数据库](./13-database.md) ⭐ |
+| 调 HTTP / 数据 API | [07 · API](./07-api.md) |
 | 理解 AI 链路 | [08 · AI 链路](./08-ai.md) |
 | 部署 / Secrets / D1·KV·R2 | [09 · 部署与 Cloudflare](./09-deploy.md) |
 | 本地开发 | [10 · 开发指南](./10-development.md) |
@@ -32,7 +35,7 @@ Wiki 是**导航层 + 界面深挖**；细节仍以专题文档为准：
 |------|------|
 | [`feature.md`](../../feature.md) | 用户功能全集（实现级） |
 | [`docs/PRD.md`](../PRD.md) | 产品需求与冲刺范围 |
-| [`docs/api.md`](../api.md) | HTTP + Mock 契约全文 |
+| [`docs/api.md`](../api.md) | HTTP + **数据/库契约** 全文 |
 | [`docs/tech.md`](../tech.md) | 技术细节全文 |
 | [`docs/cloudflare.md`](../cloudflare.md) | 部署与资源 |
 | [`plan.md`](../../plan.md) | 三人 60h 协作计划 |
@@ -49,7 +52,7 @@ Wiki 是**导航层 + 界面深挖**；细节仍以专题文档为准：
 产品：让玩偶拥有身份与视角的 AI 生命手帐（主题 Reverse）
 形态：移动优先 Web（桌面居中 ~390px 手机框）
 栈：  React 19 + TS + Vite + Tailwind 4 · Cloudflare Pages Functions
-数据：localStorage Mock（USE_MOCK=true）；AI/地点走 /api/*
+数据：DB 契约（D1/Repository）+ 演示 localStorage 实现；AI/地点走 /api/*
 主路径：档案(Home) → ＋记一笔 → 成长时间轴 → 双视角详情 → 对话/正数日/分享
 ```
 
@@ -73,7 +76,8 @@ ToyDairy/
 ├── docs/               # PRD / api / tech / cloudflare
 ├── web/                # ★ 主应用 SPA + Pages Functions
 │   ├── src/pages/      # 路由页面（TimelinePage = Home）
-│   ├── src/components/ # ToyCard / BottomNav / PlacePicker…
+│   ├── src/api/        # contracts（DB 接口）+ mockStore（演示库）
+│   ├── migrations/     # D1 schema（设计保留）
 │   └── functions/api/  # chat · analyze-entry · places
 ├── feature.md · plan.md · readme.md
 └── hardware/           # 可选，非 Web 主路径
