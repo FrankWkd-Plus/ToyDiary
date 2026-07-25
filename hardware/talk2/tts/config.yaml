@@ -11,7 +11,7 @@ chat:
   url: ""
   timeout_s: 60
   retries: 3
-  quiet_mode: false
+  quiet_mode: true
   history_limit: 12
   # 玩偶人格（写入 /api/chat 的 toy 字段）
   toy:
