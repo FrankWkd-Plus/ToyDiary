@@ -13,7 +13,6 @@ import {
   companionDayStatus,
   toyAvatar,
 } from '../archive/archiveUtils'
-import { useAuth } from '../auth/AuthContext'
 import { ToyCardCarousel } from '../components/ToyCardCarousel'
 import { useApp } from '../context/AppContext'
 import { seedPlaceForLabel, uniqueCities } from '../places/placeUtils'
@@ -21,7 +20,6 @@ import { seedPlaceForLabel, uniqueCities } from '../places/placeUtils'
 export function TimelinePage() {
   const navigate = useNavigate()
   const { currentToy, toys, entries, setCurrentToyId, showToast } = useApp()
-  const { isLoggedIn } = useAuth()
   const [pickerOpen, setPickerOpen] = useState(false)
   const [viewedToyId, setViewedToyId] = useState(currentToy?.id)
   const viewedToy =
@@ -51,11 +49,6 @@ export function TimelinePage() {
   }, [currentToy?.id])
 
   function goNewToy() {
-    if (!isLoggedIn) {
-      showToast('创建玩偶档案需要先登录')
-      navigate('/login')
-      return
-    }
     navigate('/toys/new')
   }
 
@@ -123,9 +116,6 @@ export function TimelinePage() {
           >
             <span className="text-3xl">🧸</span>
             <p className="mt-2 text-sm font-medium text-ink">先创建一只玩偶</p>
-            {!isLoggedIn && (
-              <p className="mt-1 text-[11px] text-ink-muted">游客模式请先登录</p>
-            )}
           </button>
         )}
 

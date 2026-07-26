@@ -1,7 +1,6 @@
 import { lazy, Suspense } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from './auth/AuthContext'
-import { RequireLogin, RequireSession } from './auth/RequireAuth'
 import { Toast } from './components/Toast'
 import { AppProvider } from './context/AppContext'
 import { AppLayout } from './layout/AppLayout'
@@ -9,7 +8,6 @@ import { ComposePage } from './pages/ComposePage'
 import { ConversationPage } from './pages/ConversationPage'
 import { EntryDetailPage } from './pages/EntryDetailPage'
 import { GrowthPage } from './pages/GrowthPage'
-import { LoginPage } from './pages/LoginPage'
 import { MePage } from './pages/MePage'
 import { MePhotosPage } from './pages/MePhotosPage'
 import { DayCountStudioPage } from './pages/DayCountStudioPage'
@@ -54,20 +52,18 @@ export default function App() {
           <BrowserRouter>
             <Suspense fallback={<RouteFallback />}>
               <Routes>
-                <Route path="login" element={<LoginPage />} />
+                {/* Login removed — always enter as logged-in demo user */}
+                <Route
+                  path="login"
+                  element={<Navigate to="/archive" replace />}
+                />
                 <Route path="legal/terms" element={<LegalPage kind="terms" />} />
                 <Route
                   path="legal/privacy"
                   element={<LegalPage kind="privacy" />}
                 />
 
-                <Route
-                  element={
-                    <RequireSession>
-                      <AppLayout />
-                    </RequireSession>
-                  }
-                >
+                <Route element={<AppLayout />}>
                   <Route index element={<Navigate to="/archive" replace />} />
                   <Route path="archive" element={<TimelinePage />} />
                   <Route
@@ -100,14 +96,7 @@ export default function App() {
                     element={<Navigate to="/conversation" replace />}
                   />
                   <Route path="toys" element={<ToysPage />} />
-                  <Route
-                    path="toys/new"
-                    element={
-                      <RequireLogin>
-                        <NewToyPage />
-                      </RequireLogin>
-                    }
-                  />
+                  <Route path="toys/new" element={<NewToyPage />} />
                   <Route path="toys/:id/edit" element={<NewToyPage />} />
                   <Route path="entries/:id" element={<EntryDetailPage />} />
                   <Route path="me" element={<MePage />} />
@@ -127,7 +116,6 @@ export default function App() {
                 </Route>
               </Routes>
             </Suspense>
-            {/* Global toast so /login & legal pages can feedback too */}
             <Toast />
           </BrowserRouter>
         </AuthProvider>

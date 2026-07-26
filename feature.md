@@ -30,8 +30,9 @@
 
 | 层 | 选型 |
 |----|------|
-| 前端 | React 19 · TypeScript · Vite · Tailwind 4 · react-router 7 |
-| 后端 | Cloudflare **Pages Functions**（`web/functions`） |
+| 前端 | React 19 · TypeScript · Vite · Tailwind 4 · react-router 7 · viem |
+| 浏览器链上集成 | MetaMask / EIP-1193 → Injective EVM Testnet（chainId `1439`） |
+| 后端 | Cloudflare **Pages Functions**（`web/functions`）；链上确权不经过 Functions |
 | AI | OpenAI / Anthropic 兼容网关（密钥仅服务端） |
 | 地理 | Nominatim（OSM）服务端代理 |
 | 当前业务数据 | **浏览器 localStorage**（`PERSISTENCE = 'localStorage'`；CRUD 接口契约保留） |
@@ -70,7 +71,7 @@
 | `/memories/:id` | 回忆展厅 | 幻灯片 + 正数日分享 |
 | `/conversation` | 对话 | AI 聊天 |
 | `/days` | 正数日工坊 | Days Matter 风格大数字卡片样式与导出 |
-| `/me` 及子页 | 我的 | 见 §3.7 |
+| `/me` 及子页 | 我的 | 见 §3.9；`/me/profile` 与兼容路由 `/me/settings` 含 Injective 链上确权演示 |
 | `/help*` | 帮助中心 | 文档 / 客服 / 关于 |
 
 未匹配路径 → `/archive`。主壳路由包在 `RequireSession`（需登录或游客）。
@@ -199,6 +200,7 @@
 | 版本信息 | 0.1.0-demo 等 |
 | 帮助中心 | 使用文档 / 客服占位 / 关于 |
 | 个人资料设置 | 手机号、微信、设备备注（演示本地 prefs） |
+| Injective 链上确权（实验性） | `/me/profile` 或 `/me/settings`：MetaMask 切链 → 当前玩偶/最新记录 hash → SBT 合约写入 → 交易浏览器链接 |
 
 **通知与声音（应用内卡片，非系统推送）**
 
@@ -238,6 +240,17 @@
 | 主题 | `theme/*` |
 | 对话缓存 | `conversation/chatStorage` |
 | 社区 Mock（无入口） | `api/communityStore` |
+| Injective 链上确权 | `chain/injectiveSbt`（viem + MetaMask；不经过应用后端） |
+
+#### Injective 链上确权交互（实验性）
+
+1. 用户在「我的 → 资料」点击「发起链上确权」。
+2. 浏览器请求 MetaMask 账户，并切换/添加 Injective EVM Testnet（chainId `1439`）。
+3. 前端从 `AppContext` 读取当前玩偶和最新记录，取玩偶 `id/name/birthDate` 与记录 `id/date/title/userNote/aiDiary`，在浏览器内计算 `keccak256`。
+4. 前端假定调用公开合约 `mint(address to, bytes32 dataHash)`，由 MetaMask 完成签名并返回交易 hash。
+5. 页面展示交易 hash 的截断值和 Blockscout 链接。
+
+这条链路不新增 ToyDairy HTTP API、Pages Function、Worker 或数据库。当前实现不等待 receipt、不读取链上状态，也不保存交易 hash。`SBT_CONTRACT_ADDRESS` 仍是零地址且 ABI 为占位，因此当前只能视为集成脚手架；路演前必须替换真实合约配置。
 
 ### 3.13 硬件（仓库附带，非 Web 主路径）
 
@@ -259,6 +272,7 @@
 | EXIF 自动地点 | 未接 |
 | 系统级推送 / iOS 小组件 | 愿景 / 演示文案级 |
 | 自定义多纪念日实体 | 见 `daysmatter_feature.md` 草案；当前为正数日+memorial 类型 |
+| Injective SBT 真铸造 | UI/钱包/切链/hash/合约写入已接；合约地址为零地址、ABI 为占位，尚不能完成真实铸造；无 receipt、回读或交易记录 |
 
 ---
 

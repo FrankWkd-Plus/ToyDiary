@@ -7,6 +7,7 @@ import {
   type ReactNode,
 } from 'react'
 import {
+  DEFAULT_USER_SESSION,
   loadAuthSession,
   loadUserPrefs,
   saveAuthSession,
@@ -16,7 +17,7 @@ import {
 } from './authStorage'
 
 interface AuthContextValue {
-  session: AuthSession | null
+  session: AuthSession
   isLoggedIn: boolean
   isGuest: boolean
   prefs: UserPrefs
@@ -29,9 +30,8 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<AuthSession | null>(() =>
-    loadAuthSession(),
-  )
+  // Always start logged-in (demo): loadAuthSession seeds a default user.
+  const [session, setSession] = useState<AuthSession>(() => loadAuthSession())
   const [prefs, setPrefs] = useState<UserPrefs>(() => loadUserPrefs())
 
   const login = useCallback((next: AuthSession) => {
@@ -44,15 +44,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(payload)
   }, [])
 
+  // Guest mode disabled — keep a user session so the app never shows login.
   const enterGuest = useCallback(() => {
-    const payload: AuthSession = { mode: 'guest' }
+    const payload: AuthSession = {
+      ...DEFAULT_USER_SESSION,
+      loggedInAt: new Date().toISOString(),
+    }
     saveAuthSession(payload)
     setSession(payload)
   }, [])
 
+  // Demo shell has no login screen: logout re-seeds the default user session.
   const logout = useCallback(() => {
-    saveAuthSession(null)
-    setSession(null)
+    const payload: AuthSession = {
+      ...DEFAULT_USER_SESSION,
+      loggedInAt: new Date().toISOString(),
+    }
+    saveAuthSession(payload)
+    setSession(payload)
   }, [])
 
   const updatePrefs = useCallback((patch: Partial<UserPrefs>) => {
@@ -66,8 +75,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AuthContextValue>(
     () => ({
       session,
-      isLoggedIn: session?.mode === 'user',
-      isGuest: session?.mode === 'guest',
+      isLoggedIn: session.mode === 'user',
+      isGuest: false,
       prefs,
       login,
       enterGuest,

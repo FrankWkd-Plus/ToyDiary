@@ -45,7 +45,7 @@ const DEFAULT_AVATAR = '/profile/default-avatar.jpg'
 export function MePage() {
   const navigate = useNavigate()
   const { toys, entries, currentToy, showToast } = useApp()
-  const { session, isLoggedIn, isGuest, logout } = useAuth()
+  const { session, logout } = useAuth()
   const { theme } = useTheme()
   const avatarInputRef = useRef<HTMLInputElement>(null)
   const [profileName, setProfileName] = useState(() => loadProfileName())
@@ -140,8 +140,8 @@ export function MePage() {
 
   function onLogout() {
     logout()
-    showToast(isGuest ? '已退出随便看看' : '已退出登录')
-    navigate('/login', { replace: true })
+    showToast('演示模式已恢复默认账号')
+    navigate('/archive', { replace: true })
   }
 
   /** Wipe all Toy Dairy localStorage keys and hard-reload to factory defaults. */
@@ -155,7 +155,7 @@ export function MePage() {
     }
     if (
       !window.confirm(
-        '再次确认：清空 localStorage 并重新加载？页面将回到登录页。',
+        '再次确认：清空 localStorage 并重新加载？页面将回到首页。',
       )
     ) {
       return
@@ -175,15 +175,10 @@ export function MePage() {
       }
     }
     // Full reload so ThemeProvider / Auth / mockStore all re-seed from empty storage
-    window.location.assign('/login')
+    window.location.assign('/archive')
   }
 
-  const displayId =
-    session?.mode === 'user'
-      ? session.account || '已登录'
-      : isGuest
-        ? '游客 · 随便看看'
-        : '未登录'
+  const displayId = session.account || session.name || '已登录'
 
   const themeDayCountPalette: DayCountPalette =
     theme.id === 'warm' ? 'ink' : theme.id === 'mint' ? 'matcha' : theme.id
@@ -437,32 +432,24 @@ export function MePage() {
           className="flex w-full items-center justify-center gap-2 rounded-full border border-rose-deep/30 bg-peach-soft/60 py-3.5 text-sm font-medium text-rose-deep transition-transform active:scale-[0.99]"
         >
           <LogOut className="h-4 w-4" />
-          退出登录
+          重置演示账号
         </button>
         <p className="text-center text-[10px] text-ink-muted">
-          {isGuest
-            ? '游客模式 · 退出后将回到登录页'
-            : isLoggedIn
-              ? '退出后需重新验证码登录'
-              : '返回登录页'}
+          演示模式默认已登录，无需验证码
         </p>
 
-        {isLoggedIn && (
-          <>
-            <button
-              type="button"
-              onClick={onFactoryReset}
-              className="flex w-full items-center justify-center gap-2 rounded-full border border-line/80 bg-white py-3 text-sm font-medium text-ink-soft transition-transform active:scale-[0.99]"
-            >
-              <Trash2 className="h-4 w-4 text-rose-deep" />
-              删除本地数据 · 恢复出厂设置
-            </button>
-            <p className="pb-2 text-center text-[10px] leading-relaxed text-ink-muted">
-              清除本机 localStorage 中全部 Toy Diary 数据，包括玩偶、日记、主题、
-              正数日、对话及登录状态
-            </p>
-          </>
-        )}
+        <button
+          type="button"
+          onClick={onFactoryReset}
+          className="flex w-full items-center justify-center gap-2 rounded-full border border-line/80 bg-white py-3 text-sm font-medium text-ink-soft transition-transform active:scale-[0.99]"
+        >
+          <Trash2 className="h-4 w-4 text-rose-deep" />
+          删除本地数据 · 恢复出厂设置
+        </button>
+        <p className="pb-2 text-center text-[10px] leading-relaxed text-ink-muted">
+          清除本机 localStorage 中全部 Toy Diary 数据，包括玩偶、日记、主题、
+          正数日、对话及登录状态
+        </p>
       </div>
     </div>
   )

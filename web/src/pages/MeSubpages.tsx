@@ -1,5 +1,5 @@
 import { useRef, useState, type ReactNode } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import {
   Bell,
   BookOpen,
@@ -39,13 +39,12 @@ import { useTheme } from '../theme/ThemeProvider'
  * 手机号 / 微信 / 设备管理
  */
 export function ProfileSettingsPage() {
-  const navigate = useNavigate()
-  const { session, prefs, updatePrefs, logout, isLoggedIn } = useAuth()
+  const { session, prefs, updatePrefs } = useAuth()
   const { showToast, currentToy, entries } = useApp()
   const [phone, setPhone] = useState(
     () =>
       prefs.phone ||
-      (session?.accountType === 'phone' ? session.account || '' : '') ||
+      (session.accountType === 'phone' ? session.account || '' : '') ||
       '',
   )
   const [wechat, setWechat] = useState(prefs.wechat || '')
@@ -106,23 +105,6 @@ export function ProfileSettingsPage() {
     <>
       <PageHeader title="个人资料设置" back="/me" soft />
       <div className="space-y-3 px-4 py-4">
-        {!isLoggedIn && (
-          <div className="rounded-2xl bg-mustard-soft/80 px-3.5 py-3 text-xs text-terra-deep">
-            当前为「随便看看」模式。绑定手机号/微信等能力需先
-            <button
-              type="button"
-              className="mx-1 font-semibold underline"
-              onClick={() => {
-                logout()
-                navigate('/login')
-              }}
-            >
-              登录
-            </button>
-            。
-          </div>
-        )}
-
         <section className="card-paper space-y-3 p-4">
           <Field label="手机号">
             <input
@@ -188,11 +170,9 @@ export function ProfileSettingsPage() {
           )}
         </section>
 
-        {isLoggedIn && (
-          <p className="px-1 text-center text-[11px] text-ink-muted">
-            账号：{session?.account || '已登录'} · 本地演示会话
-          </p>
-        )}
+        <p className="px-1 text-center text-[11px] text-ink-muted">
+          账号：{session.account || '已登录'} · 本地演示会话
+        </p>
       </div>
     </>
   )
@@ -650,7 +630,7 @@ export function LegalPage({ kind }: { kind: 'terms' | 'privacy' }) {
           '演示账号与验证码仅存于本机 localStorage。',
           '正式版将提供更完整的数据删除与导出能力。',
         ]
-  return <SimpleDoc title={title} body={body} back="/login" />
+  return <SimpleDoc title={title} body={body} back="/archive" />
 }
 
 function SimpleDoc({
