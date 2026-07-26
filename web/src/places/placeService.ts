@@ -7,6 +7,7 @@
  */
 
 import type { Place } from '../types'
+import { getStoredLocale } from '../i18n'
 import {
   placeFromNominatim,
   SEED_PLACES,
@@ -25,12 +26,16 @@ const NOMINATIM_UA = 'ToyDairy/1.0 (hackathon demo; contact: local)'
 export async function searchPlaces(query: string): Promise<Place[]> {
   const q = query.trim()
   if (!q) return []
+  const acceptLanguage =
+    getStoredLocale() === 'en'
+      ? 'en,en-US;q=0.9,zh;q=0.3'
+      : 'zh-CN,zh;q=0.9,en;q=0.4'
 
   // 1) Pages Function proxy
   try {
     const res = await fetch(
-      `${PROXY_SEARCH}?q=${encodeURIComponent(q)}&limit=8`,
-      { headers: { Accept: 'application/json' } },
+      `${PROXY_SEARCH}?q=${encodeURIComponent(q)}&limit=8&lang=${getStoredLocale()}`,
+      { headers: { Accept: 'application/json', 'Accept-Language': acceptLanguage } },
     )
     if (res.ok) {
       const data = (await res.json()) as { places?: Place[] } | Place[]
@@ -45,7 +50,7 @@ export async function searchPlaces(query: string): Promise<Place[]> {
   try {
     const res = await fetch(
       `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=8&q=${encodeURIComponent(q)}`,
-      { headers: { Accept: 'application/json', 'Accept-Language': 'zh-CN,zh,en' } },
+      { headers: { Accept: 'application/json', 'Accept-Language': acceptLanguage } },
     )
     if (res.ok) {
       const rows = (await res.json()) as Array<Record<string, unknown>>
@@ -75,11 +80,15 @@ export async function reverseGeocode(
   lng: number,
 ): Promise<Place | null> {
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null
+  const acceptLanguage =
+    getStoredLocale() === 'en'
+      ? 'en,en-US;q=0.9,zh;q=0.3'
+      : 'zh-CN,zh;q=0.9,en;q=0.4'
 
   try {
     const res = await fetch(
-      `${PROXY_REVERSE}?lat=${encodeURIComponent(String(lat))}&lon=${encodeURIComponent(String(lng))}`,
-      { headers: { Accept: 'application/json' } },
+      `${PROXY_REVERSE}?lat=${encodeURIComponent(String(lat))}&lon=${encodeURIComponent(String(lng))}&lang=${getStoredLocale()}`,
+      { headers: { Accept: 'application/json', 'Accept-Language': acceptLanguage } },
     )
     if (res.ok) {
       const data = (await res.json()) as { place?: Place } | Place
@@ -96,7 +105,7 @@ export async function reverseGeocode(
       {
         headers: {
           Accept: 'application/json',
-          'Accept-Language': 'zh-CN,zh,en',
+          'Accept-Language': acceptLanguage,
           // Note: browsers cannot set User-Agent; proxy is preferred.
           'X-ToyDairy-Client': NOMINATIM_UA,
         },

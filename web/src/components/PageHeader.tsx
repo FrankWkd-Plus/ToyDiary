@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChevronLeft } from 'lucide-react'
+import { useLocale } from '../i18n'
 
 export function PageHeader({
   title,
@@ -17,6 +18,7 @@ export function PageHeader({
   soft?: boolean
 }) {
   const nav = useNavigate()
+  const { t } = useLocale()
   return (
     <header
       className={`sticky top-0 z-10 flex items-center gap-2.5 px-3.5 py-3.5 ${
@@ -33,7 +35,7 @@ export function PageHeader({
             else nav(-1)
           }}
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-paper/95 text-ink-soft shadow-[var(--shadow-warm-sm)] ring-1 ring-line/40 transition-transform active:scale-95"
-          aria-label="返回"
+          aria-label={t('app.back')}
         >
           <ChevronLeft className="h-5 w-5" />
         </button>

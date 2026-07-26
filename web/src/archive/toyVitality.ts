@@ -4,6 +4,7 @@
  */
 
 import type { Entry, Toy } from '../types'
+import { getStoredLocale, translate, type Locale } from '../i18n'
 
 export type ToyMoodId =
   | 'happy'
@@ -18,7 +19,7 @@ export interface ToyVitality {
   /** 0–100 */
   energy: number
   emoji: string
-  /** short chip label e.g. 困困的 */
+  /** short chip label e.g. Sleepy */
   label: string
   /** one soft line for cards / monologue area */
   line: string
@@ -26,47 +27,69 @@ export interface ToyVitality {
 
 const MOOD_META: Record<
   ToyMoodId,
-  { emoji: string; label: string; lines: string[] }
+  { emoji: string; labelKey: string; lineKeys: string[] }
 > = {
   happy: {
     emoji: '😊',
-    label: '开心',
-    lines: ['今天心情亮晶晶的', '想和你分享一点小确幸', '被你记得的感觉真好'],
+    labelKey: 'vitality.happy',
+    lineKeys: ['vitality.happy.1', 'vitality.happy.2', 'vitality.happy.3'],
   },
   calm: {
     emoji: '🌿',
-    label: '安静',
-    lines: ['静静待在你身边就很好', '把呼吸放慢一点', '今天适合慢慢写手帐'],
+    labelKey: 'vitality.calm',
+    lineKeys: ['vitality.calm.1', 'vitality.calm.2', 'vitality.calm.3'],
   },
   curious: {
     emoji: '🔍',
-    label: '好奇',
-    lines: ['想看看你眼中的今天', '外面是不是有新故事？', '告诉我一件小事吧'],
+    labelKey: 'vitality.curious',
+    lineKeys: [
+      'vitality.curious.1',
+      'vitality.curious.2',
+      'vitality.curious.3',
+    ],
   },
   sleepy: {
     emoji: '😴',
-    label: '困困的',
-    lines: ['今天有点困，但还是想等你', '换上睡衣，想听你说晚安', '眼皮有点沉，心还醒着'],
+    labelKey: 'vitality.sleepy',
+    lineKeys: [
+      'vitality.sleepy.1',
+      'vitality.sleepy.2',
+      'vitality.sleepy.3',
+    ],
   },
   lonely: {
     emoji: '💭',
-    label: '有点想你',
-    lines: ['有点想你啦', '好久没一起记一笔了', '口袋里还留着位置给你'],
+    labelKey: 'vitality.lonely',
+    lineKeys: [
+      'vitality.lonely.1',
+      'vitality.lonely.2',
+      'vitality.lonely.3',
+    ],
   },
   excited: {
     emoji: '✨',
-    label: '兴奋',
-    lines: ['电量充足，想听你吐槽今天', '又想出门玩啦', '心跳有点快，是好事'],
+    labelKey: 'vitality.excited',
+    lineKeys: [
+      'vitality.excited.1',
+      'vitality.excited.2',
+      'vitality.excited.3',
+    ],
   },
 }
 
 const ENTRY_MOOD_MAP: Record<string, ToyMoodId> = {
   开心: 'happy',
+  happy: 'happy',
   平静: 'calm',
+  calm: 'calm',
   好奇: 'curious',
+  curious: 'curious',
   想家: 'lonely',
+  homesick: 'lonely',
   兴奋: 'excited',
+  excited: 'excited',
   温柔: 'calm',
+  gentle: 'calm',
 }
 
 function pickLine(lines: string[], seed: number) {
@@ -81,6 +104,11 @@ function daysSince(isoDate: string, now: Date) {
   return Math.max(0, Math.floor((today.getTime() - start) / 86400000))
 }
 
+function hasTrait(traits: string[], ...names: string[]) {
+  const set = new Set(traits.map((t) => t.toLowerCase()))
+  return names.some((n) => set.has(n.toLowerCase()))
+}
+
 /**
  * Derive mood + energy for a toy. Pure / deterministic for a given `now`.
  */
@@ -88,6 +116,7 @@ export function getToyVitality(
   toy: Toy,
   entries: Entry[],
   now: Date = new Date(),
+  locale: Locale = getStoredLocale(),
 ): ToyVitality {
   const hour = now.getHours()
   const toyEntries = entries.filter((e) => e.toyId === toy.id)
@@ -102,21 +131,21 @@ export function getToyVitality(
     mood = 'sleepy'
     energy -= 18
   } else if (hour < 11) {
-    mood = traits.includes('活泼') ? 'happy' : 'curious'
+    mood = hasTrait(traits, 'playful', '活泼') ? 'happy' : 'curious'
     energy += 4
   } else if (hour >= 18) {
     mood = 'calm'
     energy -= 4
   } else {
-    mood = traits.includes('活泼') ? 'happy' : 'calm'
+    mood = hasTrait(traits, 'playful', '活泼') ? 'happy' : 'calm'
   }
 
-  if (traits.includes('好奇') && mood !== 'sleepy') {
+  if (hasTrait(traits, 'curious', '好奇') && mood !== 'sleepy') {
     mood = hour < 14 ? 'curious' : mood
     energy += 3
   }
-  if (traits.includes('活泼')) energy += 6
-  if (traits.includes('安静') || traits.includes('温柔')) energy -= 4
+  if (hasTrait(traits, 'playful', '活泼')) energy += 6
+  if (hasTrait(traits, 'quiet', '安静', 'gentle', '温柔')) energy -= 4
 
   if (latest?.type === 'travel' && staleDays <= 3) {
     mood = 'excited'
@@ -134,7 +163,6 @@ export function getToyVitality(
 
   energy = Math.max(18, Math.min(100, Math.round(energy)))
 
-  // Very low energy forces sleepy overlay on label line, keep mood unless night already.
   if (energy < 30 && mood !== 'lonely') {
     mood = 'sleepy'
   }
@@ -146,12 +174,14 @@ export function getToyVitality(
     (latest?.date ? latest.date.length * 3 : 0) +
     traits.join('').length
 
+  const lines = meta.lineKeys.map((k) => translate(locale, k))
+
   return {
     mood,
     energy,
     emoji: meta.emoji,
-    label: meta.label,
-    line: pickLine(meta.lines, seed),
+    label: translate(locale, meta.labelKey),
+    line: pickLine(lines, seed),
   }
 }
 

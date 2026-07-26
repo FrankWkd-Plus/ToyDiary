@@ -27,6 +27,7 @@ import { NewToyPage } from './pages/NewToyPage'
 import { TimelinePage } from './pages/TimelinePage'
 import { ToyArchiveDetailPage } from './pages/ToyArchiveDetailPage'
 import { ToysPage } from './pages/ToysPage'
+import { LocaleProvider, useLocale } from './i18n'
 import { ThemeProvider } from './theme/ThemeProvider'
 
 const GrowthStatsPage = lazy(() =>
@@ -37,9 +38,10 @@ const MemoryHallPage = lazy(() =>
 )
 
 function RouteFallback() {
+  const { t } = useLocale()
   return (
     <div className="flex min-h-[40vh] items-center justify-center text-sm text-ink-muted">
-      加载中…
+      {t('app.loading')}
     </div>
   )
 }
@@ -47,11 +49,12 @@ function RouteFallback() {
 export default function App() {
   return (
     <ThemeProvider>
-      <AppProvider>
-        <AuthProvider>
-          <BrowserRouter>
-            <Suspense fallback={<RouteFallback />}>
-              <Routes>
+      <LocaleProvider>
+        <AppProvider>
+          <AuthProvider>
+            <BrowserRouter>
+              <Suspense fallback={<RouteFallback />}>
+                <Routes>
                 {/* Login removed — always enter as logged-in demo user */}
                 <Route
                   path="login"
@@ -116,10 +119,11 @@ export default function App() {
                 </Route>
               </Routes>
             </Suspense>
-            <Toast />
-          </BrowserRouter>
-        </AuthProvider>
-      </AppProvider>
+              <Toast />
+            </BrowserRouter>
+          </AuthProvider>
+        </AppProvider>
+      </LocaleProvider>
     </ThemeProvider>
   )
 }

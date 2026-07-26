@@ -17,8 +17,9 @@ import {
 import { loadDayCountStyle } from '../daysmatter/dayCountTheme'
 import { renderDayCountCardPng } from '../share/renderDayCountCardPng'
 import { isMobileClient, shareOrDownloadFile } from '../share/shareHelpers'
+import { useLocale } from '../i18n'
 import type { Entry, Place } from '../types'
-import { ENTRY_TYPE_LABEL } from '../types'
+import { entryTypeLabel } from '../types'
 
 type StatKind = 'companion' | 'travel' | 'cities' | 'moments'
 
@@ -310,6 +311,7 @@ function EntryList({
   entries: Entry[]
   empty: string
 }) {
+  const { locale } = useLocale()
   if (!entries.length) {
     return (
       <div className="rounded-2xl bg-cream px-4 py-8 text-center text-xs text-ink-muted">
@@ -345,9 +347,7 @@ function EntryList({
                 </strong>
                 <span className="mt-0.5 block text-[10px] text-ink-muted">
                   {entry.date}
-                  {ENTRY_TYPE_LABEL[entry.type]
-                    ? ` · ${ENTRY_TYPE_LABEL[entry.type]}`
-                    : ''}
+                  {` · ${entryTypeLabel(entry.type, locale)}`}
                 </span>
                 {location && (
                   <span className="mt-1 flex items-center gap-1 text-[11px] text-ink-soft">

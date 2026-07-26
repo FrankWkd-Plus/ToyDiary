@@ -15,6 +15,7 @@ import {
 import { PageHeader } from '../components/PageHeader'
 import { ToyAvatarStudio } from '../components/ToyAvatarStudio'
 import { useApp } from '../context/AppContext'
+import { useLocale } from '../i18n'
 
 const DEFAULT_ROLE = '陪伴伙伴'
 const TRAIT_OPTIONS = [
@@ -35,6 +36,7 @@ const TRAIT_OPTIONS = [
 export function NewToyPage() {
   const nav = useNavigate()
   const location = useLocation()
+  const { locale } = useLocale()
   const { id: editingToyId } = useParams()
   const { toys, refreshToys, showToast } = useApp()
   const editingToy = editingToyId
@@ -122,6 +124,7 @@ export function NewToyPage() {
         birthPlace: birthPlace.trim(),
         zodiac,
         birthDate,
+        locale,
       })
       setSignature(result.monologue)
       showToast(

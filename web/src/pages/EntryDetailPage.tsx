@@ -15,6 +15,7 @@ import { api } from '../api/client'
 import { LoadingBear } from '../components/LoadingBear'
 import { PageHeader } from '../components/PageHeader'
 import { useApp } from '../context/AppContext'
+import { useLocale } from '../i18n'
 import { loadProfileName } from '../profile/profileStorage'
 import {
   renderDiaryCardPng,
@@ -22,11 +23,12 @@ import {
 } from '../share/renderDiaryCardPng'
 import { isMobileClient, shareOrDownloadFile } from '../share/shareHelpers'
 import type { Entry, Toy } from '../types'
-import { ENTRY_TYPE_LABEL } from '../types'
+import { entryTypeLabel } from '../types'
 
 export function EntryDetailPage() {
   const { id } = useParams<{ id: string }>()
   const nav = useNavigate()
+  const { locale } = useLocale()
   const location = useLocation()
   const fromState = (location.state as { from?: string } | null)?.from
   const backTo =
@@ -173,6 +175,7 @@ export function EntryDetailPage() {
         location: entry.place?.displayName || entry.location,
         userNote: entry.userNote,
         imageUrl: entry.imageUrl,
+        locale,
       })
 
       const patch = {
@@ -304,7 +307,9 @@ export function EntryDetailPage() {
         )}
 
         <div className="mb-3.5 flex flex-wrap items-center gap-2 text-xs">
-          <span className="tag tag-mist">{ENTRY_TYPE_LABEL[entry.type]}</span>
+          <span className="tag tag-mist">
+            {entryTypeLabel(entry.type, locale)}
+          </span>
           <time className="tabular-nums text-ink-muted">{entry.date}</time>
           {entry.mood && <span className="tag tag-mustard">{entry.mood}</span>}
           {entry.tags?.map((tag) => (
