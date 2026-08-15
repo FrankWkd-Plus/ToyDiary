@@ -4,9 +4,11 @@ import { BottomNav } from '../components/BottomNav'
 import { LoadingBear } from '../components/LoadingBear'
 import { ToyNudgeHost } from '../components/ToyNudgeHost'
 import { useApp } from '../context/AppContext'
+import { useLocale } from '../i18n'
 
 export function AppLayout() {
   const { loading } = useApp()
+  const { t } = useLocale()
   const { pathname, search } = useLocation()
   const scrollRef = useRef<HTMLDivElement>(null)
   const lockPageScroll =
@@ -36,7 +38,7 @@ export function AppLayout() {
               <p className="font-display text-xl tracking-wide text-ink">
                 Toy Dairy
               </p>
-              <p className="mt-1.5 text-sm text-ink-muted">正在打开手帐…</p>
+              <p className="mt-1.5 text-sm text-ink-muted">{t('app.opening')}</p>
               <div className="loading-dots" aria-hidden="true">
                 <i />
                 <i />

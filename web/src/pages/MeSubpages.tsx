@@ -1,21 +1,31 @@
 import { useRef, useState, type ReactNode } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import {
   Bell,
   BookOpen,
   Check,
   ChevronRight,
   Download,
+  ExternalLink,
   FileText,
   HelpCircle,
   Info,
+  Link2,
   RotateCcw,
   Upload,
   Volume2,
 } from 'lucide-react'
 import { useAuth } from '../auth/AuthContext'
+import {
+  buildExplorerTxUrl,
+  computeRecordHash,
+  ensureInjectiveNetwork,
+  mintOwnershipSbt,
+  requestAccount,
+} from '../chain/injectiveSbt'
 import { PageHeader } from '../components/PageHeader'
 import { useApp } from '../context/AppContext'
+import { useLocale } from '../i18n'
 import {
   buildGrowthExport,
   growthExportFilename,
@@ -30,46 +40,73 @@ import { useTheme } from '../theme/ThemeProvider'
  * 手机号 / 微信 / 设备管理
  */
 export function ProfileSettingsPage() {
-  const navigate = useNavigate()
-  const { session, prefs, updatePrefs, logout, isLoggedIn } = useAuth()
-  const { showToast } = useApp()
+  const { session, prefs, updatePrefs } = useAuth()
+  const { showToast, currentToy, entries } = useApp()
+  const { t } = useLocale()
   const [phone, setPhone] = useState(
     () =>
       prefs.phone ||
-      (session?.accountType === 'phone' ? session.account || '' : '') ||
+      (session.accountType === 'phone' ? session.account || '' : '') ||
       '',
   )
   const [wechat, setWechat] = useState(prefs.wechat || '')
   const [deviceLabel, setDeviceLabel] = useState(
     prefs.deviceLabel || '本机 · Safari / Chrome',
   )
+  const [sbtBusy, setSbtBusy] = useState(false)
+  const [sbtResult, setSbtResult] = useState<{
+    hash: string
+    explorerUrl: string
+  } | null>(null)
 
   function saveField(patch: Partial<typeof prefs>, toast: string) {
     updatePrefs(patch)
     showToast(toast)
   }
 
+  async function onMintOwnershipSbt() {
+    if (!currentToy) {
+      showToast('请先创建一只玩偶')
+      return
+    }
+    setSbtBusy(true)
+    setSbtResult(null)
+    try {
+      const account = await requestAccount()
+      await ensureInjectiveNetwork()
+      const latestEntry = entries
+        .slice()
+        .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))[0]
+      const dataHash = computeRecordHash({
+        toy: {
+          id: currentToy.id,
+          name: currentToy.name,
+          birthDate: currentToy.birthDate,
+        },
+        latestEntry: latestEntry
+          ? {
+              id: latestEntry.id,
+              date: latestEntry.date,
+              title: latestEntry.title,
+              userNote: latestEntry.userNote,
+              aiDiary: latestEntry.aiDiary,
+            }
+          : null,
+      })
+      const hash = await mintOwnershipSbt({ account, dataHash })
+      setSbtResult({ hash, explorerUrl: buildExplorerTxUrl(hash) })
+      showToast('交易已提交，正在链上确权')
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : '链上确权失败，请重试')
+    } finally {
+      setSbtBusy(false)
+    }
+  }
+
   return (
     <>
-      <PageHeader title="个人资料设置" back="/me" soft />
+      <PageHeader title={t('profile.title')} back="/me" soft />
       <div className="space-y-3 px-4 py-4">
-        {!isLoggedIn && (
-          <div className="rounded-2xl bg-mustard-soft/80 px-3.5 py-3 text-xs text-terra-deep">
-            当前为「随便看看」模式。绑定手机号/微信等能力需先
-            <button
-              type="button"
-              className="mx-1 font-semibold underline"
-              onClick={() => {
-                logout()
-                navigate('/login')
-              }}
-            >
-              登录
-            </button>
-            。
-          </div>
-        )}
-
         <section className="card-paper space-y-3 p-4">
           <Field label="手机号">
             <input
@@ -106,46 +143,79 @@ export function ProfileSettingsPage() {
           </Field>
         </section>
 
-        {isLoggedIn && (
-          <p className="px-1 text-center text-[11px] text-ink-muted">
-            账号：{session?.account || '已登录'} · 本地演示会话
+        <section className="card-paper space-y-2 p-4">
+          <div className="flex items-center gap-2 text-sm font-medium text-ink">
+            <Link2 className="h-4 w-4 text-matcha-deep" />
+            Injective 链上确权
+          </div>
+          <p className="text-[11px] text-ink-muted">
+            演示：为当前玩偶生成专属确权 SBT，并将最新一条记录的哈希提交上链存证。
           </p>
-        )}
+          <button
+            type="button"
+            disabled={sbtBusy}
+            onClick={() => void onMintOwnershipSbt()}
+            className="flex min-h-11 w-full items-center justify-center rounded-2xl bg-matcha px-4 text-sm font-medium text-white active:bg-matcha-deep disabled:opacity-60"
+          >
+            {sbtBusy ? '确权中…' : '发起链上确权'}
+          </button>
+          {sbtResult && (
+            <a
+              href={sbtResult.explorerUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-1.5 text-[11px] text-matcha-deep underline"
+            >
+              交易 {sbtResult.hash.slice(0, 10)}…{sbtResult.hash.slice(-8)}
+              <ExternalLink className="h-3 w-3" />
+            </a>
+          )}
+        </section>
+
+        <p className="px-1 text-center text-[11px] text-ink-muted">
+          账号：{session.account || '已登录'} · 本地演示会话
+        </p>
       </div>
     </>
   )
 }
 
 /**
- * 切换配色 — 5 套主题实时生效
+ * Theme picker — 5 palettes apply immediately
  */
 export function ThemePickerPage() {
-  const { themeId, setThemeId, theme } = useTheme()
+  const { themeId, setThemeId } = useTheme()
   const { showToast } = useApp()
+  const { t } = useLocale()
+
+  function themeName(id: ThemeId) {
+    return t(`theme.${id}`)
+  }
+  function themeDesc(id: ThemeId) {
+    return t(`theme.${id}Desc`)
+  }
 
   function onPick(id: ThemeId) {
     if (id === themeId) return
     setThemeId(id)
-    const name = THEME_LIST.find((t) => t.id === id)?.name ?? id
-    showToast(`已切换为「${name}」`)
+    showToast(t('themePicker.switched', { name: themeName(id) }))
   }
 
   return (
     <>
-      <PageHeader title="切换配色" back="/me" soft />
+      <PageHeader title={t('themePicker.title')} back="/me" soft />
       <div className="mx-auto w-full max-w-lg space-y-3 px-4 py-4">
         <p className="px-1 text-xs text-ink-muted">
-          当前：{theme.name} · 选择后立即应用到全站（抹茶绿 / 暖杏手帐 / 雾蓝晴空 /
-          蜜桃粉 / 薰衣紫）
+          {themeName(themeId)} · {themeDesc(themeId)}
         </p>
         <div className="grid grid-cols-1 gap-2.5">
-          {THEME_LIST.map((t) => {
-            const active = t.id === themeId
+          {THEME_LIST.map((item) => {
+            const active = item.id === themeId
             return (
               <button
-                key={t.id}
+                key={item.id}
                 type="button"
-                onClick={() => onPick(t.id)}
+                onClick={() => onPick(item.id)}
                 className={`flex min-h-14 items-center gap-3 rounded-2xl px-3 py-3 text-left transition-all ${
                   active
                     ? 'bg-mist-soft shadow-[var(--shadow-warm-sm)] ring-2 ring-matcha'
@@ -153,7 +223,7 @@ export function ThemePickerPage() {
                 }`}
               >
                 <span className="flex shrink-0 overflow-hidden rounded-xl shadow-sm ring-1 ring-black/5">
-                  {t.swatches.map((c) => (
+                  {item.swatches.map((c) => (
                     <span
                       key={c}
                       className="h-10 w-5 first:rounded-l-xl last:rounded-r-xl"
@@ -162,8 +232,12 @@ export function ThemePickerPage() {
                   ))}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-medium text-ink">{t.name}</span>
-                  <span className="block text-[11px] text-ink-muted">{t.desc}</span>
+                  <span className="block text-sm font-medium text-ink">
+                    {themeName(item.id)}
+                  </span>
+                  <span className="block text-[11px] text-ink-muted">
+                    {themeDesc(item.id)}
+                  </span>
                 </span>
                 {active && (
                   <span className="flex h-6 w-6 items-center justify-center rounded-full bg-matcha text-white">
@@ -568,7 +642,7 @@ export function LegalPage({ kind }: { kind: 'terms' | 'privacy' }) {
           '演示账号与验证码仅存于本机 localStorage。',
           '正式版将提供更完整的数据删除与导出能力。',
         ]
-  return <SimpleDoc title={title} body={body} back="/login" />
+  return <SimpleDoc title={title} body={body} back="/archive" />
 }
 
 function SimpleDoc({

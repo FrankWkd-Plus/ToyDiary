@@ -102,11 +102,26 @@ export interface TravelMapResponse {
 }
 
 export const ENTRY_TYPE_LABEL: Record<EntryType, string> = {
+  travel: 'Travel',
+  daily: 'Daily',
+  heart: 'Heart',
+  memorial: 'Memorial',
+  text: 'Text',
+}
+
+export const ENTRY_TYPE_LABEL_ZH: Record<EntryType, string> = {
   travel: '旅行',
   daily: '日常',
   heart: '心事',
   memorial: '纪念日',
   text: '文字',
+}
+
+export function entryTypeLabel(
+  type: EntryType,
+  locale: 'zh' | 'en' = 'zh',
+): string {
+  return locale === 'en' ? ENTRY_TYPE_LABEL[type] : ENTRY_TYPE_LABEL_ZH[type]
 }
 
 export const COMPOSE_ENTRY_TYPES: EntryType[] = [
@@ -116,4 +131,24 @@ export const COMPOSE_ENTRY_TYPES: EntryType[] = [
   'memorial',
 ]
 
-export const MOOD_OPTIONS = ['开心', '平静', '好奇', '想家', '兴奋', '温柔'] as const
+export const MOOD_OPTIONS = [
+  'happy',
+  'calm',
+  'curious',
+  'homesick',
+  'excited',
+  'gentle',
+] as const
+
+export const MOOD_OPTIONS_ZH = [
+  '开心',
+  '平静',
+  '好奇',
+  '想家',
+  '兴奋',
+  '温柔',
+] as const
+
+export function moodOptionsFor(locale: 'zh' | 'en') {
+  return locale === 'en' ? [...MOOD_OPTIONS] : [...MOOD_OPTIONS_ZH]
+}

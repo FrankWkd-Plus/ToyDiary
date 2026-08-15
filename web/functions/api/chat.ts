@@ -39,6 +39,9 @@ type ChatBody = {
   history?: ChatTurn[]
   memories?: { title?: string; location?: string; date?: string; note?: string }[]
   quietMode?: boolean
+  /** 'zh' | 'en' — reply language for the toy */
+  locale?: string
+  language?: string
 }
 
 const CORS = {
@@ -49,6 +52,13 @@ const CORS = {
 
 export const onRequestOptions: PagesFunction = async () =>
   new Response(null, { status: 204, headers: CORS })
+
+function resolveLocale(body: ChatBody): 'zh' | 'en' {
+  const raw = (body.locale || body.language || '').toLowerCase()
+  if (raw.startsWith('en')) return 'en'
+  if (raw.startsWith('zh')) return 'zh'
+  return 'zh'
+}
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { request, env } = context
@@ -79,43 +89,75 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     return json({ error: 'message is required' }, 400)
   }
 
+  const locale = resolveLocale(body)
+  const isEn = locale === 'en'
+
   const toy = body.toy ?? {}
-  const name = toy.name?.trim() || '玩偶'
-  const role = toy.role?.trim() || '伙伴'
+  const name = toy.name?.trim() || (isEn ? 'Toy' : '玩偶')
+  const role = toy.role?.trim() || (isEn ? 'companion' : '伙伴')
   const traits = (toy.traits ?? []).filter(Boolean)
-  const traitStr = traits.length ? traits.join('、') : '温柔'
+  const traitStr = traits.length
+    ? traits.join(isEn ? ', ' : '、')
+    : isEn
+      ? 'gentle'
+      : '温柔'
   const memories = (body.memories ?? []).slice(0, 6)
   const memoryLines =
     memories.length === 0
-      ? '（还没有共同旅行/日记记忆）'
+      ? isEn
+        ? '(No shared travel or diary memories yet)'
+        : '（还没有共同旅行/日记记忆）'
       : memories
           .map((m, i) => {
             const bits = [
               m.date,
               m.location,
               m.title,
-              m.note ? `备注：${m.note}` : '',
+              m.note
+                ? isEn
+                  ? `note: ${m.note}`
+                  : `备注：${m.note}`
+                : '',
             ].filter(Boolean)
             return `${i + 1}. ${bits.join(' · ')}`
           })
           .join('\n')
 
-  const system = [
-    `你是用户的玩偶「${name}」，身份是${role}，性格：${traitStr}。`,
-    toy.bio ? `简介：${toy.bio}` : '',
-    toy.monologue ? `你常说的话：${toy.monologue}` : '',
-    '用第一人称（我）和用户说话，像在聊天，不要自称 AI 或模型。',
-    '语气温暖、手帐感、口语自然；每次回复 1～4 句，总字数约 40～120 字。',
-    '可以轻轻引用共同记忆，但不要编造用户没提过的具体事实。',
-    '不要输出 markdown 标题或列表符号堆砌；不要输出 JSON。',
-    body.quietMode
-      ? '用户开了安静模式：更短、更轻声，少追问。'
-      : '可以自然地回问一句。',
-    '以下是你们的共同记忆摘要：',
-    memoryLines,
-  ]
-    .filter(Boolean)
-    .join('\n')
+  const system = isEn
+    ? [
+        `You are the user's toy companion "${name}". Your role is ${role}. Personality traits: ${traitStr}.`,
+        toy.bio ? `Bio: ${toy.bio}` : '',
+        toy.monologue ? `A line you often say: ${toy.monologue}` : '',
+        'Speak in first person ("I") as the toy chatting with the user. Never call yourself an AI or model.',
+        'IMPORTANT: Always reply in natural English.',
+        'Tone: warm, diary-like, conversational. Each reply should be 1–4 sentences, about 40–120 words total.',
+        'You may gently reference shared memories, but never invent concrete facts the user did not mention.',
+        'Do not use markdown headings or bullet lists. Do not output JSON.',
+        body.quietMode
+          ? 'Quiet mode is on: keep replies shorter and softer, with fewer follow-up questions.'
+          : 'You may naturally ask one short follow-up question.',
+        'Shared memory summary:',
+        memoryLines,
+      ]
+        .filter(Boolean)
+        .join('\n')
+    : [
+        `你是用户的玩偶「${name}」，身份是${role}，性格：${traitStr}。`,
+        toy.bio ? `简介：${toy.bio}` : '',
+        toy.monologue ? `你常说的话：${toy.monologue}` : '',
+        '用第一人称（我）和用户说话，像在聊天，不要自称 AI 或模型。',
+        '重要：必须用自然流畅的中文回复。',
+        '语气温暖、手帐感、口语自然；每次回复 1～4 句，总字数约 40～120 字。',
+        '可以轻轻引用共同记忆，但不要编造用户没提过的具体事实。',
+        '不要输出 markdown 标题或列表符号堆砌；不要输出 JSON。',
+        body.quietMode
+          ? '用户开了安静模式：更短、更轻声，少追问。'
+          : '可以自然地回问一句。',
+        '以下是你们的共同记忆摘要：',
+        memoryLines,
+      ]
+        .filter(Boolean)
+        .join('\n')
 
   const history = (body.history ?? []).slice(-12)
   const messages: ChatMessage[] = [{ role: 'system', content: system }]
@@ -143,7 +185,6 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   })
 
   const auth = buildAuthMeta(config, result.endpoint, apiKey)
-  // Prefer actual provider used by the call
   auth.provider = result.provider
 
   if (!result.ok) {

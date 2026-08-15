@@ -18,6 +18,15 @@ export interface AuthSession {
 const AUTH_KEY = 'toydairy.auth.session'
 const PREFS_KEY = 'toydairy.user.prefs'
 
+/** Demo default: app always starts as a logged-in user (no login screen). */
+export const DEFAULT_USER_SESSION: AuthSession = {
+  mode: 'user',
+  account: '13800000000',
+  accountType: 'phone',
+  name: '演示用户',
+  loggedInAt: '2026-01-01T00:00:00.000Z',
+}
+
 export type UserPrefs = {
   diaryPush: boolean
   memorySound: boolean
@@ -45,13 +54,32 @@ const DEFAULT_PREFS: UserPrefs = {
   nudgeFrequency: 'normal',
 }
 
-export function loadAuthSession(): AuthSession | null {
+export function loadAuthSession(): AuthSession {
   try {
     const raw = localStorage.getItem(AUTH_KEY)
-    if (!raw) return null
-    return JSON.parse(raw) as AuthSession
+    if (!raw) {
+      saveAuthSession(DEFAULT_USER_SESSION)
+      return { ...DEFAULT_USER_SESSION }
+    }
+    const parsed = JSON.parse(raw) as AuthSession
+    // Upgrade guest / empty mode to full user so create-toy etc. always work.
+    if (!parsed?.mode || parsed.mode !== 'user') {
+      const upgraded: AuthSession = {
+        ...DEFAULT_USER_SESSION,
+        ...parsed,
+        mode: 'user',
+        account: parsed.account || DEFAULT_USER_SESSION.account,
+        accountType: parsed.accountType || DEFAULT_USER_SESSION.accountType,
+        name: parsed.name || DEFAULT_USER_SESSION.name,
+        loggedInAt: parsed.loggedInAt || new Date().toISOString(),
+      }
+      saveAuthSession(upgraded)
+      return upgraded
+    }
+    return parsed
   } catch {
-    return null
+    saveAuthSession(DEFAULT_USER_SESSION)
+    return { ...DEFAULT_USER_SESSION }
   }
 }
 

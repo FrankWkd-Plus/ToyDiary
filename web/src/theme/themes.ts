@@ -15,8 +15,8 @@ export type ThemeVars = Record<string, string>
 export const THEMES: Record<ThemeId, ThemeMeta & { vars: ThemeVars }> = {
   mint: {
     id: 'mint',
-    name: '抹茶绿',
-    desc: '清新萌宠风，默认推荐',
+    name: 'Matcha Mint',
+    desc: 'Fresh & cuddly — default',
     swatches: ['#d4ecc8', '#b5a06a', '#fff6e0'],
     themeColor: '#d4ecc8',
     vars: {
@@ -56,8 +56,8 @@ export const THEMES: Record<ThemeId, ThemeMeta & { vars: ThemeVars }> = {
   },
   warm: {
     id: 'warm',
-    name: '暖杏手帐',
-    desc: '奶油杏 + 陶土橙，复古纸感',
+    name: 'Warm Journal',
+    desc: 'Cream apricot + terracotta',
     swatches: ['#f5e6d4', '#c4957a', '#efe4cd'],
     themeColor: '#f0e4d4',
     vars: {
@@ -97,8 +97,8 @@ export const THEMES: Record<ThemeId, ThemeMeta & { vars: ThemeVars }> = {
   },
   sky: {
     id: 'sky',
-    name: '雾蓝晴空',
-    desc: '清爽蓝灰，干净现代',
+    name: 'Misty Sky',
+    desc: 'Cool blue-gray, clean modern',
     swatches: ['#d4e8f0', '#6a9ab5', '#e8f4fa'],
     themeColor: '#d4e8f0',
     vars: {
@@ -138,8 +138,8 @@ export const THEMES: Record<ThemeId, ThemeMeta & { vars: ThemeVars }> = {
   },
   peach: {
     id: 'peach',
-    name: '蜜桃粉',
-    desc: '温柔粉橘，可爱氛围',
+    name: 'Peach Blush',
+    desc: 'Soft peach-pink, cozy vibe',
     swatches: ['#ffd8d0', '#e8a090', '#fff0eb'],
     themeColor: '#ffd8d0',
     vars: {
@@ -179,8 +179,8 @@ export const THEMES: Record<ThemeId, ThemeMeta & { vars: ThemeVars }> = {
   },
   lavender: {
     id: 'lavender',
-    name: '薰衣紫',
-    desc: '淡紫雾感，安静治愈',
+    name: 'Lavender Haze',
+    desc: 'Soft purple, quiet comfort',
     swatches: ['#e4dcf0', '#9a88b8', '#f4f0fa'],
     themeColor: '#e4dcf0',
     vars: {

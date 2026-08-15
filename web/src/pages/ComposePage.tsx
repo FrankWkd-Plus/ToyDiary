@@ -15,10 +15,11 @@ import { api } from '../api/client'
 import { PlacePicker } from '../components/PlacePicker'
 import { PageHeader } from '../components/PageHeader'
 import { useApp } from '../context/AppContext'
+import { useLocale } from '../i18n'
 import {
   COMPOSE_ENTRY_TYPES,
-  ENTRY_TYPE_LABEL,
-  MOOD_OPTIONS,
+  entryTypeLabel,
+  moodOptionsFor,
   type EntryType,
   type Place,
 } from '../types'
@@ -34,6 +35,7 @@ interface ComposeRouteState {
 
 export function ComposePage() {
   const nav = useNavigate()
+  const { locale } = useLocale()
   const routeState = useLocation().state as ComposeRouteState | null
   const { currentToy, toys, setCurrentToyId, refreshEntries, showToast } =
     useApp()
@@ -98,6 +100,7 @@ export function ComposePage() {
           location: place?.displayName,
           userNote: userNote.trim() || undefined,
           imageUrl,
+          locale,
         })
         // Respect user-selected type (heart maps to daily for AI if needed)
         setAnalysis({
@@ -130,7 +133,7 @@ export function ComposePage() {
           aiDiary: fallbackDiary,
           toyReply: '好呀，我已经准备好把这一刻记下来啦。',
           mood,
-          tags: [ENTRY_TYPE_LABEL[entryType], place?.city || '日常'].filter(Boolean),
+          tags: [entryTypeLabel(entryType, locale), place?.city || (locale === 'en' ? 'daily' : '日常')].filter(Boolean),
           entryType: entryType === 'heart' ? 'daily' : entryType,
           processedImageUrl: imageUrl,
           source: 'local',
@@ -265,7 +268,7 @@ export function ComposePage() {
                 value={mood}
                 onChange={(event) => setMood(event.target.value)}
               >
-                {MOOD_OPTIONS.map((option) => (
+                {moodOptionsFor(locale).map((option) => (
                   <option key={option} value={option}>
                     {option}
                   </option>
@@ -418,14 +421,14 @@ export function ComposePage() {
               类型
             </span>
             <div className="flex flex-wrap gap-2">
-              {COMPOSE_ENTRY_TYPES.map((t) => (
+              {COMPOSE_ENTRY_TYPES.map((type) => (
                 <button
-                  key={t}
+                  key={type}
                   type="button"
-                  onClick={() => setEntryType(t)}
-                  className={entryType === t ? 'chip chip-active' : 'chip'}
+                  onClick={() => setEntryType(type)}
+                  className={entryType === type ? 'chip chip-active' : 'chip'}
                 >
-                  {ENTRY_TYPE_LABEL[t]}
+                  {entryTypeLabel(type, locale)}
                 </button>
               ))}
             </div>

@@ -13,15 +13,16 @@ import {
   companionDayStatus,
   toyAvatar,
 } from '../archive/archiveUtils'
-import { useAuth } from '../auth/AuthContext'
+import { LanguageSwitch } from '../components/LanguageSwitch'
 import { ToyCardCarousel } from '../components/ToyCardCarousel'
 import { useApp } from '../context/AppContext'
+import { useLocale } from '../i18n'
 import { seedPlaceForLabel, uniqueCities } from '../places/placeUtils'
 
 export function TimelinePage() {
   const navigate = useNavigate()
+  const { t } = useLocale()
   const { currentToy, toys, entries, setCurrentToyId, showToast } = useApp()
-  const { isLoggedIn } = useAuth()
   const [pickerOpen, setPickerOpen] = useState(false)
   const [viewedToyId, setViewedToyId] = useState(currentToy?.id)
   const viewedToy =
@@ -51,17 +52,12 @@ export function TimelinePage() {
   }, [currentToy?.id])
 
   function goNewToy() {
-    if (!isLoggedIn) {
-      showToast('创建玩偶档案需要先登录')
-      navigate('/login')
-      return
-    }
     navigate('/toys/new')
   }
 
   function requireViewedToy(path: string) {
     if (!viewedToy) {
-      showToast('请先选择玩偶')
+      showToast(t('archive.pickToyFirst'))
       return
     }
     if (viewedToy.id !== currentToy?.id) {
@@ -72,41 +68,44 @@ export function TimelinePage() {
 
   return (
     <div className="min-h-full">
-      <header className="header-band sticky top-0 z-10 flex items-center justify-between px-4 py-3.5">
-        <button
-          type="button"
-          onClick={() => setPickerOpen(true)}
-          className="flex min-w-0 items-center gap-2.5 rounded-2xl py-0.5 pr-2 text-left transition-transform active:scale-[0.98]"
-          aria-haspopup="dialog"
-          aria-expanded={pickerOpen}
-        >
-          <img
-            src={toyAvatar(
-              currentToy,
-              toys.findIndex((toy) => toy.id === currentToy?.id),
-            )}
-            alt=""
-            className="h-9 w-9 shrink-0 rounded-xl border-2 border-white object-cover shadow-sm ring-1 ring-line/50"
-          />
-          <span className="min-w-0">
-            <span className="block text-[9px] font-semibold tracking-[0.12em] text-ink-muted">
-              TOY DAIRY
+      <header className="header-band sticky top-0 z-10 flex items-center justify-between gap-2 px-4 py-3.5">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <LanguageSwitch className="shrink-0" />
+          <button
+            type="button"
+            onClick={() => setPickerOpen(true)}
+            className="flex min-w-0 items-center gap-2.5 rounded-2xl py-0.5 pr-2 text-left transition-transform active:scale-[0.98]"
+            aria-haspopup="dialog"
+            aria-expanded={pickerOpen}
+          >
+            <img
+              src={toyAvatar(
+                currentToy,
+                toys.findIndex((toy) => toy.id === currentToy?.id),
+              )}
+              alt=""
+              className="h-9 w-9 shrink-0 rounded-xl border-2 border-white object-cover shadow-sm ring-1 ring-line/50"
+            />
+            <span className="min-w-0">
+              <span className="block text-[9px] font-semibold tracking-[0.12em] text-ink-muted">
+                TOY DAIRY
+              </span>
+              <span className="mt-0.5 flex items-center gap-1">
+                <strong className="max-w-[7rem] truncate font-display text-sm text-ink sm:max-w-[8rem]">
+                  {currentToy?.name || t('archive.selectToy')}
+                </strong>
+                <ChevronDown className="h-3.5 w-3.5 shrink-0 text-matcha-deep" />
+              </span>
             </span>
-            <span className="mt-0.5 flex items-center gap-1">
-              <strong className="max-w-[8rem] truncate font-display text-sm text-ink">
-                {currentToy?.name || '选择玩偶'}
-              </strong>
-              <ChevronDown className="h-3.5 w-3.5 shrink-0 text-matcha-deep" />
-            </span>
-          </span>
-        </button>
+          </button>
+        </div>
         <button
           type="button"
           onClick={goNewToy}
-          className="flex min-h-9 items-center gap-1 rounded-full bg-mustard-soft px-3 py-2 text-[11px] font-semibold text-matcha-deep shadow-[var(--shadow-warm-sm)] ring-1 ring-line/30 transition-transform active:scale-95"
+          className="flex min-h-9 shrink-0 items-center gap-1 rounded-full bg-mustard-soft px-3 py-2 text-[11px] font-semibold text-matcha-deep shadow-[var(--shadow-warm-sm)] ring-1 ring-line/30 transition-transform active:scale-95"
         >
           <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
-          新增玩偶
+          {t('archive.addToy')}
         </button>
       </header>
 
@@ -122,10 +121,9 @@ export function TimelinePage() {
             className="card-paper w-full p-6 text-center"
           >
             <span className="text-3xl">🧸</span>
-            <p className="mt-2 text-sm font-medium text-ink">先创建一只玩偶</p>
-            {!isLoggedIn && (
-              <p className="mt-1 text-[11px] text-ink-muted">游客模式请先登录</p>
-            )}
+            <p className="mt-2 text-sm font-medium text-ink">
+              {t('archive.createFirst')}
+            </p>
           </button>
         )}
 
@@ -138,13 +136,13 @@ export function TimelinePage() {
             <div className="relative z-[1] max-w-[65%]">
               <span className="inline-flex items-center gap-1 rounded-full bg-white/65 px-2.5 py-1 text-[10px] font-medium text-terra-deep">
                 <Sparkles className="h-3 w-3" />
-                陪伴纪念
+                {t('archive.memorial')}
               </span>
 
               {companion.isFuture ? (
                 <>
                   <p className="mt-3 text-xs font-medium text-ink-soft">
-                    距离我们相遇还有 {companion.daysUntil} 天
+                    {t('archive.daysUntilMeet', { n: companion.daysUntil })}
                   </p>
                   <p className="mt-0.5 font-display text-[1.9rem] leading-none text-ink">
                     COMING SOON
@@ -153,7 +151,7 @@ export function TimelinePage() {
               ) : (
                 <>
                   <p className="mt-3 text-xs font-medium text-ink-soft">
-                    今天是我们认识的第 {companion.days} 天
+                    {t('archive.dayNumber', { n: companion.days })}
                   </p>
                   <p className="mt-0.5 font-display text-[2.25rem] leading-none text-ink">
                     {companion.days} DAYS
@@ -162,7 +160,7 @@ export function TimelinePage() {
               )}
 
               <span className="mt-3 inline-flex items-center text-[10px] font-semibold text-matcha-deep">
-                进入回忆展厅
+                {t('archive.enterMemoryHall')}
                 <ChevronRight className="h-3.5 w-3.5" />
               </span>
             </div>
@@ -176,35 +174,35 @@ export function TimelinePage() {
         {viewedToy && companion && (
           <section className="grid grid-cols-2 gap-2">
             <ArchiveStatCard
-              badge="📅 陪伴"
+              badge={t('archive.statCompanion')}
               value={companionDaysValue}
-              unit="天"
+              unit={t('archive.unitDay')}
               hint={
                 companion.isFuture
-                  ? `还有 ${companion.daysUntil} 天相遇`
-                  : '一起走过的日子'
+                  ? t('archive.hintUntilMeet', { n: companion.daysUntil })
+                  : t('archive.hintTogether')
               }
               onClick={() => requireViewedToy('/growth/stats/companion')}
             />
             <ArchiveStatCard
-              badge="✈️ 旅行"
+              badge={t('archive.statTravel')}
               value={travelCount}
-              unit="次"
-              hint="出发的记录"
+              unit={t('archive.unitTrip')}
+              hint={t('archive.hintTravel')}
               onClick={() => requireViewedToy('/growth/stats/travel')}
             />
             <ArchiveStatCard
-              badge="🏙️ 城市"
+              badge={t('archive.statCities')}
               value={cityCount}
-              unit="座"
-              hint="留下脚印的地方"
+              unit={t('archive.unitCity')}
+              hint={t('archive.hintCities')}
               onClick={() => requireViewedToy('/growth/stats/cities')}
             />
             <ArchiveStatCard
-              badge="✨ 瞬间"
+              badge={t('archive.statMoments')}
               value={momentCount}
-              unit="条"
-              hint="共同收藏的闪光"
+              unit={t('archive.unitMoment')}
+              hint={t('archive.hintMoments')}
               onClick={() => requireViewedToy('/growth/stats/moments')}
             />
           </section>
@@ -233,17 +231,17 @@ export function TimelinePage() {
                   id="toy-picker-title"
                   className="font-display text-lg text-ink"
                 >
-                  选择当前玩偶
+                  {t('archive.pickerTitle')}
                 </h2>
                 <p className="mt-0.5 text-[10px] text-ink-muted">
-                  新增记录、成长与对话将默认使用它
+                  {t('archive.pickerHint')}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setPickerOpen(false)}
                 className="flex h-8 w-8 items-center justify-center rounded-full bg-cream text-ink-muted"
-                aria-label="关闭玩偶列表"
+                aria-label={t('archive.closePicker')}
               >
                 <X className="h-4 w-4" />
               </button>
@@ -260,7 +258,7 @@ export function TimelinePage() {
                       setCurrentToyId(toy.id)
                       setViewedToyId(toy.id)
                       setPickerOpen(false)
-                      showToast(`已将 ${toy.name} 设为当前玩偶`)
+                      showToast(t('archive.setCurrent', { name: toy.name }))
                     }}
                     className={`flex w-full items-center gap-3 rounded-2xl border px-3 py-2.5 text-left transition-colors ${
                       selected
@@ -290,7 +288,7 @@ export function TimelinePage() {
                           ? 'bg-matcha text-white'
                           : 'border border-line bg-white text-transparent'
                       }`}
-                      aria-label={selected ? '当前玩偶' : undefined}
+                      aria-label={selected ? t('archive.currentAria') : undefined}
                     >
                       <Check className="h-4 w-4" strokeWidth={3} />
                     </span>
@@ -308,7 +306,7 @@ export function TimelinePage() {
               className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-2xl border border-dashed border-matcha/45 bg-white py-3 text-xs font-semibold text-matcha-deep"
             >
               <Plus className="h-4 w-4" />
-              新增玩偶
+              {t('archive.addToy')}
             </button>
           </section>
         </div>
@@ -341,9 +339,11 @@ function ArchiveStatCard({
       </span>
       <p className="mt-2 font-display text-[1.55rem] leading-none text-ink">
         {value}
-        <span className="ml-0.5 font-sans text-[11px] font-medium text-ink-muted">
-          {unit}
-        </span>
+        {unit ? (
+          <span className="ml-0.5 font-sans text-[11px] font-medium text-ink-muted">
+            {unit}
+          </span>
+        ) : null}
       </p>
       <p className="mt-1 text-[10px] leading-snug text-ink-soft">{hint}</p>
     </button>

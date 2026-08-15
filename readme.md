@@ -17,7 +17,7 @@
 ---
 > ### 基本信息：
 > - 名称：**Toy Diary**
-> - 技术栈：**`React` + `TypeScript` + `Vite` + `Tailwind` + `Python`**
+> - 技术栈：**`React` + `TypeScript` + `Vite` + `Tailwind` + `viem` + `Python`**
 > - 比赛主题：**Reverse**
 > - DEMO Link：[LINK](https://toydiary.outwardly.dpdns.org) || [BACKUP LINK](https://toydiary.pages.dev)
 > -  目标用户：**喜欢收藏 / 携带玩偶旅行、拍照，并希望用玩偶记录生活与情绪的年轻人**
@@ -87,6 +87,12 @@ AI 会结合玩偶的性格和已有记忆，以玩偶第一视角生成日记�
 
 成长轨迹、旅行足迹和重要回忆也可以生成分享内容，让用户将自己与玩偶的故事分享给朋友。
 
+### 8. Injective 链上确权（实验性演示）
+
+在「我的 → 资料」中，用户可以通过 MetaMask 切换到 Injective EVM Testnet，将当前玩偶与最新一条记录的内容哈希提交给预置 SBT 合约，并获得交易哈希与区块浏览器链接。
+
+该流程由浏览器直接完成，不新增应用后端或数据库。当前仓库中的合约地址和 ABI 仍为占位配置，因此这是路演集成脚手架；正式演示前必须替换真实测试网合约并准备测试网 INJ，不能将当前状态描述为已成功铸造。
+
 ## 四、产品特色
 
 ### 1. 记录主体的反转
@@ -120,7 +126,7 @@ Toy Diary 不只是一个照片记录工具，也不只是一个 AI 聊天应用
 | 文档 | 说明 |
 |------|------|
 | [**GitHub Wiki**](https://github.com/FrankWkd-Plus/ToyDiary/wiki) | **线上 Wiki**（技术全览 + Home/档案界面；侧边栏导航） |
-| [`docs/wiki/README.md`](./docs/wiki/README.md) | Wiki 源文件（含 **[13 · 数据库](./docs/wiki/13-database.md)**） |
+| [`docs/wiki/README.md`](./docs/wiki/README.md) | Wiki 源文件（含 **[13 · 数据库](./docs/wiki/13-database.md)**、**[14 · Injective SBT](./docs/wiki/14-injective-sbt.md)**） |
 | [`feature.md`](./feature.md) | **完整功能说明**（用户能力 + 后端 / DB / AI / 地址） |
 | [`docs/PRD.md`](./docs/PRD.md) | **产品需求文档**（定位、原则、MVP 范围、演示脚本） |
 | [`docs/api.md`](./docs/api.md) | HTTP API 与 Mock 契约 |
@@ -147,6 +153,7 @@ ToyDairy/
 │   ├── wiki/                 # ★ Wiki 知识库（技术 + Home 界面）
 │   │   ├── README.md         # Wiki 目录
 │   │   ├── 03-home-ui.md     # 档案 Home 界面详解
+│   │   ├── 14-injective-sbt.md # Injective/SBT 集成、发布与排障
 │   │   └── …                 # 产品 / 架构 / API / 部署 / 排障
 │   ├── PRD.md                # 产品需求（从 readme 迁入整理）
 │   ├── api.md                # API 文档
@@ -177,6 +184,7 @@ ToyDairy/
 │       ├── layout/           # AppLayout
 │       ├── context/          # AppContext（toys/entries/toast）
 │       ├── auth/             # 登录会话、游客、偏好
+│       ├── chain/            # viem + MetaMask + Injective SBT 演示
 │       ├── api/              # client + mockStore + communityStore
 │       ├── ai/               # 前端 AI 客户端与本地 fallback
 │       ├── archive/          # 陪伴天数、星座、活力
@@ -205,7 +213,8 @@ ToyDairy/
 
 | 区域 | 职责 |
 |------|------|
-| **`web/src`** | 全部用户界面与本地业务状态 |
+| **`web/src`** | 全部用户界面、本地业务状态，以及浏览器钱包/Injective 集成 |
+| **`web/src/chain`** | viem 封装、MetaMask 切链、内容 hash 与 SBT 合约写入 |
 | **`web/functions`** | 仅服务端能力：AI、地点代理；**密钥不进前端** |
 | **`web/migrations`** | 未来 D1 表结构草案 |
 | **`docs/`** | 产品与工程文档 |
@@ -223,7 +232,7 @@ npm install
 npm run dev
 ```
 
-浏览器打开终端提示地址（默认 `http://localhost:5173`）。桌面端居中约 390px 手机框。
+浏览器打开终端提示地址（默认 `http://localhost:5173`）。桌面端居中约 390px 手机框。若要测试链上确权，还需安装 MetaMask，并准备 Injective EVM Testnet 账户与测试网 INJ。
 
 | 脚本 | 说明 |
 |------|------|
@@ -264,7 +273,10 @@ npx wrangler pages deploy ./dist \
 ```
 
 AI 密钥在 Dashboard → **toydiary** → Settings → Environment variables（`OPENAI_API_KEY` 等，Encrypt）。  
-完整步骤与 D1/KV/R2 资源表见 [`docs/cloudflare.md`](./docs/cloudflare.md)；API 与排障见 [`docs/api.md`](./docs/api.md)。
+
+**链上演示发布前检查**：把 `web/src/chain/injectiveSbt.ts` 中的零地址和占位 ABI 替换为 Injective EVM Testnet 上真实部署的 SBT 合约，准备测试网 INJ，并实测 MetaMask 切链、交易提交及 Blockscout 链接。该配置不需要 Cloudflare Secret，严禁把私钥或助记词写入前端/环境变量。
+
+完整步骤与 D1/KV/R2 资源表见 [`docs/cloudflare.md`](./docs/cloudflare.md)；API 与排障见 [`docs/api.md`](./docs/api.md)；链上专题见 [`docs/wiki/14-injective-sbt.md`](./docs/wiki/14-injective-sbt.md)。
 
 ---
 
@@ -275,5 +287,6 @@ AI 密钥在 Dashboard → **toydiary** → Settings → Environment variables�
 3. **成长** — 双视角详情 / 地图  
 4. **对话** — 与玩偶闲聊  
 5. **我的** — 配色 / 正数日 / 备份  
+6. **（实验性）我的 → 资料 → Injective 链上确权** — MetaMask 切到测试网，提交交易并打开 Blockscout（须先配置真实合约）  
 
 产品定义与冲刺范围以 [`docs/PRD.md`](./docs/PRD.md) 为准；实现级功能清单以 [`feature.md`](./feature.md) 为准。

@@ -16,6 +16,10 @@ export const onRequestGet: PagesFunction = async (context) => {
   const url = new URL(context.request.url)
   const q = url.searchParams.get('q')?.trim() || ''
   const limit = Math.min(Number(url.searchParams.get('limit') || 8), 12)
+  const lang = (url.searchParams.get('lang') || 'zh').toLowerCase()
+  const acceptLanguage = lang.startsWith('en')
+    ? 'en,en-US;q=0.9,zh;q=0.3'
+    : 'zh-CN,zh;q=0.9,en;q=0.4'
   if (!q) {
     return json({ places: [], error: 'q is required' }, 400)
   }
@@ -26,7 +30,7 @@ export const onRequestGet: PagesFunction = async (context) => {
       {
         headers: {
           Accept: 'application/json',
-          'Accept-Language': 'zh-CN,zh,en',
+          'Accept-Language': acceptLanguage,
           'User-Agent': 'ToyDairy/1.0 (Cloudflare Pages; hackathon demo)',
         },
       },

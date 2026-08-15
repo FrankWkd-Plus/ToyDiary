@@ -40,6 +40,7 @@ import {
   type ChatMessage,
 } from '../conversation/chatStorage'
 import { useApp } from '../context/AppContext'
+import { useLocale } from '../i18n'
 import type { Entry, Toy } from '../types'
 
 const QUICK_TOPICS = [
@@ -97,6 +98,7 @@ function fileToDataUrl(file: File) {
 
 export function ConversationPage() {
   const navigate = useNavigate()
+  const { locale } = useLocale()
   const {
     currentToy,
     toys,
@@ -207,7 +209,7 @@ export function ConversationPage() {
       }))
       .filter((m) => m.text)
 
-    let replyText = localPersonaReply(currentToy, userText, entries)
+    let replyText = localPersonaReply(currentToy, userText, entries, locale)
     let errorMessage: ChatMessage | null = null
     try {
       const result = await chatToyReply({
@@ -216,10 +218,11 @@ export function ConversationPage() {
         history,
         entries,
         quietMode,
+        locale,
       })
       replyText = result.reply
       if (result.apiError) {
-        const errorText = formatChatApiError(result.apiError)
+        const errorText = formatChatApiError(result.apiError, locale)
         errorMessage = {
           id: uid('error'),
           role: 'system',
@@ -232,16 +235,24 @@ export function ConversationPage() {
           errorText
             .split('\n')
             .map((line) => line.trim())
-            .find((line) => line && !line.startsWith('AI 调用失败')) ||
-          'AI 调用失败'
+            .find(
+              (line) =>
+                line &&
+                !line.startsWith('AI 调用失败') &&
+                !line.startsWith('AI request failed'),
+            ) ||
+          (locale === 'en' ? 'AI request failed' : 'AI 调用失败')
         showToast(toastLine.slice(0, 120))
         console.warn('[chatToyReply] API failed', result.apiError)
       }
     } catch (err) {
-      const errorText = formatChatApiError({
-        status: 0,
-        body: err instanceof Error ? err.message : String(err),
-      })
+      const errorText = formatChatApiError(
+        {
+          status: 0,
+          body: err instanceof Error ? err.message : String(err),
+        },
+        locale,
+      )
       errorMessage = {
         id: uid('error'),
         role: 'system',

@@ -9,7 +9,7 @@ export function LoadingBear({ className = '' }: { className?: string }) {
       aria-hidden="true"
       role="img"
     >
-      <title>小熊加载中</title>
+      <title>Loading</title>
       {/* ears */}
       <circle cx="28" cy="32" r="16" fill="#E8C9A0" />
       <circle cx="92" cy="32" r="16" fill="#E8C9A0" />

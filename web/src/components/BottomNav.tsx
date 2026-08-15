@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { Plus } from 'lucide-react'
+import { useLocale } from '../i18n'
 import {
   ConversationNavIcon,
   DiaryNavIcon,
@@ -9,15 +10,8 @@ import {
 } from './NavIcons'
 import { RecordMethodSheet } from './RecordMethodSheet'
 
-const tabs = [
-  { to: '/archive', label: '档案', icon: DiaryNavIcon },
-  { to: '/growth', label: '成长', icon: GrowthNavIcon },
-  { to: '/compose', label: '', icon: Plus, center: true },
-  { to: '/conversation', label: '对话', icon: ConversationNavIcon },
-  { to: '/me', label: '我的', icon: MeNavIcon },
-] as const
-
 export function BottomNav() {
+  const { t } = useLocale()
   const location = useLocation()
   const { pathname } = location
   const fromMe =
@@ -25,6 +19,18 @@ export function BottomNav() {
   const fromArchive =
     (location.state as { from?: string } | null)?.from === 'archive'
   const [composerOpen, setComposerOpen] = useState(false)
+
+  const tabs = [
+    { to: '/archive', label: t('nav.archive'), icon: DiaryNavIcon },
+    { to: '/growth', label: t('nav.growth'), icon: GrowthNavIcon },
+    { to: '/compose', label: '', icon: Plus, center: true as const },
+    {
+      to: '/conversation',
+      label: t('nav.conversation'),
+      icon: ConversationNavIcon,
+    },
+    { to: '/me', label: t('nav.me'), icon: MeNavIcon },
+  ]
 
   return (
     <nav
@@ -42,7 +48,7 @@ export function BottomNav() {
                 type="button"
                 onClick={() => setComposerOpen(true)}
                 className="fab-float -mt-7 flex flex-col items-center"
-                aria-label="新增记录"
+                aria-label={t('nav.addRecord')}
               >
                 <span className="relative flex h-[3.75rem] w-[3.75rem] items-center justify-center rounded-full bg-gradient-to-b from-[color-mix(in_srgb,var(--color-matcha)_90%,white)] to-[var(--color-matcha-deep)] text-white shadow-[var(--shadow-glow)] ring-[3px] ring-paper transition-transform active:scale-95">
                   <Plus className="h-7 w-7" strokeWidth={2.5} />

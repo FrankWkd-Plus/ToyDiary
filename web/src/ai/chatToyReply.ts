@@ -1,4 +1,5 @@
 import type { Entry, Toy } from '../types'
+import { getStoredLocale, type Locale } from '../i18n'
 
 export interface ChatTurn {
   role: 'user' | 'toy'
@@ -11,6 +12,7 @@ export interface ChatToyReplyInput {
   history?: ChatTurn[]
   entries?: Entry[]
   quietMode?: boolean
+  locale?: Locale
 }
 
 export interface ChatApiError {
@@ -35,63 +37,118 @@ const CHAT_ENDPOINT =
   ) ||
   '/api/chat'
 
+function hasTrait(toy: Toy, ...names: string[]) {
+  const set = new Set(toy.traits.map((t) => t.toLowerCase()))
+  return names.some((n) => set.has(n.toLowerCase()))
+}
+
 /** Local keyword templates — used when remote AI is unavailable. */
 export function localPersonaReply(
   toy: Toy,
   text: string,
   entries: Entry[] = [],
+  locale: Locale = 'zh',
 ): string {
-  const normalized = text.trim()
+  const isEn = locale === 'en'
+  const normalized = text.trim().toLowerCase()
   const recent = entries[0]
   const travel =
     entries.find((e) => e.type === 'travel' && e.imageUrl) ??
     entries.find((e) => e.imageUrl) ??
     recent
 
-  if (/累|疲惫|难过|不开心|压力|烦/.test(normalized)) {
-    if (toy.traits.includes('活泼')) {
-      return '先把今天的大包袱放在这里吧，我替你看一会儿。等你有一点力气了，我们再慢慢往前走。'
+  if (
+    /tired|exhausted|sad|upset|stressed|anxious|lonely|depressed|bad day|rough day|累|疲惫|难过|不开心|压力|烦/.test(
+      normalized,
+    )
+  ) {
+    if (hasTrait(toy, 'playful', '活泼')) {
+      return isEn
+        ? 'Set that heavy bag down for a minute — I can hold it. When you have a little energy again, we can take the next step together.'
+        : '先把今天的大包袱放在这里吧，我替你看一会儿。等你有一点力气了，我们再慢慢往前走。'
     }
-    if (toy.traits.includes('勇敢')) {
-      return '今天不去很远的地方了，我们就在这里进行一次小小的休息探险。你已经做得很好啦。'
+    if (hasTrait(toy, 'brave', '勇敢')) {
+      return isEn
+        ? "No faraway adventures today. Let's call this a tiny rest expedition. You already did enough."
+        : '今天不去很远的地方了，我们就在这里进行一次小小的休息探险。你已经做得很好啦。'
     }
-    return '辛苦啦。你不需要马上振作，我会安安静静陪你待一会儿。要不要告诉我，今天最累的是哪一刻？'
+    return isEn
+      ? "You've been through a lot. You don't have to bounce back right away — I'll sit quietly with you. Want to tell me which moment felt heaviest?"
+      : '辛苦啦。你不需要马上振作，我会安安静静陪你待一会儿。要不要告诉我，今天最累的是哪一刻？'
   }
 
-  if (/旅行|回忆|记得|以前|去过/.test(normalized) && travel?.location) {
-    return `当然记得。我们在${travel.location}留下了「${travel.title || '一段小小的旅行'}」。我最舍不得忘记的，是那天你愿意带我一起看世界。`
+  if (
+    /travel|trip|memory|remember|before|used to|回忆|记得|以前|去过|旅行/.test(
+      normalized,
+    ) &&
+    travel?.location
+  ) {
+    return isEn
+      ? `Of course I remember. We left “${travel.title || 'a little journey'}” in ${travel.location}. What I never want to forget is that you chose to show me the world.`
+      : `当然记得。我们在${travel.location}留下了「${travel.title || '一段小小的旅行'}」。我最舍不得忘记的，是那天你愿意带我一起看世界。`
   }
 
-  if (/日记|记录|写下来|保存/.test(normalized)) {
-    return '好呀。你把今天发生的事告诉我，我来帮你整理成一篇属于我们的日记；写完以后还可以再慢慢修改。'
+  if (/diary|journal|write|record|save|日记|记录|写下来|保存/.test(normalized)) {
+    return isEn
+      ? 'Gladly. Tell me what happened today and I’ll shape it into a diary entry for us — we can always edit it later.'
+      : '好呀。你把今天发生的事告诉我，我来帮你整理成一篇属于我们的日记；写完以后还可以再慢慢修改。'
   }
 
-  if (/照片|晚霞|天空|看到/.test(normalized)) {
-    return recent?.location
-      ? `听起来像一张值得收藏的照片。会不会有一点像我们在${recent.location}看到的颜色？`
+  if (/photo|picture|sunset|sky|look|照片|晚霞|天空|看到/.test(normalized)) {
+    if (recent?.location) {
+      return isEn
+        ? `That sounds like a photo worth keeping. A little like the colors we saw in ${recent.location}?`
+        : `听起来像一张值得收藏的照片。会不会有一点像我们在${recent.location}看到的颜色？`
+    }
+    return isEn
+      ? 'I’d love to see that moment through your eyes. Send it over and we can tuck it into today.'
       : '我也想看看你眼中的这一刻。发给我吧，我们可以把它收藏进今天。'
   }
 
-  if (/你好|在吗|想你|陪我/.test(normalized)) {
-    return `我一直都在呀。${toy.traits.includes('活泼') ? '快把今天的新鲜事分我一点！' : '可以靠近一点，慢慢说给我听。'}`
+  if (
+    /hello|hi |hey|are you there|miss you|with me|你好|在吗|想你|陪我/.test(
+      normalized,
+    )
+  ) {
+    const playful = hasTrait(toy, 'playful', '活泼')
+    if (isEn) {
+      return `I’m right here. ${
+        playful
+          ? 'Share a little of today’s news with me!'
+          : 'Come a little closer and tell me slowly.'
+      }`
+    }
+    return `我一直都在呀。${
+      playful ? '快把今天的新鲜事分我一点！' : '可以靠近一点，慢慢说给我听。'
+    }`
   }
 
-  const trait = toy.traits[0] || '温柔'
-  return `我认真听到啦。作为一只${trait}的${toy.role}，我想把你刚刚说的这一刻好好接住。然后呢，还发生了什么？`
+  const trait = toy.traits[0] || (isEn ? 'gentle' : '温柔')
+  return isEn
+    ? `I heard you. As a ${trait} ${toy.role}, I want to hold onto this moment you just shared. And then… what happened next?`
+    : `我认真听到啦。作为一只${trait}的${toy.role}，我想把你刚刚说的这一刻好好接住。然后呢，还发生了什么？`
 }
 
 /** Pretty-print API body for chat display; keep raw text if not JSON. */
-export function formatChatApiError(error: ChatApiError): string {
+export function formatChatApiError(
+  error: ChatApiError,
+  locale: Locale = 'zh',
+): string {
+  const isEn = locale === 'en'
   const header =
     error.status > 0
-      ? `AI 调用失败 · HTTP ${error.status}`
-      : 'AI 调用失败 · 网络或请求异常'
+      ? isEn
+        ? `AI request failed · HTTP ${error.status}`
+        : `AI 调用失败 · HTTP ${error.status}`
+      : isEn
+        ? 'AI request failed · network or request error'
+        : 'AI 调用失败 · 网络或请求异常'
   const raw = error.body?.trim()
-  if (!raw) return `${header}\n（无返回内容）`
+  if (!raw)
+    return isEn ? `${header}\n(no response body)` : `${header}\n（无返回内容）`
 
   try {
     const parsed = JSON.parse(raw) as Record<string, unknown>
-    // Prefer a short human line first (from our Pages Function or OpenAI-style payload).
     const summary =
       pickErrorSummary(parsed) ||
       (typeof parsed.detail === 'string' ? parsed.detail : undefined)
@@ -120,7 +177,6 @@ function pickErrorSummary(parsed: Record<string, unknown>): string | undefined {
     return parsed.message.trim()
   }
   if (typeof parsed.detail === 'string' && parsed.detail.trim()) {
-    // detail may itself be a JSON string from the upstream provider
     const detail = parsed.detail.trim()
     try {
       const inner = JSON.parse(detail) as Record<string, unknown>
@@ -142,10 +198,16 @@ function pickErrorSummary(parsed: Record<string, unknown>): string | undefined {
 export async function chatToyReply(
   input: ChatToyReplyInput,
 ): Promise<ChatToyReplyResult> {
+  const locale = input.locale || getStoredLocale()
   const message = input.message.trim()
   if (!message) {
     return {
-      reply: localPersonaReply(input.toy, input.message, input.entries),
+      reply: localPersonaReply(
+        input.toy,
+        input.message,
+        input.entries,
+        locale,
+      ),
       source: 'local',
     }
   }
@@ -181,6 +243,8 @@ export async function chatToyReply(
           history,
           memories,
           quietMode: input.quietMode,
+          locale,
+          language: locale,
         }),
       })
 
@@ -225,7 +289,7 @@ export async function chatToyReply(
   }
 
   return {
-    reply: localPersonaReply(input.toy, message, input.entries),
+    reply: localPersonaReply(input.toy, message, input.entries, locale),
     source: 'local',
     apiError,
   }
