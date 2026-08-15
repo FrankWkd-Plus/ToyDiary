@@ -29,4 +29,4 @@ playback:
 paths:
   # 默认测试 wav：仓库 hardware/pi/test.wav
   # 板子上可改为 /home/talk2/play/test.wav
-  default_wav: "../../pi/test.wav"
+  default_wav: "test.wav"
