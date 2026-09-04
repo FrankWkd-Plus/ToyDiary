@@ -16,6 +16,7 @@ Desktop.ini
 # Claude / local agent state
 .claude/
 .claude/worktrees/
+.workbuddy/
 
 # Cloudflare Wrangler local state
 .wrangler/

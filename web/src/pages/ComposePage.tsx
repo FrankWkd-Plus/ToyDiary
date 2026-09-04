@@ -16,6 +16,7 @@ import { PlacePicker } from '../components/PlacePicker'
 import { PageHeader } from '../components/PageHeader'
 import { useApp } from '../context/AppContext'
 import { useLocale } from '../i18n'
+import { persistDiaryPhoto } from '../media/photoStorage'
 import {
   COMPOSE_ENTRY_TYPES,
   entryTypeLabel,
@@ -28,6 +29,7 @@ interface ComposeRouteState {
   mode?: 'photo' | 'text'
   imageUrl?: string
   imageFile?: File
+  nativeImageUri?: string
   ocrText?: string
   fromCamera?: boolean
   fromConversation?: boolean
@@ -44,6 +46,10 @@ export function ComposePage() {
   const [place, setPlace] = useState<Place | undefined>()
   const [userNote, setUserNote] = useState(routeState?.ocrText || '')
   const [imageUrl, setImageUrl] = useState<string | undefined>(routeState?.imageUrl)
+  const [imageFile, setImageFile] = useState<File | undefined>(routeState?.imageFile)
+  const [nativeImageUri, setNativeImageUri] = useState<string | undefined>(
+    routeState?.nativeImageUri,
+  )
   const [aiEnabled, setAiEnabled] = useState(true)
   const [analysis, setAnalysis] = useState<EntryAnalysis | null>(null)
   const [title, setTitle] = useState('')
@@ -58,6 +64,8 @@ export function ComposePage() {
 
   useEffect(() => {
     if (routeState?.imageUrl) setImageUrl(routeState.imageUrl)
+    if (routeState?.imageFile) setImageFile(routeState.imageFile)
+    if (routeState?.nativeImageUri) setNativeImageUri(routeState.nativeImageUri)
     if (routeState?.mode === 'text') setImageUrl(undefined)
     if (routeState?.ocrText) setUserNote(routeState.ocrText)
   }, [routeState?.imageUrl, routeState?.mode, routeState?.ocrText])
@@ -73,6 +81,8 @@ export function ComposePage() {
       return
     }
     setImageUrl(URL.createObjectURL(file))
+    setImageFile(file)
+    setNativeImageUri(undefined)
     setAnalysis(null)
   }
 
@@ -161,6 +171,11 @@ export function ComposePage() {
     }
     setSaving(true)
     try {
+      const persistedImageUrl = await persistDiaryPhoto({
+        file: imageFile,
+        nativeUri: nativeImageUri,
+        previewUrl: imageUrl,
+      })
       const savedType: EntryType =
         entryType === 'heart' ? 'daily' : analysis.entryType || entryType
       // Persist diary to localStorage (demo DB) — REST/D1 contract kept on api.*
@@ -172,7 +187,8 @@ export function ComposePage() {
         title: title.trim(),
         userNote: userNote.trim() || undefined,
         mood,
-        imageUrl: analysis.processedImageUrl || imageUrl,
+        // Never persist a temporary blob: URL as the diary photo.
+        imageUrl: persistedImageUrl || analysis.processedImageUrl || imageUrl,
         aiDiary: aiDiary.trim(),
         tags: analysis.tags,
         imageAnalysis: analysis.imageAnalysis,
@@ -348,6 +364,8 @@ export function ComposePage() {
                 type="button"
                 onClick={() => {
                   setImageUrl(undefined)
+                  setImageFile(undefined)
+                  setNativeImageUri(undefined)
                   setAnalysis(null)
                 }}
                 className="absolute right-2.5 top-2.5 flex h-8 w-8 items-center justify-center rounded-full bg-ink/75 text-white shadow-md"

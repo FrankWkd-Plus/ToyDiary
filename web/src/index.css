@@ -138,6 +138,13 @@ body {
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
+  /*
+   * Capacitor uses viewport-fit=cover on iPhone, so the WebView extends
+   * underneath the Dynamic Island. Keep every page's first interactive
+   * element below the system status area while retaining a clean white
+   * canvas behind it.
+   */
+  padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
   scrollbar-width: none;
   animation: page-in 0.18s ease-out;

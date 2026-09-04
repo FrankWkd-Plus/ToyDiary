@@ -1,7 +1,14 @@
 import { useRef, useState, type ChangeEvent, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Camera, Image, PenLine, ScanText, X } from 'lucide-react'
+import {
+  Camera as NativeCamera,
+  CameraDirection,
+  MediaTypeSelection,
+} from '@capacitor/camera'
+import { Filesystem } from '@capacitor/filesystem'
 import { useApp } from '../context/AppContext'
+import { isNativeApp } from '../media/photoStorage'
 import { recognizeImageText } from '../ocr/recognizeImageText'
 
 export function RecordMethodSheet({
@@ -18,6 +25,88 @@ export function RecordMethodSheet({
   const [ocrRunning, setOcrRunning] = useState(false)
   const [ocrProgress, setOcrProgress] = useState(0)
   const [capturedPreview, setCapturedPreview] = useState<string>()
+
+  async function nativePhotoToFile(uri: string, name: string) {
+    const source = await Filesystem.readFile({ path: uri })
+    if (typeof source.data !== 'string') throw new Error('读取照片失败')
+    const bytes = Uint8Array.from(atob(source.data), (char) => char.charCodeAt(0))
+    return new File([bytes], name, { type: 'image/jpeg' })
+  }
+
+  async function onNativePhotoSelected(source: 'gallery' | 'camera') {
+    try {
+      const options = {
+        quality: 88,
+        targetWidth: 2000,
+        targetHeight: 2000,
+        includeMetadata: true,
+      }
+      const result =
+        source === 'camera'
+          ? await NativeCamera.takePhoto({
+              ...options,
+              cameraDirection: CameraDirection.Rear,
+            })
+          : (await NativeCamera.chooseFromGallery({
+              ...options,
+              mediaType: MediaTypeSelection.Photo,
+              allowMultipleSelection: false,
+              limit: 1,
+            })).results[0]
+      if (!result?.uri || !result.webPath) return
+
+      const file = await nativePhotoToFile(result.uri, `photo.${result.metadata?.format || 'jpg'}`)
+      if (source === 'gallery') {
+        onClose()
+        navigate('/compose', {
+          state: {
+            mode: 'photo',
+            imageUrl: result.webPath,
+            imageFile: file,
+            nativeImageUri: result.uri,
+          },
+        })
+        return
+      }
+
+      setCapturedPreview(result.webPath)
+      setOcrProgress(0)
+      setOcrRunning(true)
+      try {
+        const ocrText = await recognizeImageText(file, ({ progress }) => {
+          setOcrProgress(Math.max(0, Math.min(1, progress)))
+        })
+        onClose()
+        navigate('/compose', {
+          state: {
+            mode: 'photo',
+            imageUrl: result.webPath,
+            imageFile: file,
+            nativeImageUri: result.uri,
+            ocrText,
+            fromCamera: true,
+          },
+        })
+      } catch {
+        onClose()
+        navigate('/compose', {
+          state: {
+            mode: 'photo',
+            imageUrl: result.webPath,
+            imageFile: file,
+            nativeImageUri: result.uri,
+            fromCamera: true,
+          },
+        })
+        showToast('拍照完成，OCR 暂时未识别成功')
+      } finally {
+        setOcrRunning(false)
+        setCapturedPreview(undefined)
+      }
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '打开相机失败，请重试')
+    }
+  }
 
   async function onImageSelected(
     e: ChangeEvent<HTMLInputElement>,
@@ -124,7 +213,10 @@ export function RecordMethodSheet({
                 icon={<Image className="h-6 w-6" />}
                 label="从相册选择"
                 color="bg-mist-soft text-matcha-deep"
-                onClick={() => galleryInputRef.current?.click()}
+                onClick={() => {
+                  if (isNativeApp()) void onNativePhotoSelected('gallery')
+                  else galleryInputRef.current?.click()
+                }}
               />
               <RecordChoice
                 icon={
@@ -135,7 +227,10 @@ export function RecordMethodSheet({
                 }
                 label="拍照记录"
                 color="bg-peach-soft text-rose-deep"
-                onClick={() => cameraInputRef.current?.click()}
+                onClick={() => {
+                  if (isNativeApp()) void onNativePhotoSelected('camera')
+                  else cameraInputRef.current?.click()
+                }}
               />
               <RecordChoice
                 icon={<PenLine className="h-6 w-6" />}
