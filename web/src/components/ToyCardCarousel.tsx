@@ -70,10 +70,14 @@ export function ToyCardCarousel({
   const location = useLocation()
   const { toys, currentToy, entries, setCurrentToyId } = useApp()
   const carouselRef = useRef<HTMLDivElement>(null)
+  const programmaticTargetIndexRef = useRef<number | null>(null)
   const [entriesByToy, setEntriesByToy] = useState<Record<string, Entry[]>>({})
-  const [visibleIndex, setVisibleIndex] = useState(() =>
-    Math.max(0, toys.findIndex((toy) => toy.id === currentToy?.id)),
+  const initialVisibleIndex = Math.max(
+    0,
+    toys.findIndex((toy) => toy.id === currentToy?.id),
   )
+  const visibleIndexRef = useRef(initialVisibleIndex)
+  const [visibleIndex, setVisibleIndex] = useState(initialVisibleIndex)
 
   useEffect(() => {
     let cancelled = false
@@ -92,15 +96,21 @@ export function ToyCardCarousel({
       0,
       toys.findIndex((toy) => toy.id === currentToy?.id),
     )
+    visibleIndexRef.current = nextIndex
     setVisibleIndex(nextIndex)
     const carousel = carouselRef.current
     if (!carousel) return
-    window.requestAnimationFrame(() => {
+
+    // The top picker changes the global toy before this carousel moves. While
+    // it is moving, intermediate cards must not overwrite that new selection.
+    programmaticTargetIndexRef.current = nextIndex
+    const frame = window.requestAnimationFrame(() => {
       carousel.scrollTo({
         left: carousel.clientWidth * nextIndex,
         behavior: 'smooth',
       })
     })
+    return () => window.cancelAnimationFrame(frame)
   }, [currentToy?.id, toys])
 
   function syncVisibleCard() {
@@ -110,7 +120,19 @@ export function ToyCardCarousel({
       0,
       Math.min(toys.length - 1, Math.round(carousel.scrollLeft / carousel.clientWidth)),
     )
-    if (index === visibleIndex) return
+
+    const programmaticTarget = programmaticTargetIndexRef.current
+    if (programmaticTarget !== null) {
+      if (index === programmaticTarget) {
+        programmaticTargetIndexRef.current = null
+        visibleIndexRef.current = index
+        setVisibleIndex(index)
+      }
+      return
+    }
+
+    if (index === visibleIndexRef.current) return
+    visibleIndexRef.current = index
     setVisibleIndex(index)
     const visibleToy = toys[index]
     if (!visibleToy) return

@@ -9,6 +9,7 @@ export function PageHeader({
   back,
   right,
   soft,
+  bare,
 }: {
   title: string
   subtitle?: string
@@ -16,13 +17,17 @@ export function PageHeader({
   right?: ReactNode
   /** soft gradient header band */
   soft?: boolean
+  /** transparent header for collection sub-pages that sit on the app canvas */
+  bare?: boolean
 }) {
   const nav = useNavigate()
   const { t } = useLocale()
   return (
     <header
       className={`page-header z-10 flex items-center gap-2.5 px-3.5 ${
-        soft
+        bare
+          ? 'bg-transparent'
+          : soft
           ? 'header-band pattern-soft'
           : 'border-b border-line/50 bg-paper/90 backdrop-blur-xl'
       }`}

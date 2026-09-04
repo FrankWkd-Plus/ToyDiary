@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { companionDays, companionDayStatus, toyAvatar } from '../archive/archiveUtils'
 import { DayCountNumber } from '../components/DayCountNumber'
+import { PageHeader } from '../components/PageHeader'
 import { useApp } from '../context/AppContext'
 import {
   placeCityKey,
@@ -46,9 +47,9 @@ const META: Record<
     unit: '座',
   },
   moments: {
-    title: '记录瞬间',
-    subtitle: (n) => `共 ${n} 条成长瞬间`,
-    icon: '✨',
+    title: '全部记录',
+    subtitle: (n) => `共 ${n} 条记录`,
+    icon: '📖',
     unit: '条',
   },
 }
@@ -95,8 +96,7 @@ export function GrowthStatsPage() {
   }
 
   const meta = META[statKind]
-  const pageTitle =
-    statKind === 'moments' && fromMe ? '我的日记' : meta.title
+  const pageTitle = meta.title
   const count =
     statKind === 'companion'
       ? days
@@ -146,43 +146,52 @@ export function GrowthStatsPage() {
 
   return (
     <div className="min-h-full">
-      <header className="sticky top-0 z-10 border-b border-line/60 bg-white/95 px-3 py-2.5 backdrop-blur">
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => navigate(backTo)}
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-cream text-ink-soft"
-            aria-label={fromMe ? '返回我的' : '返回成长'}
-          >
-            <ChevronLeft className="h-5 w-5" />
-          </button>
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate text-base font-semibold text-ink">
-              {meta.icon} {pageTitle}
-            </h1>
-            <p className="text-[10px] text-ink-muted">
-              {currentToy.name} · {meta.subtitle(count)}
-            </p>
-          </div>
-          {statKind === 'companion' && (
+      {fromMe ? (
+        <PageHeader
+          title={`${meta.icon} ${pageTitle}`}
+          subtitle={`${currentToy.name} · ${meta.subtitle(count)}`}
+          back="/me"
+          bare
+        />
+      ) : (
+        <header className="sticky top-0 z-10 border-b border-line/60 bg-white/95 px-3 py-2.5 backdrop-blur">
+          <div className="flex items-center gap-2">
             <button
               type="button"
-              disabled={sharing}
-              onClick={() => void shareCompanionCard()}
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-cream text-matcha-deep disabled:opacity-50"
-              aria-label="分享正数日"
-              title="分享正数日"
+              onClick={() => navigate(backTo)}
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-cream text-ink-soft"
+              aria-label="返回成长"
             >
-              <Share2 className="h-[18px] w-[18px]" />
+              <ChevronLeft className="h-5 w-5" />
             </button>
-          )}
-        </div>
-      </header>
+            <div className="min-w-0 flex-1">
+              <h1 className="truncate text-base font-semibold text-ink">
+                {meta.icon} {pageTitle}
+              </h1>
+              <p className="text-[10px] text-ink-muted">
+                {currentToy.name} · {meta.subtitle(count)}
+              </p>
+            </div>
+            {statKind === 'companion' && (
+              <button
+                type="button"
+                disabled={sharing}
+                onClick={() => void shareCompanionCard()}
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-cream text-matcha-deep disabled:opacity-50"
+                aria-label="分享正数日"
+                title="分享正数日"
+              >
+                <Share2 className="h-[18px] w-[18px]" />
+              </button>
+            )}
+          </div>
+        </header>
+      )}
 
       <div className="space-y-4 px-3.5 py-4">
-        {/* The companion page keeps one clear hero; other stats retain the
-            memorial entrance card. */}
-        {statKind !== 'companion' && !(statKind === 'moments' && fromMe) && (
+        {/* “我的 → 共同收藏”已经展示过数量；进入详情后直接看内容。
+            成长页的旧入口仍保留原来的纪念展示。 */}
+        {statKind !== 'companion' && !fromMe && (
           <button
             type="button"
             onClick={() => navigate(`/memories/${currentToy.id}`)}
@@ -217,15 +226,17 @@ export function GrowthStatsPage() {
           </button>
         )}
 
-        <DayCountNumber
-          value={count}
-          label={pageTitle}
-          unit={meta.unit}
-          size="hero"
-          photoUrl={photoUrl}
-          sublabel={meta.subtitle(count)}
-          onClick={() => navigate('/days')}
-        />
+        {(!fromMe || statKind === 'companion') && (
+          <DayCountNumber
+            value={count}
+            label={pageTitle}
+            unit={meta.unit}
+            size="hero"
+            photoUrl={photoUrl}
+            sublabel={meta.subtitle(count)}
+            onClick={() => navigate('/days')}
+          />
+        )}
 
         {statKind === 'companion' && (
           <button
@@ -252,10 +263,20 @@ export function GrowthStatsPage() {
             firstEntry={momentEntries[momentEntries.length - 1]}
           />
         )}
-        {statKind === 'travel' && <EntryList entries={travelEntries} empty="还没有旅行记录。" />}
-        {statKind === 'cities' && <CityList groups={cityGroups} />}
+        {statKind === 'travel' && (
+          <EntryList
+            entries={travelEntries}
+            empty="还没有旅行记录。"
+            fromMe={fromMe}
+          />
+        )}
+        {statKind === 'cities' && <CityList groups={cityGroups} fromMe={fromMe} />}
         {statKind === 'moments' && (
-          <EntryList entries={momentEntries} empty="还没有瞬间记录。" />
+          <EntryList
+            entries={momentEntries}
+            empty="还没有瞬间记录。"
+            fromMe={fromMe}
+          />
         )}
       </div>
     </div>
@@ -307,9 +328,11 @@ function CompanionDetail({
 function EntryList({
   entries,
   empty,
+  fromMe = false,
 }: {
   entries: Entry[]
   empty: string
+  fromMe?: boolean
 }) {
   const { locale } = useLocale()
   if (!entries.length) {
@@ -323,40 +346,49 @@ function EntryList({
     <ul className="space-y-2">
       {entries.map((entry) => {
         const location = entry.place?.displayName || entry.location
+        const excerpt =
+          entry.userNote?.trim() ||
+          entry.aiDiary?.trim() ||
+          entry.imageAnalysis?.trim()
         return (
           <li key={entry.id}>
             <Link
               to={`/entries/${entry.id}`}
-              state={{ from: 'growth-stats' }}
-              className="flex gap-3 overflow-hidden rounded-2xl bg-white p-2.5 shadow-[var(--shadow-warm-sm)] ring-1 ring-line/50 active:scale-[0.99]"
+              state={{ from: fromMe ? 'me-collection' : 'growth-stats' }}
+              className="block overflow-hidden rounded-[1.25rem] bg-white p-3 shadow-[var(--shadow-warm-sm)] ring-1 ring-line/50 transition-transform active:scale-[0.99]"
             >
-              {entry.imageUrl ? (
-                <img
-                  src={entry.imageUrl}
-                  alt=""
-                  className="h-16 w-16 shrink-0 rounded-xl object-cover"
-                />
-              ) : (
-                <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-cream text-xl">
-                  📝
-                </span>
-              )}
-              <span className="min-w-0 flex-1 py-0.5">
-                <strong className="block truncate text-sm text-ink">
-                  {entry.title || '这一刻'}
-                </strong>
-                <span className="mt-0.5 block text-[10px] text-ink-muted">
-                  {entry.date}
-                  {` · ${entryTypeLabel(entry.type, locale)}`}
-                </span>
-                {location && (
-                  <span className="mt-1 flex items-center gap-1 text-[11px] text-ink-soft">
-                    <MapPin className="h-3 w-3 text-matcha-deep" />
-                    <span className="truncate">{location}</span>
-                  </span>
+              <span className="flex gap-3">
+                {entry.imageUrl && (
+                  <img
+                    src={entry.imageUrl}
+                    alt=""
+                    className="h-[5.25rem] w-[5.25rem] shrink-0 rounded-2xl object-cover"
+                  />
                 )}
+                <span className="min-w-0 flex-1 py-0.5">
+                  <span className="flex items-start gap-2">
+                    <strong className="min-w-0 flex-1 truncate text-sm text-ink">
+                      {entry.title || excerpt || '这一刻'}
+                    </strong>
+                    <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-ink-muted" />
+                  </span>
+                  {excerpt && excerpt !== entry.title && (
+                    <span className="mt-1.5 line-clamp-2 text-[11px] leading-relaxed text-ink-soft">
+                      {excerpt}
+                    </span>
+                  )}
+                  <span className="mt-2 block text-[10px] text-ink-muted">
+                    {entry.date}
+                    {` · ${entryTypeLabel(entry.type, locale)}`}
+                  </span>
+                  {location && (
+                    <span className="mt-1 flex items-center gap-1 text-[11px] text-ink-soft">
+                      <MapPin className="h-3 w-3 shrink-0 text-matcha-deep" />
+                      <span className="truncate">{location}</span>
+                    </span>
+                  )}
+                </span>
               </span>
-              <ChevronRight className="mt-5 h-4 w-4 shrink-0 text-ink-muted" />
             </Link>
           </li>
         )
@@ -367,8 +399,10 @@ function EntryList({
 
 function CityList({
   groups,
+  fromMe = false,
 }: {
   groups: { key: string; place: Place; entries: Entry[] }[]
+  fromMe?: boolean
 }) {
   if (!groups.length) {
     return (
@@ -399,7 +433,7 @@ function CityList({
                   <Link
                     key={e.id}
                     to={`/entries/${e.id}`}
-                    state={{ from: 'growth-stats' }}
+                    state={{ from: fromMe ? 'me-collection' : 'growth-stats' }}
                     className="flex items-center justify-between gap-2 rounded-xl bg-cream/80 px-2.5 py-1.5 text-[11px] active:bg-cream"
                   >
                     <span className="min-w-0 truncate text-ink-soft">

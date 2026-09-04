@@ -35,8 +35,11 @@ export function EntryDetailPage() {
   const { locale } = useLocale()
   const location = useLocation()
   const fromState = (location.state as { from?: string } | null)?.from
+  const fromMeCollection = fromState === 'me-collection'
   const backTo =
-    fromState === 'growth-timeline'
+    fromMeCollection
+      ? '/me'
+      : fromState === 'growth-timeline'
       ? '/growth'
       : fromState === 'growth' || fromState === 'growth-stats'
         ? '/growth'
@@ -291,7 +294,7 @@ export function EntryDetailPage() {
     <>
       <PageHeader
         title={entry.title || '事件详情'}
-        back={backTo}
+        back={fromMeCollection ? true : backTo}
         soft
         right={
           <div className="flex shrink-0 items-center gap-1">

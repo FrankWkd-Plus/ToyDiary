@@ -14,14 +14,14 @@ export function MePhotosPage() {
   return (
     <div className="min-h-full">
       <PageHeader
-        title="我的照片"
+        title="🖼️ 照片收藏"
         subtitle={
           currentToy
             ? `${currentToy.name} · ${photos.length} 张共同回忆`
             : '只收藏当前玩偶的照片'
         }
         back="/me"
-        soft
+        bare
       />
 
       {photos.length === 0 ? (

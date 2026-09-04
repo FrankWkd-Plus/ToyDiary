@@ -1,72 +1,25 @@
 import {
-  Bell,
   Check,
   ChevronDown,
-  ChevronRight,
   Plus,
-  Sparkles,
   X,
 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import {
-  companionDayStatus,
-  toyAvatar,
-} from '../archive/archiveUtils'
+import { toyAvatar } from '../archive/archiveUtils'
 import { LanguageSwitch } from '../components/LanguageSwitch'
 import { ToyCardCarousel } from '../components/ToyCardCarousel'
 import { useApp } from '../context/AppContext'
 import { useLocale } from '../i18n'
-import { seedPlaceForLabel, uniqueCities } from '../places/placeUtils'
 
 export function TimelinePage() {
   const navigate = useNavigate()
   const { t } = useLocale()
-  const { currentToy, toys, entries, setCurrentToyId, showToast } = useApp()
+  const { currentToy, toys, setCurrentToyId, showToast } = useApp()
   const [pickerOpen, setPickerOpen] = useState(false)
-  const [viewedToyId, setViewedToyId] = useState(currentToy?.id)
-  const viewedToy =
-    toys.find((toy) => toy.id === viewedToyId) ?? currentToy
-  const viewedToyIndex = toys.findIndex((toy) => toy.id === viewedToy?.id)
-  const avatar = toyAvatar(viewedToy, viewedToyIndex)
-  const companion = viewedToy ? companionDayStatus(viewedToy) : null
-
-  // While the next toy's records are loading, never briefly show the previous
-  // toy's counts under the newly selected card.
-  const viewedEntries = useMemo(
-    () => entries.filter((entry) => entry.toyId === viewedToy?.id),
-    [entries, viewedToy?.id],
-  )
-  const travelCount = useMemo(
-    () => viewedEntries.filter((entry) => entry.type === 'travel').length,
-    [viewedEntries],
-  )
-  const cityCount = useMemo(() => {
-    const places = viewedEntries
-      .map((e) => e.place || seedPlaceForLabel(e.location))
-      .filter((p): p is NonNullable<typeof p> => Boolean(p))
-    return uniqueCities(places).length
-  }, [viewedEntries])
-  const momentCount = viewedEntries.length
-  const companionDaysValue = companion?.isFuture ? 0 : companion?.days ?? 0
-
-  useEffect(() => {
-    if (currentToy?.id) setViewedToyId(currentToy.id)
-  }, [currentToy?.id])
 
   function goNewToy() {
     navigate('/toys/new')
-  }
-
-  function requireViewedToy(path: string) {
-    if (!viewedToy) {
-      showToast(t('archive.pickToyFirst'))
-      return
-    }
-    if (viewedToy.id !== currentToy?.id) {
-      setCurrentToyId(viewedToy.id)
-    }
-    navigate(path)
   }
 
   return (
@@ -114,9 +67,7 @@ export function TimelinePage() {
 
       <main className="space-y-3.5 px-4 pb-5 pt-4">
         {toys.length > 0 ? (
-          <ToyCardCarousel
-            onVisibleToyChange={(toy) => setViewedToyId(toy.id)}
-          />
+          <ToyCardCarousel />
         ) : (
           <button
             type="button"
@@ -130,86 +81,6 @@ export function TimelinePage() {
           </button>
         )}
 
-        {viewedToy && companion && (
-          <button
-            type="button"
-            onClick={() => navigate(`/memories/${viewedToy.id}`)}
-            className="archive-milestone-card w-full overflow-hidden text-left transition-transform active:scale-[0.99]"
-          >
-            <div className="relative z-[1] max-w-[65%]">
-              <span className="inline-flex items-center gap-1 rounded-full bg-white/65 px-2.5 py-1 text-[10px] font-medium text-terra-deep">
-                <Sparkles className="h-3 w-3" />
-                {t('archive.memorial')}
-              </span>
-
-              {companion.isFuture ? (
-                <>
-                  <p className="mt-3 text-xs font-medium text-ink-soft">
-                    {t('archive.daysUntilMeet', { n: companion.daysUntil })}
-                  </p>
-                  <p className="mt-0.5 font-display text-[1.9rem] leading-none text-ink">
-                    COMING SOON
-                  </p>
-                </>
-              ) : (
-                <>
-                  <p className="mt-3 text-xs font-medium text-ink-soft">
-                    {t('archive.dayNumber', { n: companion.days })}
-                  </p>
-                  <p className="mt-0.5 font-display text-[2.25rem] leading-none text-ink">
-                    {companion.days} DAYS
-                  </p>
-                </>
-              )}
-
-              <span className="mt-3 inline-flex items-center text-[10px] font-semibold text-matcha-deep">
-                {t('archive.enterMemoryHall')}
-                <ChevronRight className="h-3.5 w-3.5" />
-              </span>
-            </div>
-            <div className="absolute -bottom-5 -right-2 h-36 w-36 rotate-6 overflow-hidden rounded-[2rem] border-[5px] border-white bg-white shadow-lg">
-              <img src={avatar} alt="" className="h-full w-full object-cover" />
-            </div>
-            <Bell className="absolute right-32 top-5 h-4 w-4 rotate-12 text-terra-deep/60" />
-          </button>
-        )}
-
-        {viewedToy && companion && (
-          <section className="grid grid-cols-2 gap-2">
-            <ArchiveStatCard
-              badge={t('archive.statCompanion')}
-              value={companionDaysValue}
-              unit={t('archive.unitDay')}
-              hint={
-                companion.isFuture
-                  ? t('archive.hintUntilMeet', { n: companion.daysUntil })
-                  : t('archive.hintTogether')
-              }
-              onClick={() => requireViewedToy('/growth/stats/companion')}
-            />
-            <ArchiveStatCard
-              badge={t('archive.statTravel')}
-              value={travelCount}
-              unit={t('archive.unitTrip')}
-              hint={t('archive.hintTravel')}
-              onClick={() => requireViewedToy('/growth/stats/travel')}
-            />
-            <ArchiveStatCard
-              badge={t('archive.statCities')}
-              value={cityCount}
-              unit={t('archive.unitCity')}
-              hint={t('archive.hintCities')}
-              onClick={() => requireViewedToy('/growth/stats/cities')}
-            />
-            <ArchiveStatCard
-              badge={t('archive.statMoments')}
-              value={momentCount}
-              unit={t('archive.unitMoment')}
-              hint={t('archive.hintMoments')}
-              onClick={() => requireViewedToy('/growth/stats/moments')}
-            />
-          </section>
-        )}
       </main>
 
       {pickerOpen && (
@@ -259,7 +130,6 @@ export function TimelinePage() {
                     type="button"
                     onClick={() => {
                       setCurrentToyId(toy.id)
-                      setViewedToyId(toy.id)
                       setPickerOpen(false)
                       showToast(t('archive.setCurrent', { name: toy.name }))
                     }}
@@ -315,40 +185,5 @@ export function TimelinePage() {
         </div>
       )}
     </div>
-  )
-}
-
-function ArchiveStatCard({
-  badge,
-  value,
-  unit,
-  hint,
-  onClick,
-}: {
-  badge: string
-  value: number
-  unit: string
-  hint: string
-  onClick: () => void
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="archive-stat-card text-left active:scale-[0.99]"
-    >
-      <span className="inline-flex items-center rounded-full bg-white/70 px-2 py-0.5 text-[9px] font-medium text-terra-deep">
-        {badge}
-      </span>
-      <p className="mt-2 font-display text-[1.55rem] leading-none text-ink">
-        {value}
-        {unit ? (
-          <span className="ml-0.5 font-sans text-[11px] font-medium text-ink-muted">
-            {unit}
-          </span>
-        ) : null}
-      </p>
-      <p className="mt-1 text-[10px] leading-snug text-ink-soft">{hint}</p>
-    </button>
   )
 }

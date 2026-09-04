@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { useParams } from 'react-router-dom'
+import { useLocation, useParams } from 'react-router-dom'
 import {
   ChevronLeft,
   ChevronRight,
@@ -37,6 +37,11 @@ import { isMobileClient, shareOrDownloadFile } from '../share/shareHelpers'
  */
 export function MemoryHallPage() {
   const { id } = useParams()
+  const location = useLocation()
+  const backTo =
+    (location.state as { from?: string } | null)?.from === 'me'
+      ? '/me'
+      : '/archive'
   const { toys, currentToy, entries, setCurrentToyId, showToast } = useApp()
   const { prefs, updatePrefs } = useAuth()
   const toy = toys.find((item) => item.id === id)
@@ -140,7 +145,7 @@ export function MemoryHallPage() {
   if (!toy) {
     return (
       <>
-        <PageHeader title="回忆展厅" back="/archive" soft />
+        <PageHeader title="回忆展厅" back={backTo} soft />
         <div className="px-4 py-16 text-center text-sm text-ink-muted">
           这段回忆暂时找不到了
         </div>
@@ -230,7 +235,7 @@ export function MemoryHallPage() {
       <PageHeader
         title="回忆展厅"
         subtitle={`我和 ${toy.name} 的 ${days} 天`}
-        back="/archive"
+        back={backTo}
         soft
         right={
           <button
