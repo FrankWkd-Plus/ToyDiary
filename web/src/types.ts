@@ -60,6 +60,8 @@ export interface Entry {
   userNote?: string
   mood?: string
   imageUrl?: string
+  /** Relative Library path used to re-resolve and remove a native diary photo. */
+  localImagePath?: string
   aiDiary?: string
   tags?: string[]
   imageAnalysis?: string
@@ -76,6 +78,7 @@ export interface CreateEntryInput {
   mood?: string
   /** local object URL or data URL for mock */
   imageUrl?: string
+  localImagePath?: string
   aiDiary?: string
   tags?: string[]
   imageAnalysis?: string
@@ -88,6 +91,7 @@ export interface TravelMapPoint {
   title?: string
   mood?: string
   imageUrl?: string
+  localImagePath?: string
   aiDiary?: string
   userNote?: string
   place: Place

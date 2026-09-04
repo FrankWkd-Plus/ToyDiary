@@ -71,7 +71,7 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
     try {
       document.documentElement.lang = locale === 'en' ? 'en' : 'zh-CN'
       document.title =
-        locale === 'en' ? 'Toy Dairy' : 'Toy Dairy · 玩偶日记'
+        locale === 'en' ? 'Toy Diary' : 'Toy Diary · 玩偶日记'
     } catch {
       /* ignore */
     }

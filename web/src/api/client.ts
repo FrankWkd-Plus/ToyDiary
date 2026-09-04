@@ -35,6 +35,11 @@ import {
   type CreateCommunityPostInput,
 } from './communityStore'
 import { mockStore } from './mockStore'
+import {
+  getRelativeDiaryPhotoPath,
+  localDiaryPhotoReference,
+  resolveDiaryPhotoUrl,
+} from '../media/photoStorage'
 
 /**
  * Demo: always localStorage.
@@ -50,6 +55,34 @@ const BASE = import.meta.env.VITE_API_BASE as string | undefined
 
 /** Local repository implementing the DB/REST contract. */
 const localRepo: ToyDairyRepository = mockStore
+
+/**
+ * One-time media migration for local records. Older builds saved WebView URLs
+ * containing an iOS app-container path; that path changes after an app update.
+ */
+async function hydrateEntryMedia<T extends Pick<Entry, 'id' | 'imageUrl' | 'localImagePath'>>(
+  entry: T,
+): Promise<T> {
+  const relativePath = getRelativeDiaryPhotoPath(entry.imageUrl, entry.localImagePath)
+  if (!relativePath) return entry
+
+  const stableReference = localDiaryPhotoReference(relativePath)
+  if (
+    entry.localImagePath !== relativePath ||
+    entry.imageUrl !== stableReference
+  ) {
+    await localRepo.updateEntry(entry.id, {
+      localImagePath: relativePath,
+      imageUrl: stableReference,
+    })
+  }
+
+  return {
+    ...entry,
+    localImagePath: relativePath,
+    imageUrl: await resolveDiaryPhotoUrl(stableReference, relativePath),
+  }
+}
 
 async function http<T>(path: string, init?: RequestInit): Promise<T> {
   if (!BASE) throw new Error('VITE_API_BASE not set (remote persistence)')
@@ -117,7 +150,10 @@ export const api = {
   },
 
   async listEntries(toyId: string): Promise<Entry[]> {
-    if (PERSISTENCE === 'localStorage') return localRepo.listEntries(toyId)
+    if (PERSISTENCE === 'localStorage') {
+      const entries = await localRepo.listEntries(toyId)
+      return Promise.all(entries.map(hydrateEntryMedia))
+    }
     return http(`/toys/${toyId}/entries`)
   },
 
@@ -125,7 +161,7 @@ export const api = {
     if (PERSISTENCE === 'localStorage') {
       const e = await localRepo.getEntry(id)
       if (!e) throw new Error('记录不存在')
-      return e
+      return hydrateEntryMedia(e)
     }
     return http(`/entries/${id}`)
   },
@@ -134,7 +170,7 @@ export const api = {
     assertLocalForDemo('createEntry')
     // Always local for demo: diary + place + imageUrl (data URL) → localStorage
     if (PERSISTENCE === 'localStorage') {
-      return localRepo.createEntry(toyId, input)
+      return hydrateEntryMedia(await localRepo.createEntry(toyId, input))
     }
     const form = new FormData()
     Object.entries(input).forEach(([k, v]) => {
@@ -147,13 +183,34 @@ export const api = {
 
   /** GET /toys/:toyId/travel-map — local derive from entries.place */
   async getTravelMap(toyId: string): Promise<TravelMapResponse> {
-    if (PERSISTENCE === 'localStorage') return localRepo.getTravelMap(toyId)
+    if (PERSISTENCE === 'localStorage') {
+      const map = await localRepo.getTravelMap(toyId)
+      return {
+        ...map,
+        points: await Promise.all(
+          map.points.map(async (point) => {
+            const media = await hydrateEntryMedia({
+              id: point.entryId,
+              imageUrl: point.imageUrl,
+              localImagePath: point.localImagePath,
+            })
+            return {
+              ...point,
+              imageUrl: media.imageUrl,
+              localImagePath: media.localImagePath,
+            }
+          }),
+        ),
+      }
+    }
     return http(`/toys/${toyId}/travel-map`)
   },
 
   async regenerateEntry(id: string): Promise<Entry> {
     assertLocalForDemo('regenerateEntry')
-    if (PERSISTENCE === 'localStorage') return localRepo.regenerateEntry(id)
+    if (PERSISTENCE === 'localStorage') {
+      return hydrateEntryMedia(await localRepo.regenerateEntry(id))
+    }
     return http(`/entries/${id}/regenerate`, { method: 'POST' })
   },
 
@@ -162,17 +219,37 @@ export const api = {
     patch: Partial<
       Pick<
         Entry,
-        'aiDiary' | 'title' | 'mood' | 'tags' | 'imageAnalysis' | 'userNote'
+        | 'toyId'
+        | 'type'
+        | 'date'
+        | 'location'
+        | 'place'
+        | 'aiDiary'
+        | 'title'
+        | 'mood'
+        | 'tags'
+        | 'imageAnalysis'
+        | 'userNote'
+        | 'imageUrl'
+        | 'localImagePath'
       >
     >,
   ): Promise<Entry> {
     assertLocalForDemo('updateEntry')
-    if (PERSISTENCE === 'localStorage') return localRepo.updateEntry(id, patch)
+    if (PERSISTENCE === 'localStorage') {
+      return hydrateEntryMedia(await localRepo.updateEntry(id, patch))
+    }
     return http(`/entries/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(patch),
     })
+  },
+
+  async deleteEntry(id: string): Promise<void> {
+    assertLocalForDemo('deleteEntry')
+    if (PERSISTENCE === 'localStorage') return localRepo.deleteEntry(id)
+    await http(`/entries/${id}`, { method: 'DELETE' })
   },
 
   getCurrentToyId: () => localRepo.getCurrentToyId(),

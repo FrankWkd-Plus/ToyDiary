@@ -126,7 +126,7 @@ export function GrowthStatsPage() {
       })
       const result = await shareOrDownloadFile({
         blob,
-        filename: `Toy-Dairy-${status.days}-days.jpg`,
+        filename: `Toy-Diary-${status.days}-days.jpg`,
         title: `${status.days} DAYS 正数日`,
         text: `我和 ${currentToy.name} 已经认识 ${status.days} 天了。`,
       })

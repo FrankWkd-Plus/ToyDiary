@@ -127,7 +127,7 @@ export function DayCountStudioPage() {
         font: style.font,
         title: `和 ${currentToy.name} 相遇`,
       })
-      const filename = `Toy-Dairy-${status.days}-days.jpg`
+      const filename = `Toy-Diary-${status.days}-days.jpg`
       const result = await shareOrDownloadFile({
         blob,
         filename,

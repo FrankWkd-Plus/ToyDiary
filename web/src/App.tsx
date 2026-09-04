@@ -19,6 +19,7 @@ import {
   HelpSupportPage,
   LegalPage,
   NotifySoundPage,
+  PreferencesPage,
   ProfileSettingsPage,
   ThemePickerPage,
   VersionPage,
@@ -107,6 +108,7 @@ export default function App() {
                   <Route path="days" element={<DayCountStudioPage />} />
                   <Route path="me/profile" element={<ProfileSettingsPage />} />
                   <Route path="me/theme" element={<ThemePickerPage />} />
+                  <Route path="me/preferences" element={<PreferencesPage />} />
                   <Route path="me/notify" element={<NotifySoundPage />} />
                   <Route path="me/data" element={<DataBackupPage />} />
                   <Route path="me/version" element={<VersionPage />} />

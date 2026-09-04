@@ -228,7 +228,7 @@ export async function renderDiaryCardPng(
   ctx.fillStyle = muted
   ctx.font = '500 14px "Noto Sans SC", sans-serif'
   ctx.textAlign = 'center'
-  ctx.fillText('Toy Dairy · 双视角日记', W / 2, H - pad - 16)
+  ctx.fillText('Toy Diary · 双视角日记', W / 2, H - pad - 16)
   ctx.textAlign = 'left'
 
   // JPEG is much faster to encode than PNG on mobile

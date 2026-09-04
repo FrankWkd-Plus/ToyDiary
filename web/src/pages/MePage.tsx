@@ -11,21 +11,14 @@ import {
   Camera,
   Check,
   ChevronRight,
-  Database,
-  FileText,
-  HelpCircle,
-  Info,
-  LayoutGrid,
-  LogOut,
-  Palette,
   Pencil,
-  Share2,
-  Sparkles,
+  ScrollText,
+  Settings2,
+  ShieldCheck,
   Trash2,
   UserRound,
   X,
 } from 'lucide-react'
-import { useAuth } from '../auth/AuthContext'
 import { useApp } from '../context/AppContext'
 import {
   loadProfileAvatar,
@@ -35,8 +28,6 @@ import {
 } from '../profile/profileStorage'
 import { DayCountNumber } from '../components/DayCountNumber'
 import { companionDays } from '../archive/archiveUtils'
-import { renderGrowthTimelinePng } from '../share/renderGrowthTimelinePng'
-import { shareOrDownloadFile } from '../share/shareHelpers'
 import { useTheme } from '../theme/ThemeProvider'
 import type { DayCountPalette } from '../daysmatter/dayCountTheme'
 
@@ -45,7 +36,6 @@ const DEFAULT_AVATAR = '/profile/default-avatar.jpg'
 export function MePage() {
   const navigate = useNavigate()
   const { toys, entries, currentToy, showToast } = useApp()
-  const { session, logout } = useAuth()
   const { theme } = useTheme()
   const avatarInputRef = useRef<HTMLInputElement>(null)
   const [profileName, setProfileName] = useState(() => loadProfileName())
@@ -54,7 +44,6 @@ export function MePage() {
   const [avatarUrl, setAvatarUrl] = useState(() =>
     loadProfileAvatar(DEFAULT_AVATAR),
   )
-  const [sharingGrowth, setSharingGrowth] = useState(false)
 
   function saveName() {
     const nextName = draftName.trim()
@@ -105,50 +94,11 @@ export function MePage() {
     reader.readAsDataURL(file)
   }
 
-  async function shareGrowthTimeline() {
-    if (sharingGrowth) return
-    if (!toys.length) {
-      showToast('还没有可分享的成长轨迹')
-      return
-    }
-    setSharingGrowth(true)
-    try {
-      const blob = await renderGrowthTimelinePng({
-        toys,
-        entries,
-        currentToy,
-        ownerName: profileName,
-      })
-      const filename = `toydairy-timeline-${new Date().toISOString().slice(0, 10)}.png`
-      const mode = await shareOrDownloadFile({
-        blob,
-        filename,
-        title: `${currentToy?.name || '玩偶'} 的成长轨迹`,
-        text: '来自 Toy Dairy 的成长时间轴',
-      })
-      showToast(
-        mode === 'shared'
-          ? '已打开分享（可转微信 / 朋友圈 / 保存相册）'
-          : '已保存成长轨迹图片',
-      )
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : '生成分享图失败')
-    } finally {
-      setSharingGrowth(false)
-    }
-  }
-
-  function onLogout() {
-    logout()
-    showToast('演示模式已恢复默认账号')
-    navigate('/archive', { replace: true })
-  }
-
-  /** Wipe all Toy Dairy localStorage keys and hard-reload to factory defaults. */
+  /** Wipe all Toy Diary localStorage keys and hard-reload to factory defaults. */
   function onFactoryReset() {
     if (
       !window.confirm(
-        '将清除本机全部 Toy Diary 数据（玩偶、日记、主题、正数日、对话、登录态等），并恢复出厂默认。此操作不可撤销。继续？',
+        '将清除本机全部 Toy Diary 数据（玩偶、日记、主题、正数日与对话记录等）。此操作不可撤销。继续？',
       )
     ) {
       return
@@ -178,14 +128,21 @@ export function MePage() {
     window.location.assign('/archive')
   }
 
-  const displayId = session.account || session.name || '已登录'
-
   const themeDayCountPalette: DayCountPalette =
     theme.id === 'warm' ? 'ink' : theme.id === 'mint' ? 'matcha' : theme.id
 
   return (
-    <div className="min-h-full">
-      <div className="header-band pattern-soft px-4 pb-5 pt-4 sm:pb-6">
+    /*
+     * MePage renders its own gradient header band, so it should NOT inherit
+     * the safe-area inset from `.page-scroll` (which would otherwise stack
+     * two bands of empty space at the top). We negate that padding and pull
+     * it back into the header band itself.
+     */
+    <div
+      className="min-h-full"
+      style={{ marginTop: 'calc(var(--safe-top) * -1)' }}
+    >
+      <div className="header-band pattern-soft px-4 pb-5 pt-[calc(var(--safe-top)+1rem)] sm:pb-6">
         <div className="mx-auto flex w-full max-w-lg items-center gap-3 sm:gap-4">
           <button
             type="button"
@@ -254,7 +211,7 @@ export function MePage() {
               </button>
             )}
             <p className="mt-0.5 text-xs text-ink-muted">
-              {displayId} · {theme.name}
+              本地优先 · {theme.name}
             </p>
           </div>
           <Link
@@ -332,111 +289,37 @@ export function MePage() {
           />
         </div>
 
-        {/* A 快捷操作 */}
-        <SectionCard title="快捷操作">
+        <SectionCard title="通用">
           <LinkRow
-            to="/days"
-            icon={<Sparkles className="h-4 w-4" />}
-            label="正数日样式"
-            hint="配色 / 字体"
+            to="/me/preferences"
+            icon={<Settings2 className="h-4 w-4" />}
+            label="偏好设置"
+            hint="外观 · 正数日 · 本地备份"
           />
-          <LinkRow
-            to="/me/theme"
-            icon={<Palette className="h-4 w-4" />}
-            label="切换配色"
-            hint={theme.name}
-          />
-          <button
-            type="button"
-            onClick={() => showToast('iOS 小组件即将开放')}
-            className="flex min-h-12 w-full items-center gap-3 border-b border-line/70 px-4 py-3.5 text-left active:bg-cream"
-          >
-            <span className="text-matcha-deep">
-              <LayoutGrid className="h-4 w-4" />
-            </span>
-            <span className="flex-1 text-sm text-ink">iOS 小组件</span>
-            <span className="text-[10px] text-ink-muted">即将支持</span>
-            <ChevronRight className="h-4 w-4 text-ink-muted" />
-          </button>
-          <button
-            type="button"
-            onClick={() => void shareGrowthTimeline()}
-            disabled={sharingGrowth}
-            className="flex min-h-12 w-full items-center gap-3 px-4 py-3.5 text-left active:bg-cream disabled:opacity-60"
-          >
-            <span className="text-matcha-deep">
-              <Share2 className="h-4 w-4" />
-            </span>
-            <span className="flex-1 text-sm text-ink">
-              {sharingGrowth ? '正在生成时间轴…' : '成长轨迹分享'}
-            </span>
-            <span className="text-[10px] text-ink-muted">PNG</span>
-            <ChevronRight className="h-4 w-4 text-ink-muted" />
-          </button>
-        </SectionCard>
-
-        {/* B 通知与声音 */}
-        <SectionCard title="通知与声音">
           <LinkRow
             to="/me/notify"
             icon={<Bell className="h-4 w-4" />}
-            label="玩偶提醒 / 日记 / 声音"
-            hint="细分开关"
-          />
-        </SectionCard>
-
-        {/* 数据备份 / 重置 */}
-        <SectionCard title="数据">
-          <LinkRow
-            to="/me/data"
-            icon={<Database className="h-4 w-4" />}
-            label="备份与重置"
-            hint="导出 · 导入 · 重置演示"
+            label="通知设置"
+            hint="玩偶提醒 · 日记 · 声音"
             last
           />
         </SectionCard>
 
-        {/* C 版本信息 */}
-        <SectionCard title="版本信息">
+        <SectionCard title="隐私与条款">
           <LinkRow
-            to="/me/version"
-            icon={<Info className="h-4 w-4" />}
-            label="版本更新与介绍"
-            hint="v0.1.0"
-          />
-        </SectionCard>
-
-        {/* D 帮助中心 */}
-        <SectionCard title="帮助中心">
-          <LinkRow
-            to="/help/docs"
-            icon={<FileText className="h-4 w-4" />}
-            label="使用文档"
+            to="/legal/privacy"
+            icon={<ShieldCheck className="h-4 w-4" />}
+            label="隐私政策"
+            hint="数据与权限说明"
           />
           <LinkRow
-            to="/help/support"
-            icon={<HelpCircle className="h-4 w-4" />}
-            label="帮助与客服"
-          />
-          <LinkRow
-            to="/help/about"
-            icon={<Info className="h-4 w-4" />}
-            label="关于我们"
+            to="/legal/terms"
+            icon={<ScrollText className="h-4 w-4" />}
+            label="使用条款"
+            hint="服务使用约定"
             last
           />
         </SectionCard>
-
-        <button
-          type="button"
-          onClick={onLogout}
-          className="flex w-full items-center justify-center gap-2 rounded-full border border-rose-deep/30 bg-peach-soft/60 py-3.5 text-sm font-medium text-rose-deep transition-transform active:scale-[0.99]"
-        >
-          <LogOut className="h-4 w-4" />
-          重置演示账号
-        </button>
-        <p className="text-center text-[10px] text-ink-muted">
-          演示模式默认已登录，无需验证码
-        </p>
 
         <button
           type="button"
@@ -444,11 +327,11 @@ export function MePage() {
           className="flex w-full items-center justify-center gap-2 rounded-full border border-line/80 bg-white py-3 text-sm font-medium text-ink-soft transition-transform active:scale-[0.99]"
         >
           <Trash2 className="h-4 w-4 text-rose-deep" />
-          删除本地数据 · 恢复出厂设置
+          删除本地数据
         </button>
         <p className="pb-2 text-center text-[10px] leading-relaxed text-ink-muted">
-          清除本机 localStorage 中全部 Toy Diary 数据，包括玩偶、日记、主题、
-          正数日、对话及登录状态
+          清除本机 Toy Diary 数据，包括玩偶、日记、主题、正数日与对话记录。
+          删除前请先在「偏好设置」中导出完整备份。
         </p>
       </div>
     </div>

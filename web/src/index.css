@@ -1,7 +1,7 @@
 @import 'tailwindcss';
 
 /**
- * Toy Dairy — soft kawaii scrapbook UI
+ * Toy Diary — soft kawaii scrapbook UI
  * Fonts: Noto Sans SC + ZCOOL XiaoWei
  * Feature styles (archive / community / OCR / growth) live below.
  */
@@ -55,6 +55,20 @@
   --shadow-elevated: 0 12px 32px rgb(74 67 60 / 0.1), 0 4px 12px rgb(74 67 60 / 0.06);
   --shadow-glow: 0 8px 24px color-mix(in srgb, var(--color-matcha) 28%, transparent);
   --radius-card: 1.35rem;
+}
+
+/*
+ * iOS safe-area fallbacks.
+ *
+ * Capacitor's WKWebView *should* expose env(safe-area-inset-top) when the
+ * viewport meta has viewport-fit=cover, but real builds sometimes report 0
+ * on iPhone simulators / devices until the web content finishes layout. To
+ * guarantee the header is never clipped by the Dynamic Island, we keep a
+ * 50 px hard floor while still respecting larger insets on future devices.
+ */
+:root {
+  --safe-top: max(50px, env(safe-area-inset-top, 0px));
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 * {
@@ -143,9 +157,12 @@ body {
    * underneath the Dynamic Island. Keep every page's first interactive
    * element below the system status area while retaining a clean white
    * canvas behind it.
+   *
+   * --safe-top has a 50 px floor so even if env() reports 0 the header
+   * is never clipped; larger real insets are still honored.
    */
-  padding-top: env(safe-area-inset-top, 0px);
-  padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+  padding-top: var(--safe-top);
+  padding-bottom: calc(88px + var(--safe-bottom));
   scrollbar-width: none;
   animation: page-in 0.18s ease-out;
 }
@@ -388,7 +405,53 @@ textarea.input {
   );
   border-bottom: 1px solid color-mix(in srgb, var(--color-line) 70%, transparent);
   backdrop-filter: blur(12px);
-  padding-bottom: 0.5rem;
+  /*
+   * No padding here on purpose: this is unlayered CSS, which BEATS Tailwind
+   * utilities in v4. A padding-bottom here silently hijacked MePage's pb-5
+   * and TimelinePage's py-3.5 (bottom inset shrank 20px -> 8px). Each call
+   * site owns its own padding: MePage pb-5, PageHeader via .page-header.
+   */
+}
+
+/*
+ * Detail-page header band.
+ *
+ * NOT sticky on purpose: a sticky header always floats over the first card
+ * as soon as the user scrolls even one pixel, clipping the card's rounded
+ * top and the user's first tap target. Detail pages (Preferences, Legal,
+ * Me sub-pages) are short and never need a persistent title. This header
+ * scrolls away with the content.
+ *
+ * Vertical padding is owned here (PageHeader.tsx must not add `py-*`).
+ *
+ * IMPORTANT: do NOT pull this header up with a negative margin-top. The
+ * parent `.page-scroll` already reserves `padding-top: env(safe-area-inset-top)`,
+ * so the header starts exactly below the Dynamic Island. Pulling it up made
+ * the title render inside the safe-area and get clipped.
+ */
+.page-header {
+  position: relative;
+  z-index: 10;
+  padding-top: 0.875rem;
+  padding-bottom: 0.875rem;
+}
+
+/*
+ * Privacy and terms intentionally live outside AppLayout so they do not show
+ * the app bottom navigation. They therefore do not inherit page-scroll's
+ * safe-area padding and must reserve the status-bar area themselves.
+ */
+.legal-standalone .page-header {
+  padding-top: calc(0.875rem + var(--safe-top));
+}
+
+.legal-standalone {
+  min-height: 100dvh;
+  padding-bottom: var(--safe-bottom);
+  background:
+    radial-gradient(circle at 10% 4%, color-mix(in srgb, var(--color-mint) 24%, transparent), transparent 34%),
+    radial-gradient(circle at 96% 12%, color-mix(in srgb, var(--color-mustard-soft) 58%, transparent), transparent 32%),
+    #ffffff;
 }
 
 /* Growth page: a scrollable, single-column journey timeline. */
@@ -1559,6 +1622,96 @@ button:focus-visible {
   padding: 1rem;
   box-shadow: 0 24px 60px rgb(0 0 0 / 0.28);
   -webkit-overflow-scrolling: touch;
+}
+
+/* iOS-style action sheets for diary management actions. */
+.ios-action-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 16px;
+  padding-top: max(16px, env(safe-area-inset-top, 0px));
+  padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
+  background: rgb(30 26 22 / 0.32);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  overscroll-behavior: none;
+}
+
+.ios-action-sheet {
+  width: min(100%, 390px);
+  animation: ios-sheet-in 180ms ease-out;
+}
+
+.ios-action-group,
+.ios-action-cancel {
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 0.78);
+  border-radius: 1.35rem;
+  background: rgb(255 255 255 / 0.95);
+  box-shadow: 0 12px 32px rgb(68 50 29 / 0.15);
+}
+
+.ios-action-row,
+.ios-action-cancel {
+  display: flex;
+  min-height: 3.55rem;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  padding: 0.75rem 1rem;
+  color: var(--color-ink);
+  font-size: 0.98rem;
+  font-weight: 600;
+}
+
+.ios-action-row + .ios-action-row {
+  border-top: 1px solid var(--color-line);
+}
+
+.ios-action-row:active,
+.ios-action-cancel:active {
+  background: var(--color-cream);
+}
+
+.ios-action-danger {
+  color: #c64e49;
+}
+
+.ios-action-cancel {
+  margin-top: 0.7rem;
+}
+
+.ios-confirm-card {
+  width: min(100%, 350px);
+  margin-bottom: max(18dvh, 72px);
+  border-radius: 1.55rem;
+  background: #fff;
+  padding: 1.35rem;
+  box-shadow: 0 24px 60px rgb(0 0 0 / 0.25);
+  animation: ios-sheet-in 180ms ease-out;
+}
+
+.ios-confirm-delete {
+  min-height: 3rem;
+  border-radius: 0.9rem;
+  background: #c64e49;
+  color: white;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.ios-confirm-delete:disabled {
+  opacity: 0.55;
+}
+
+@keyframes ios-sheet-in {
+  from { transform: translateY(14px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
 }
 
 /* Camera OCR */

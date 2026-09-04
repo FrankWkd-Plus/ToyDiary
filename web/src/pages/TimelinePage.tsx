@@ -31,20 +31,23 @@ export function TimelinePage() {
   const avatar = toyAvatar(viewedToy, viewedToyIndex)
   const companion = viewedToy ? companionDayStatus(viewedToy) : null
 
-  // Stats only make sense for the currently loaded entry set
-  const statsReady = Boolean(viewedToy && currentToy?.id === viewedToy.id)
+  // While the next toy's records are loading, never briefly show the previous
+  // toy's counts under the newly selected card.
+  const viewedEntries = useMemo(
+    () => entries.filter((entry) => entry.toyId === viewedToy?.id),
+    [entries, viewedToy?.id],
+  )
   const travelCount = useMemo(
-    () => (statsReady ? entries.filter((e) => e.type === 'travel').length : 0),
-    [entries, statsReady],
+    () => viewedEntries.filter((entry) => entry.type === 'travel').length,
+    [viewedEntries],
   )
   const cityCount = useMemo(() => {
-    if (!statsReady) return 0
-    const places = entries
+    const places = viewedEntries
       .map((e) => e.place || seedPlaceForLabel(e.location))
       .filter((p): p is NonNullable<typeof p> => Boolean(p))
     return uniqueCities(places).length
-  }, [entries, statsReady])
-  const momentCount = statsReady ? entries.length : 0
+  }, [viewedEntries])
+  const momentCount = viewedEntries.length
   const companionDaysValue = companion?.isFuture ? 0 : companion?.days ?? 0
 
   useEffect(() => {
@@ -88,7 +91,7 @@ export function TimelinePage() {
             />
             <span className="min-w-0">
               <span className="block text-[9px] font-semibold tracking-[0.12em] text-ink-muted">
-                TOY DAIRY
+                TOY DIARY
               </span>
               <span className="mt-0.5 flex items-center gap-1">
                 <strong className="max-w-[7rem] truncate font-display text-sm text-ink sm:max-w-[8rem]">

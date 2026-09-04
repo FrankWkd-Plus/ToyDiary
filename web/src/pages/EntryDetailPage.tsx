@@ -4,9 +4,12 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import {
   Download,
   Eye,
+  Ellipsis,
   MapPin,
+  Pencil,
   RefreshCw,
   Share2,
+  Trash2,
   UserRound,
   X,
 } from 'lucide-react'
@@ -22,6 +25,7 @@ import {
   type DiaryCardLayout,
 } from '../share/renderDiaryCardPng'
 import { isMobileClient, shareOrDownloadFile } from '../share/shareHelpers'
+import { deletePersistedDiaryPhoto } from '../media/photoStorage'
 import type { Entry, Toy } from '../types'
 import { entryTypeLabel } from '../types'
 
@@ -50,6 +54,9 @@ export function EntryDetailPage() {
   const [stickerFrame, setStickerFrame] = useState(true)
   const [showDayCount, setShowDayCount] = useState(true)
   const [showLocation, setShowLocation] = useState(true)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     const onFocus = () => setOwnerName(loadProfileName())
@@ -59,7 +66,7 @@ export function EntryDetailPage() {
 
   // Lock background scroll while export sheet is open (page-scroll + body)
   useEffect(() => {
-    if (!exportOpen) return
+    if (!exportOpen && !menuOpen && !confirmDelete) return
     const scrollEl = document.querySelector('.page-scroll') as HTMLElement | null
     const prevBody = document.body.style.overflow
     const prevScroll = scrollEl?.style.overflow ?? ''
@@ -67,7 +74,7 @@ export function EntryDetailPage() {
     if (scrollEl) scrollEl.style.overflow = 'hidden'
     const blockTouch = (e: TouchEvent) => {
       const target = e.target as HTMLElement | null
-      if (target?.closest('[data-export-sheet]')) return
+      if (target?.closest('[data-modal-sheet]')) return
       e.preventDefault()
     }
     document.addEventListener('touchmove', blockTouch, { passive: false })
@@ -76,7 +83,7 @@ export function EntryDetailPage() {
       if (scrollEl) scrollEl.style.overflow = prevScroll
       document.removeEventListener('touchmove', blockTouch)
     }
-  }, [exportOpen])
+  }, [exportOpen, menuOpen, confirmDelete])
 
   // Live export preview — re-render when options change (debounced)
   useEffect(() => {
@@ -201,6 +208,22 @@ export function EntryDetailPage() {
     }
   }
 
+  async function onDelete() {
+    if (!entry || deleting) return
+    setDeleting(true)
+    try {
+      await deletePersistedDiaryPhoto(entry.localImagePath)
+      await api.deleteEntry(entry.id)
+      await refreshEntries(entry.toyId)
+      showToast('这篇日志已删除')
+      nav(backTo, { replace: true })
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : '删除失败，请重试')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   async function onExportCard() {
     if (!entry || exporting) return
     setExporting(true)
@@ -222,7 +245,7 @@ export function EntryDetailPage() {
         blob,
         filename,
         title: entry.title || '今日日记',
-        text: '来自 Toy Dairy 的双视角日记卡',
+        text: '来自 Toy Diary 的双视角日记卡',
       })
       showToast(
         mode === 'shared'
@@ -283,14 +306,11 @@ export function EntryDetailPage() {
             </button>
             <button
               type="button"
-              onClick={onRegenerate}
-              disabled={regen}
-              className="chip inline-flex items-center gap-1 !min-h-9 !px-2.5 !py-1.5 !text-xs disabled:opacity-50"
+              onClick={() => setMenuOpen(true)}
+              className="chip inline-flex min-h-9 min-w-9 items-center justify-center !px-2 !py-1.5 text-xs"
+              aria-label="更多日志操作"
             >
-              <RefreshCw
-                className={`h-3.5 w-3.5 ${regen ? 'animate-spin' : ''}`}
-              />
-              <span>重写</span>
+              <Ellipsis className="h-4 w-4" />
             </button>
           </div>
         }
@@ -352,7 +372,7 @@ export function EntryDetailPage() {
             footer={
               entry.userNote?.trim()
                 ? undefined
-                : '提示：主人备注会作为「我的视角」展示；点右上角「重写」可刷新玩偶视角。'
+                : '提示：主人备注会作为「我的视角」展示；点右上角「···」可重新生成玩偶视角。'
             }
           />
         </div>
@@ -368,7 +388,7 @@ export function EntryDetailPage() {
             onClick={() => !exporting && setExportOpen(false)}
           >
             <div
-              data-export-sheet
+              data-modal-sheet
               className="export-sheet-panel"
               onClick={(e) => e.stopPropagation()}
             >
@@ -494,6 +514,113 @@ export function EntryDetailPage() {
                 </button>
               </div>
             </div>
+          </div>,
+          document.body,
+        )}
+
+      {menuOpen &&
+        createPortal(
+          <div
+            className="ios-action-overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-label="日志操作"
+            onClick={() => setMenuOpen(false)}
+          >
+            <div
+              data-modal-sheet
+              className="ios-action-sheet"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="ios-action-group">
+                <button
+                  type="button"
+                  className="ios-action-row"
+                  onClick={() => {
+                    setMenuOpen(false)
+                    nav('/compose', {
+                      state: { editEntry: entry, from: `/entries/${entry.id}` },
+                    })
+                  }}
+                >
+                  <Pencil className="h-5 w-5" />
+                  编辑日志
+                </button>
+                <button
+                  type="button"
+                  disabled={regen}
+                  className="ios-action-row disabled:opacity-45"
+                  onClick={() => {
+                    setMenuOpen(false)
+                    void onRegenerate()
+                  }}
+                >
+                  <RefreshCw className={`h-5 w-5 ${regen ? 'animate-spin' : ''}`} />
+                  {regen ? '正在生成…' : '重新生成玩偶日记'}
+                </button>
+                <button
+                  type="button"
+                  className="ios-action-row ios-action-danger"
+                  onClick={() => {
+                    setMenuOpen(false)
+                    setConfirmDelete(true)
+                  }}
+                >
+                  <Trash2 className="h-5 w-5" />
+                  删除这篇日志
+                </button>
+              </div>
+              <button
+                type="button"
+                className="ios-action-cancel"
+                onClick={() => setMenuOpen(false)}
+              >
+                取消
+              </button>
+            </div>
+          </div>,
+          document.body,
+        )}
+
+      {confirmDelete &&
+        createPortal(
+          <div
+            className="ios-action-overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-entry-title"
+            onClick={() => !deleting && setConfirmDelete(false)}
+          >
+            <section
+              data-modal-sheet
+              className="ios-confirm-card"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <h2 id="delete-entry-title" className="font-display text-lg text-ink">
+                删除这篇日志？
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-ink-soft">
+                删除后将从成长轨迹、地图、统计和回忆展厅中移除，且无法恢复。
+              </p>
+              <div className="mt-5 grid grid-cols-2 gap-2.5">
+                <button
+                  type="button"
+                  disabled={deleting}
+                  className="btn-secondary py-3 text-sm disabled:opacity-50"
+                  onClick={() => setConfirmDelete(false)}
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  disabled={deleting}
+                  className="ios-confirm-delete"
+                  onClick={() => void onDelete()}
+                >
+                  {deleting ? '正在删除…' : '删除'}
+                </button>
+              </div>
+            </section>
           </div>,
           document.body,
         )}

@@ -1,4 +1,4 @@
-# Toy Dairy · Web（前端）
+# Toy Diary · Web（前端）
 
 React + TypeScript + Vite + Tailwind。业务数据默认 **localStorage**（`PERSISTENCE = 'localStorage'`，REST/D1 接口契约保留）；智能记录可走 Cloudflare Pages Function（密钥不在前端）。
 

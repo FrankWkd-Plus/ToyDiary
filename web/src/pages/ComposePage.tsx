@@ -22,6 +22,7 @@ import {
   entryTypeLabel,
   moodOptionsFor,
   type EntryType,
+  type Entry,
   type Place,
 } from '../types'
 
@@ -33,6 +34,9 @@ interface ComposeRouteState {
   ocrText?: string
   fromCamera?: boolean
   fromConversation?: boolean
+  /** Opens the regular compose form with an existing diary prefilled. */
+  editEntry?: Entry
+  from?: string
 }
 
 export function ComposePage() {
@@ -41,26 +45,41 @@ export function ComposePage() {
   const routeState = useLocation().state as ComposeRouteState | null
   const { currentToy, toys, setCurrentToyId, refreshEntries, showToast } =
     useApp()
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
-  const [entryType, setEntryType] = useState<EntryType>('daily')
-  const [place, setPlace] = useState<Place | undefined>()
-  const [userNote, setUserNote] = useState(routeState?.ocrText || '')
-  const [imageUrl, setImageUrl] = useState<string | undefined>(routeState?.imageUrl)
+  const editingEntry = routeState?.editEntry
+  const [date, setDate] = useState(
+    () => editingEntry?.date || new Date().toISOString().slice(0, 10),
+  )
+  const [entryType, setEntryType] = useState<EntryType>(
+    () => editingEntry?.type || 'daily',
+  )
+  const [place, setPlace] = useState<Place | undefined>(() => editingEntry?.place)
+  const [userNote, setUserNote] = useState(
+    () => editingEntry?.userNote || routeState?.ocrText || '',
+  )
+  const [imageUrl, setImageUrl] = useState<string | undefined>(
+    () => editingEntry?.imageUrl || routeState?.imageUrl,
+  )
   const [imageFile, setImageFile] = useState<File | undefined>(routeState?.imageFile)
   const [nativeImageUri, setNativeImageUri] = useState<string | undefined>(
     routeState?.nativeImageUri,
   )
   const [aiEnabled, setAiEnabled] = useState(true)
   const [analysis, setAnalysis] = useState<EntryAnalysis | null>(null)
-  const [title, setTitle] = useState('')
-  const [aiDiary, setAiDiary] = useState('')
-  const [mood, setMood] = useState('温柔')
+  const [title, setTitle] = useState(() => editingEntry?.title || '')
+  const [aiDiary, setAiDiary] = useState(() => editingEntry?.aiDiary || '')
+  const [mood, setMood] = useState(() => editingEntry?.mood || '温柔')
   const [analyzing, setAnalyzing] = useState(false)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     if (!currentToy && toys[0]) setCurrentToyId(toys[0].id)
   }, [currentToy, toys, setCurrentToyId])
+
+  useEffect(() => {
+    if (editingEntry?.toyId && editingEntry.toyId !== currentToy?.id) {
+      setCurrentToyId(editingEntry.toyId)
+    }
+  }, [editingEntry?.toyId, currentToy?.id, setCurrentToyId])
 
   useEffect(() => {
     if (routeState?.imageUrl) setImageUrl(routeState.imageUrl)
@@ -171,7 +190,7 @@ export function ComposePage() {
     }
     setSaving(true)
     try {
-      const persistedImageUrl = await persistDiaryPhoto({
+      const persistedPhoto = await persistDiaryPhoto({
         file: imageFile,
         nativeUri: nativeImageUri,
         previewUrl: imageUrl,
@@ -188,7 +207,8 @@ export function ComposePage() {
         userNote: userNote.trim() || undefined,
         mood,
         // Never persist a temporary blob: URL as the diary photo.
-        imageUrl: persistedImageUrl || analysis.processedImageUrl || imageUrl,
+        imageUrl: persistedPhoto?.url || analysis.processedImageUrl || imageUrl,
+        localImagePath: persistedPhoto?.nativePath,
         aiDiary: aiDiary.trim(),
         tags: analysis.tags,
         imageAnalysis: analysis.imageAnalysis,
@@ -203,10 +223,49 @@ export function ComposePage() {
     }
   }
 
+  async function onSaveEdit() {
+    if (!editingEntry || !currentToy) return
+    if (entryType === 'travel' && !place) {
+      showToast('旅行记录需要地点')
+      return
+    }
+    setSaving(true)
+    try {
+      const nextPhoto = imageFile || nativeImageUri
+        ? await persistDiaryPhoto({
+            file: imageFile,
+            nativeUri: nativeImageUri,
+            previewUrl: imageUrl,
+          })
+        : undefined
+      await api.updateEntry(editingEntry.id, {
+        toyId: currentToy.id,
+        type: entryType,
+        date,
+        location: place?.displayName,
+        place,
+        userNote: userNote.trim() || undefined,
+        imageUrl:
+          nextPhoto?.url ||
+          (editingEntry.localImagePath
+            ? `toydiary-media://${editingEntry.localImagePath}`
+            : imageUrl),
+        localImagePath: nextPhoto?.nativePath || editingEntry.localImagePath,
+      })
+      await refreshEntries(currentToy.id)
+      showToast('日志修改已保存')
+      nav(routeState?.from || `/entries/${editingEntry.id}`, { replace: true })
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '保存失败')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   if (!currentToy) {
     return (
       <>
-        <PageHeader title="记录这一刻" back="/archive" soft />
+        <PageHeader title={editingEntry ? '编辑日志' : '记录这一刻'} back={routeState?.from || '/archive'} soft />
         <div className="px-4 py-16 text-center text-sm text-ink-muted">
           请先在档案页创建一只玩偶
         </div>
@@ -338,17 +397,26 @@ export function ComposePage() {
 
   return (
     <>
-      <PageHeader title="记录这一刻" back="/archive" soft />
-      <form onSubmit={(event) => void onAnalyze(event)} className="space-y-5 px-4 py-4">
+      <PageHeader title={editingEntry ? '编辑日志' : '记录这一刻'} back={routeState?.from || '/archive'} soft />
+      <form
+        onSubmit={(event) => {
+          event.preventDefault()
+          if (editingEntry) void onSaveEdit()
+          else void onAnalyze()
+        }}
+        className="space-y-5 px-4 py-4"
+      >
         <section className="rounded-[1.35rem] bg-gradient-to-br from-mustard-soft via-white to-mist-soft p-4 ring-1 ring-line/50">
           <div className="flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-terra-deep" />
             <strong className="font-display text-base text-ink">
-              让{currentToy.name}写下这一刻
+              {editingEntry ? `修改和${currentToy.name}的这一刻` : `让${currentToy.name}写下这一刻`}
             </strong>
           </div>
           <p className="mt-1.5 text-[11px] leading-relaxed text-ink-muted">
-            选择类型与地点，再让玩偶用第一视角记下来。
+            {editingEntry
+              ? '修改原始记录后保存；玩偶日记不会自动改写。'
+              : '选择类型与地点，再让玩偶用第一视角记下来。'}
           </p>
         </section>
 
@@ -488,10 +556,15 @@ export function ComposePage() {
 
         <button
           type="submit"
-          disabled={analyzing}
+          disabled={analyzing || saving}
           className="btn-primary w-full py-3.5 text-sm"
         >
-          {analyzing ? (
+          {saving ? (
+            <>
+              <LoaderCircle className="h-4 w-4 animate-spin" />
+              正在保存…
+            </>
+          ) : analyzing ? (
             <>
               <LoaderCircle className="h-4 w-4 animate-spin" />
               正在理解这一刻…
@@ -499,7 +572,11 @@ export function ComposePage() {
           ) : (
             <>
               <Sparkles className="h-4 w-4" />
-              {aiEnabled ? '让玩偶写下来' : '用模板生成并预览'}
+              {editingEntry
+                ? '保存修改'
+                : aiEnabled
+                  ? '让玩偶写下来'
+                  : '用模板生成并预览'}
             </>
           )}
         </button>

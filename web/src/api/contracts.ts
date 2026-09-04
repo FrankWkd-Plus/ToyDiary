@@ -52,6 +52,7 @@ export const REST_PATHS = {
   createEntry: 'POST /toys/:toyId/entries',
   getEntry: 'GET /entries/:id',
   updateEntry: 'PATCH /entries/:id',
+  deleteEntry: 'DELETE /entries/:id',
   regenerateEntry: 'POST /entries/:id/regenerate',
   travelMap: 'GET /toys/:toyId/travel-map',
 } as const
@@ -80,10 +81,23 @@ export interface ToyDairyRepository {
     patch: Partial<
       Pick<
         Entry,
-        'aiDiary' | 'title' | 'mood' | 'tags' | 'imageAnalysis' | 'userNote'
+        | 'toyId'
+        | 'type'
+        | 'date'
+        | 'location'
+        | 'place'
+        | 'aiDiary'
+        | 'title'
+        | 'mood'
+        | 'tags'
+        | 'imageAnalysis'
+        | 'userNote'
+        | 'imageUrl'
+        | 'localImagePath'
       >
     >,
   ): Promise<Entry>
+  deleteEntry(id: string): Promise<void>
   regenerateEntry(id: string): Promise<Entry>
   getTravelMap(toyId: string): Promise<TravelMapResponse>
 

@@ -87,7 +87,7 @@ export async function renderGrowthTimelinePng(opts: {
   )
   ctx.fillStyle = '#9a8758'
   ctx.font = '500 22px "Noto Sans SC", sans-serif'
-  ctx.fillText('Toy Dairy · 把陪伴写进时间里', 260, 226)
+  ctx.fillText('Toy Diary · 把陪伴写进时间里', 260, 226)
 
   // Timeline spine
   const spineX = 150

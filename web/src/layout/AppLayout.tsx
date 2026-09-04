@@ -36,7 +36,7 @@ export function AppLayout() {
             </div>
             <div className="loading-screen__copy">
               <p className="font-display text-xl tracking-wide text-ink">
-                Toy Dairy
+                Toy Diary
               </p>
               <p className="mt-1.5 text-sm text-ink-muted">{t('app.opening')}</p>
               <div className="loading-dots" aria-hidden="true">

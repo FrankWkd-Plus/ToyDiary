@@ -98,7 +98,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
   const system = isEn
     ? [
-        "You are the copywriter for Toy Dairy, writing growth journal entries for the user's toy companion.",
+        "You are the copywriter for Toy Diary, writing growth journal entries for the user's toy companion.",
         'IMPORTANT: Write all user-facing text in natural English.',
         'Output only one JSON object. No markdown code fences. No extra commentary.',
         'JSON fields:',
@@ -112,7 +112,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         "Match the toy's personality. Keep the tone warm and diary-like, not template-y.",
       ].join('\n')
     : [
-        '你是 Toy Dairy 的文案助手，为用户的玩偶生成成长手帐。',
+        '你是 Toy Diary 的文案助手，为用户的玩偶生成成长手帐。',
         '重要：所有面向用户的文案必须用自然流畅的中文。',
         '必须只输出一个 JSON 对象，不要 markdown 代码块，不要其它说明。',
         'JSON 字段：',

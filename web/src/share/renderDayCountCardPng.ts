@@ -220,7 +220,7 @@ export async function renderDayCountCardPng(
   // Brand line under card
   ctx.fillStyle = pal.number
   ctx.font = '600 18px "Noto Sans SC", sans-serif'
-  ctx.fillText('Toy Dairy · 把陪伴写进时间里', W / 2, H - 56)
+  ctx.fillText('Toy Diary · 把陪伴写进时间里', W / 2, H - 56)
 
   // JPEG is smaller/faster; PNG kept if caller expects transparency — solid bg so JPEG ok
   const blob = await new Promise<Blob | null>((resolve) =>

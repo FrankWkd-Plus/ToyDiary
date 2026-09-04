@@ -110,9 +110,15 @@ export function ToyCardCarousel({
       0,
       Math.min(toys.length - 1, Math.round(carousel.scrollLeft / carousel.clientWidth)),
     )
+    if (index === visibleIndex) return
     setVisibleIndex(index)
     const visibleToy = toys[index]
-    if (visibleToy) onVisibleToyChange?.(visibleToy)
+    if (!visibleToy) return
+
+    // A carousel card is not only a preview: it represents the active toy
+    // across the app. Keep the global selection (and its entry set) in sync.
+    if (visibleToy.id !== currentToy?.id) setCurrentToyId(visibleToy.id)
+    onVisibleToyChange?.(visibleToy)
   }
 
   return (

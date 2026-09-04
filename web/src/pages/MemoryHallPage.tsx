@@ -175,7 +175,7 @@ export function MemoryHallPage() {
         font: exportFont,
         title: `和 ${toy.name} 相遇`,
       })
-      const filename = `Toy-Dairy-${days}-days.jpg`
+      const filename = `Toy-Diary-${days}-days.jpg`
       if (mode === 'share') {
         const result = await shareOrDownloadFile({
           blob,

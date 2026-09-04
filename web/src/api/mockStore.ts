@@ -734,6 +734,7 @@ export const mockStore: ToyDairyRepository = {
       title: e.title,
       mood: e.mood,
       imageUrl: e.imageUrl,
+      localImagePath: e.localImagePath,
       aiDiary: e.aiDiary,
       userNote: e.userNote,
       place: e.place as Place,
@@ -776,7 +777,19 @@ export const mockStore: ToyDairyRepository = {
     patch: Partial<
       Pick<
         Entry,
-        'aiDiary' | 'title' | 'mood' | 'tags' | 'imageAnalysis' | 'userNote'
+        | 'toyId'
+        | 'type'
+        | 'date'
+        | 'location'
+        | 'place'
+        | 'aiDiary'
+        | 'title'
+        | 'mood'
+        | 'tags'
+        | 'imageAnalysis'
+        | 'userNote'
+        | 'imageUrl'
+        | 'localImagePath'
       >
     >,
   ): Promise<Entry> {
@@ -787,6 +800,15 @@ export const mockStore: ToyDairyRepository = {
     Object.assign(entry, patch)
     save(data)
     return { ...entry }
+  },
+
+  async deleteEntry(id: string): Promise<void> {
+    await delay(20)
+    const data = load()
+    const index = data.entries.findIndex((entry) => entry.id === id)
+    if (index < 0) throw new Error('记录不存在')
+    data.entries.splice(index, 1)
+    save(data)
   },
 
   getCurrentToyId(): string | null {

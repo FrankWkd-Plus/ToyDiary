@@ -11,7 +11,6 @@ import {
   HelpCircle,
   Info,
   Link2,
-  RotateCcw,
   Upload,
   Volume2,
 } from 'lucide-react'
@@ -26,11 +25,13 @@ import {
 import { PageHeader } from '../components/PageHeader'
 import { useApp } from '../context/AppContext'
 import { useLocale } from '../i18n'
+import { api } from '../api/client'
 import {
-  buildGrowthExport,
-  growthExportFilename,
-  parseGrowthImport,
-} from '../share/growthJson'
+  buildFullBackup,
+  fullBackupFilename,
+  parseFullBackup,
+  restoreFullBackupMedia,
+} from '../share/fullBackup'
 import { shareOrDownloadFile } from '../share/shareHelpers'
 import { THEME_LIST, type ThemeId } from '../theme/themes'
 import { useTheme } from '../theme/ThemeProvider'
@@ -253,6 +254,63 @@ export function ThemePickerPage() {
   )
 }
 
+/** A calm home for preferences that do not belong in the account/profile UI. */
+export function PreferencesPage() {
+  return (
+    <>
+      <PageHeader title="偏好设置" back="/me" soft />
+      <div className="space-y-3 px-4 py-4">
+        <section className="card-paper overflow-hidden">
+          <PreferenceLink
+            to="/me/theme"
+            label="外观与配色"
+            hint="主题 · 字体 · 页面氛围"
+          />
+          <PreferenceLink
+            to="/days"
+            label="正数日样式"
+            hint="卡片配色 · 字体与背景"
+          />
+          <PreferenceLink
+            to="/me/data"
+            label="本地数据与备份"
+            hint="完整备份 · 导入恢复"
+            last
+          />
+        </section>
+        <p className="px-1 text-[11px] leading-relaxed text-ink-muted">
+          Toy Diary 默认将记录保存在本机。建议在更换设备、更新系统或删除 App 前导出完整备份。
+        </p>
+      </div>
+    </>
+  )
+}
+
+function PreferenceLink({
+  to,
+  label,
+  hint,
+  last,
+}: {
+  to: string
+  label: string
+  hint: string
+  last?: boolean
+}) {
+  return (
+    <Link
+      to={to}
+      className={`flex min-h-14 items-center gap-3 px-4 py-3.5 active:bg-cream ${last ? '' : 'border-b border-line/70'}`}
+    >
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm text-ink">{label}</span>
+        <span className="mt-0.5 block text-[11px] text-ink-muted">{hint}</span>
+      </span>
+      <ChevronRight className="h-4 w-4 shrink-0 text-ink-muted" />
+    </Link>
+  )
+}
+
 export function NotifySoundPage() {
   const { prefs, updatePrefs } = useAuth()
   const { showToast } = useApp()
@@ -374,24 +432,27 @@ export function NotifySoundPage() {
 }
 
 /**
- * JSON 备份：导出 / 导入成长轨迹；重置演示数据
+ * Complete offline backup: profile data + all diary entries + native photos.
  */
 export function DataBackupPage() {
   const {
     toys,
-    entries,
     currentToy,
     importGrowthData,
-    resetDemo,
     showToast,
   } = useApp()
   const fileRef = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
 
-  async function onExportJson() {
+  async function onExportBackup() {
     setBusy(true)
     try {
-      const payload = buildGrowthExport({
+      // AppContext keeps only the current toy's entries in memory. A backup
+      // must explicitly load every toy so no diary is silently omitted.
+      const entries = (
+        await Promise.all(toys.map((toy) => api.listEntries(toy.id)))
+      ).flat()
+      const payload = await buildFullBackup({
         toys,
         entries,
         currentToyId: currentToy?.id ?? null,
@@ -399,15 +460,15 @@ export function DataBackupPage() {
       const blob = new Blob([JSON.stringify(payload, null, 2)], {
         type: 'application/json',
       })
-      const filename = growthExportFilename()
+      const filename = fullBackupFilename()
       const mode = await shareOrDownloadFile({
         blob,
         filename,
-        title: 'Toy Dairy 成长轨迹备份',
-        text: `toys ${toys.length} · entries ${entries.length}`,
+        title: 'Toy Diary 成长轨迹备份',
+        text: `${toys.length} 只玩偶 · ${entries.length} 条日记 · ${payload.media.photos.length} 张本地照片`,
       })
       showToast(
-        mode === 'shared' ? '已分享 / 导出成长轨迹 JSON' : '已下载成长轨迹 JSON',
+        mode === 'shared' ? '已分享完整备份' : '完整备份已下载',
       )
     } catch (err) {
       showToast(err instanceof Error ? err.message : '导出失败')
@@ -426,36 +487,27 @@ export function DataBackupPage() {
     try {
       const text = await file.text()
       const json = JSON.parse(text) as unknown
-      const payload = parseGrowthImport(json)
+      const backup = parseFullBackup(json)
       if (
         !window.confirm(
-          `将导入 ${payload.toys.length} 只玩偶、${payload.entries.length} 条日记，并覆盖当前本地数据。继续？`,
+          `将导入 ${backup.growth.toys.length} 只玩偶、${backup.growth.entries.length} 条日记、${backup.photos.length} 张本地照片，并覆盖当前本地数据。继续？`,
         )
       ) {
         return
       }
-      await importGrowthData(payload)
+      // Restore files first, then reveal the diary records that reference them.
+      await restoreFullBackupMedia(backup.photos)
+      await importGrowthData(backup.growth)
+      showToast(
+        backup.legacy
+          ? '已导入旧版 JSON（其中不含本地照片）'
+          : `已恢复完整备份 · ${backup.photos.length} 张照片`,
+      )
     } catch (err) {
       showToast(err instanceof Error ? err.message : '导入失败，请检查 JSON')
     } finally {
       setBusy(false)
       if (fileRef.current) fileRef.current.value = ''
-    }
-  }
-
-  async function onResetDemo() {
-    if (
-      !window.confirm(
-        '将清除当前玩偶与日记，并恢复内置演示数据。主题、正数日样式、对话记录不会清除。继续？',
-      )
-    ) {
-      return
-    }
-    setBusy(true)
-    try {
-      await resetDemo()
-    } finally {
-      setBusy(false)
     }
   }
 
@@ -467,16 +519,16 @@ export function DataBackupPage() {
           <button
             type="button"
             disabled={busy}
-            onClick={() => void onExportJson()}
+            onClick={() => void onExportBackup()}
             className="flex min-h-14 w-full items-center gap-3 border-b border-line/70 px-4 py-3.5 text-left active:bg-cream disabled:opacity-50"
           >
             <span className="text-matcha-deep">
               <Download className="h-4 w-4" />
             </span>
             <div className="min-w-0 flex-1">
-              <p className="text-sm text-ink">导出成长轨迹 JSON</p>
+              <p className="text-sm text-ink">导出完整备份</p>
               <p className="text-[11px] text-ink-muted">
-                含玩偶档案与日记（演示本地备份）
+                含全部玩偶、日志和本地照片
               </p>
             </div>
             <ChevronRight className="h-4 w-4 text-ink-muted" />
@@ -491,29 +543,9 @@ export function DataBackupPage() {
               <Upload className="h-4 w-4" />
             </span>
             <div className="min-w-0 flex-1">
-              <p className="text-sm text-ink">导入成长轨迹 JSON</p>
+              <p className="text-sm text-ink">导入完整备份</p>
               <p className="text-[11px] text-ink-muted">
-                覆盖当前本地数据，请先自行备份
-              </p>
-            </div>
-            <ChevronRight className="h-4 w-4 text-ink-muted" />
-          </button>
-        </section>
-
-        <section className="card-paper overflow-hidden">
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => void onResetDemo()}
-            className="flex min-h-14 w-full items-center gap-3 px-4 py-3.5 text-left active:bg-cream disabled:opacity-50"
-          >
-            <span className="text-rose-deep">
-              <RotateCcw className="h-4 w-4" />
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm text-ink">重置演示数据</p>
-              <p className="text-[11px] text-ink-muted">
-                恢复种子玩偶与示例日记（不改主题 / 正数日 / 对话）
+                覆盖当前本地数据，也兼容旧版 JSON
               </p>
             </div>
             <ChevronRight className="h-4 w-4 text-ink-muted" />
@@ -528,8 +560,7 @@ export function DataBackupPage() {
           onChange={(e) => void onImportFile(e.target.files?.[0] ?? null)}
         />
         <p className="px-1 text-[11px] leading-relaxed text-ink-muted">
-          当前：{toys.length} 只玩偶 · {entries.length} 条日记。图片若为本地
-          data URL 会一并写入 JSON，体积可能较大。
+          完整备份适合换机、误删或卸载前保存。照片会写入备份文件，文件体积会随照片数量增加。
         </p>
       </div>
     </>
@@ -543,7 +574,7 @@ export function VersionPage() {
       <div className="space-y-3 px-4 py-4">
         <section className="card-paper space-y-3 p-4">
           <InfoLine label="当前版本" value="0.1.0-demo" />
-          <InfoLine label="构建" value="Toy Dairy MVP · Cloudflare Pages" />
+          <InfoLine label="构建" value="Toy Diary MVP · Cloudflare Pages" />
           <InfoLine label="更新通道" value="main / production" />
         </section>
         <section className="card-paper p-4 text-xs leading-relaxed text-ink-soft">
@@ -605,7 +636,7 @@ export function HelpSupportPage() {
       body={[
         '演示环境暂无真人客服。',
         '问题反馈可在 GitHub Issues 提交。',
-        '紧急联系：support@toydairy.demo（占位邮箱）',
+        '联系邮箱：gxz4992563@gmail.com',
       ]}
     />
   )
@@ -616,7 +647,7 @@ export function HelpAboutPage() {
     <SimpleDoc
       title="关于我们"
       body={[
-        'Toy Dairy · 玩偶生命手帐。把「人看玩偶」反转成「玩偶看世界」——让陪伴物从被记录的物品，变成共同生活的叙事主角。',
+        'Toy Diary · 玩偶生命手帐。把「人看玩偶」反转成「玩偶看世界」——让陪伴物从被记录的物品，变成共同生活的叙事主角。',
         '核心链路：身份卡（谁）→ 记一笔（发生了什么）→ 双视角日记（我怎么说 / 它怎么说）→ 成长时间轴与旅行地图 → 对话陪伴、正数日与分享卡片。',
         'Slogan：Through toy eyes, your world rewinds. / Reverse the gaze. 从物品到陪伴。',
         '面向喜欢收藏、携带玩偶旅行拍照，并希望用玩偶记录生活与情绪的年轻人。演示数据保存在本机浏览器；AI 日记与对话可走服务端接口。',
@@ -627,22 +658,145 @@ export function HelpAboutPage() {
 }
 
 export function LegalPage({ kind }: { kind: 'terms' | 'privacy' }) {
-  const title = kind === 'terms' ? '服务协议' : '隐私政策'
-  const body =
-    kind === 'terms'
-      ? [
-          '本协议适用于 Toy Dairy 演示应用。',
-          '演示数据默认保存在你的浏览器本地，不构成正式网络服务。',
-          '请合理使用 AI 生成内容，勿上传违法违规材料。',
-          '我们保留随时调整演示功能的权利。',
-        ]
-      : [
-          '我们重视隐私：抠图与多数数据在本地处理。',
-          '调用 AI 对话/日记接口时，会将必要的文本（不含完整密钥）发送至你配置的模型网关。',
-          '演示账号与验证码仅存于本机 localStorage。',
-          '正式版将提供更完整的数据删除与导出能力。',
-        ]
-  return <SimpleDoc title={title} body={body} back="/archive" />
+  const privacy = kind === 'privacy'
+  const title = privacy ? '隐私政策' : '使用条款'
+  const sections: Array<{ title: string; body: string[] }> = privacy
+    ? [
+        {
+          title: '简介',
+          body: [
+            'Toy Diary 是一款本地优先的玩偶陪伴记录工具。我们重视你的隐私；本政策说明本应用处理哪些信息、如何使用这些信息，以及你可如何管理自己的数据。',
+            '生效日期：2026 年 9 月 4 日 · 最后更新：2026 年 9 月 4 日。',
+          ],
+        },
+        {
+          title: '本地存储的信息',
+          body: [
+            '本应用不要求注册账号。玩偶档案、日志文字、照片、地点、对话记录、偏好设置和完整备份，默认保存在你的设备本地。',
+            '卸载应用、清除应用数据、重置设备或设备故障可能导致本地内容无法恢复。请在「偏好设置 → 本地数据与备份」中定期导出完整备份。',
+          ],
+        },
+        {
+          title: '相机、相册与定位',
+          body: [
+            '当你主动拍照、从相册选择图片或设置头像时，本应用才会请求相机或照片库权限；不会自行读取或上传你未选择的照片。',
+            '当你主动使用“当前位置”时，本应用会请求定位权限，用于填写日志地点和生成成长轨迹。你可以拒绝定位，并手动输入地点。',
+          ],
+        },
+        {
+          title: 'AI 与地点服务',
+          body: [
+            '当你主动使用生成玩偶日记、重新生成或玩偶对话时，完成请求所必需的玩偶设定、文字、日期、地点，以及你选择用于图片理解的压缩图片，可能经由本应用接口发送至 AI 服务处理。请不要输入身份证号、银行卡号、精确住址等敏感信息。',
+            '地点搜索或逆地理编码会将你主动输入的关键词或授权的坐标发送至地点服务以返回地点结果。AI 与地点服务仅用于你主动发起的功能，不用于广告、跨 App 跟踪或建立营销画像。',
+          ],
+        },
+        {
+          title: '备份、删除与分享',
+          body: [
+            '完整备份由你主动导出，可能包含玩偶、日志与本地照片。保存到“文件”、电脑或网盘后，该文件的保管责任由你和对应服务承担。',
+            '你可以在应用内删除单篇日志、玩偶或清除本地数据。删除日志时，关联的本地照片会一并清理。',
+          ],
+        },
+        {
+          title: '我们不会做什么',
+          body: [
+            '我们不会出售、出租或交易你的日志、照片和玩偶档案；不会将其用于广告定向或跨 App 跟踪；也不会在未经你主动操作的情况下公开发布你的内容。',
+          ],
+        },
+        {
+          title: '政策更新与联系我们',
+          body: [
+            '若因功能、法律或服务变化需要更新本政策，我们会在本页面更新日期并提供新版内容。',
+            '如对隐私或数据处理有疑问，请联系：gxz4992563@gmail.com。',
+          ],
+        },
+      ]
+    : [
+        {
+          title: '接受条款',
+          body: [
+            '下载、安装或使用 Toy Diary，即表示你同意本使用条款；如不同意，请停止使用本应用。',
+            '生效日期：2026 年 9 月 4 日 · 最后更新：2026 年 9 月 4 日。',
+          ],
+        },
+        {
+          title: '服务说明',
+          body: [
+            'Toy Diary 用于创建玩偶档案、记录日常与旅行、生成玩偶日记、查看成长轨迹、导出纪念卡片和完整备份。当前版本不提供账号、登录或跨设备云同步功能。',
+          ],
+        },
+        {
+          title: '本地数据与备份',
+          body: [
+            '你的内容默认保存在设备本地。你应自行保管设备和备份文件，并在更换设备、卸载应用或清除数据前导出完整备份。',
+            '在适用法律允许的范围内，我们不对因未备份、误操作、设备故障或第三方存储服务异常导致的数据丢失承担责任。',
+          ],
+        },
+        {
+          title: '用户内容',
+          body: [
+            '你保留自己创建、上传或保存的日志、照片、文字和玩偶设定的权利。你应确保拥有这些内容的合法使用权。',
+            '不得利用本应用上传、保存或分享违法、侵权、欺诈、暴力、骚扰、恶意代码或侵犯他人隐私、肖像权、著作权的内容。',
+          ],
+        },
+        {
+          title: 'AI 功能',
+          body: [
+            '玩偶日记、对话和图片理解由 AI 生成，可能不准确、不完整或不符合你的预期。你应自行决定是否保存、修改、导出或分享生成内容。',
+            'AI 内容仅供陪伴记录与创作参考，不构成医疗、法律、金融、心理咨询或其他专业建议。',
+          ],
+        },
+        {
+          title: '第三方服务与知识产权',
+          body: [
+            '部分功能依赖相机、相册、定位、地图、地点或 AI 服务。你可自行决定是否授权；第三方服务的可用性、结果准确性和服务条款由其自身负责。',
+            'Toy Diary 的名称、界面设计、图标、插画、代码与开发者提供的内容受相关法律保护。未经许可，不得复制、反向工程、出售或不当使用。',
+          ],
+        },
+        {
+          title: '服务变更与联系我们',
+          body: [
+            '我们可能因维护、安全、功能优化或法律要求调整部分功能。若变更明显影响核心使用方式，会尽合理努力提前说明。',
+            '如对本条款有疑问，请联系：gxz4992563@gmail.com。',
+          ],
+        },
+      ]
+
+  return <LegalDocument title={title} sections={sections} />
+}
+
+function LegalDocument({
+  title,
+  sections,
+}: {
+  title: string
+  sections: Array<{ title: string; body: string[] }>
+}) {
+  return (
+    <div className="legal-standalone">
+      <PageHeader title={title} back="/me" soft />
+      <div className="space-y-4 px-5 py-5 pb-10">
+        {sections.map((section, i) => (
+          <section key={section.title} className="card-paper p-5">
+            <h2 className="flex items-baseline gap-2 text-base font-semibold tracking-wide text-ink">
+              <span className="inline-block h-4 w-1 shrink-0 self-center rounded-full bg-matcha/70" aria-hidden="true" />
+              {section.title}
+            </h2>
+            <div className="mt-3 space-y-3 text-[13px] leading-7 text-ink-soft">
+              {section.body.map((paragraph) => (
+                <p key={paragraph}>{paragraph}</p>
+              ))}
+            </div>
+            {i === sections.length - 1 && (
+              <p className="mt-4 border-t border-line/50 pt-3 text-center text-[11px] text-ink-muted">
+                Toy Diary · 与你的玩偶一起，把陪伴写进时间里
+              </p>
+            )}
+          </section>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 function SimpleDoc({
