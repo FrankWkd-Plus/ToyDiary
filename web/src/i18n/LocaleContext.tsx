@@ -47,7 +47,13 @@ export function translate(
 }
 
 export function LocaleProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>(() => loadLocale())
+  // Chinese-only MVP: keep the localization infrastructure, but always start
+  // in Chinese until every product surface has a complete English version.
+  const [locale, setLocaleState] = useState<Locale>('zh')
+
+  useEffect(() => {
+    saveLocale('zh')
+  }, [])
 
   const setLocale = useCallback((next: Locale) => {
     setLocaleState(next)

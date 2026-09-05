@@ -12,6 +12,10 @@
 	<string>用于拍下你和玩偶一起经历的每一个瞬间。</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>用于从相册选择一张照片，写进玩偶日志。</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>用于在你主动选择时，将生成的纪念卡片保存到相册。</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>用于在你主动选择“当前位置”时填写日志地点并生成成长轨迹。</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -51,15 +55,9 @@
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
 	<string>Main</string>
-	<key>UIRequiredDeviceCapabilities</key>
-	<array>
-		<string>armv7</string>
-	</array>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>

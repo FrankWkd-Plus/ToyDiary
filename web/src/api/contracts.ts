@@ -140,7 +140,7 @@ export interface EntryRow {
   /** JSON Place */
   place: string | null
   title: string | null
-  /** 我的视角 */
+  /** 用户写下的记录文字 */
   user_note: string | null
   mood: string | null
   image_url: string | null

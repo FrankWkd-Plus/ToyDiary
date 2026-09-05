@@ -219,6 +219,20 @@ export function ToyArchiveDetailPage() {
               )
             })}
           </div>
+          {photos.length === 0 && (
+            <button
+              type="button"
+              onClick={() => navigate('/compose')}
+              className="w-full rounded-2xl border border-dashed border-line bg-cream/55 px-4 py-5 text-center active:scale-[0.99]"
+            >
+              <span className="block text-xs font-medium text-ink-soft">
+                还没有高光时刻
+              </span>
+              <span className="mt-1 block text-[10px] leading-4 text-ink-muted">
+                记录一段带照片的故事，第一张高光就会出现在这里
+              </span>
+            </button>
+          )}
         </section>
 
         <button

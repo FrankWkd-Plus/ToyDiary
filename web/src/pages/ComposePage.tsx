@@ -87,7 +87,13 @@ export function ComposePage() {
     if (routeState?.nativeImageUri) setNativeImageUri(routeState.nativeImageUri)
     if (routeState?.mode === 'text') setImageUrl(undefined)
     if (routeState?.ocrText) setUserNote(routeState.ocrText)
-  }, [routeState?.imageUrl, routeState?.mode, routeState?.ocrText])
+  }, [
+    routeState?.imageFile,
+    routeState?.imageUrl,
+    routeState?.mode,
+    routeState?.nativeImageUri,
+    routeState?.ocrText,
+  ])
 
   function onPickFile(file: File | null) {
     if (!file) return
@@ -145,7 +151,7 @@ export function ComposePage() {
         setAiDiary(result.aiDiary)
         setMood(result.mood)
         if (result.source === 'local') {
-          showToast('AI 暂时不可用，已用本地模板生成')
+          showToast('已在本机生成玩偶日记')
         }
       } else {
         const fallbackTitle =

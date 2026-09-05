@@ -19,6 +19,7 @@ import {
   companionDays,
   toyAvatar,
 } from '../archive/archiveUtils'
+import { api } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
 import { PageHeader } from '../components/PageHeader'
 import { useApp } from '../context/AppContext'
@@ -42,9 +43,10 @@ export function MemoryHallPage() {
     (location.state as { from?: string } | null)?.from === 'me'
       ? '/me'
       : '/archive'
-  const { toys, currentToy, entries, setCurrentToyId, showToast } = useApp()
+  const { toys, showToast } = useApp()
   const { prefs, updatePrefs } = useAuth()
   const toy = toys.find((item) => item.id === id)
+  const [entries, setEntries] = useState<Awaited<ReturnType<typeof api.listEntries>>>([])
   const [slide, setSlide] = useState(0)
   const [playing, setPlaying] = useState(true)
   const [musicOn, setMusicOn] = useState(() => prefs.memorySound)
@@ -60,6 +62,20 @@ export function MemoryHallPage() {
   useEffect(() => {
     setMusicOn(prefs.memorySound)
   }, [prefs.memorySound])
+
+  useEffect(() => {
+    if (!id) {
+      setEntries([])
+      return
+    }
+    let cancelled = false
+    void api.listEntries(id).then((list) => {
+      if (!cancelled) setEntries(list)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [id])
 
   // Prevent background page-scroll while share sheet is open
   useEffect(() => {
@@ -82,15 +98,11 @@ export function MemoryHallPage() {
     }
   }, [shareOpen])
 
-  const ready = Boolean(toy && currentToy?.id === toy.id)
-  const photos = useMemo(
-    () => (ready ? archivePhotos(entries) : []),
-    [entries, ready],
-  )
+  const photos = useMemo(() => archivePhotos(entries), [entries])
 
   useEffect(() => {
-    if (toy && currentToy?.id !== toy.id) setCurrentToyId(toy.id)
-  }, [currentToy?.id, setCurrentToyId, toy])
+    setSlide((current) => Math.min(current, Math.max(0, photos.length - 1)))
+  }, [photos.length])
 
   useEffect(() => {
     if (!playing || photos.length < 2) return
@@ -250,46 +262,56 @@ export function MemoryHallPage() {
         }
       />
       <main className="space-y-5 px-4 pb-5 pt-4">
-        <section className="memory-stage">
-          <img src={currentPhoto.src} alt={currentPhoto.title} />
-          <div className="memory-stage__shade" />
-          <div className="absolute inset-x-0 top-0 z-[2] flex items-center justify-between p-3">
-            <span className="rounded-full bg-black/25 px-2.5 py-1 text-[9px] tracking-widest text-white backdrop-blur-sm">
-              {slide + 1} / {photos.length}
-            </span>
-            <button
-              type="button"
-              onClick={() => {
-                setMusicOn((value) => {
-                  const next = !value
-                  updatePrefs({ memorySound: next })
-                  showToast(next ? '已开启回忆展厅声音' : '已关闭回忆展厅声音')
-                  return next
-                })
-              }}
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-black/25 text-white backdrop-blur-sm"
-              aria-label={musicOn ? '关闭背景音乐' : '开启背景音乐'}
-            >
-              {musicOn ? (
-                <Volume2 className="h-4 w-4" />
-              ) : (
-                <VolumeX className="h-4 w-4" />
-              )}
-            </button>
-          </div>
-          <div className="absolute inset-x-0 bottom-0 z-[2] p-4 text-white">
-            <p className="text-[10px] text-white/75">
-              {currentPhoto.date} · {currentPhoto.location}
-              {musicOn ? ' · ♪ 声音开' : ' · 静音'}
+        {currentPhoto ? (
+          <section className="memory-stage">
+            <img src={currentPhoto.src} alt={currentPhoto.title} />
+            <div className="memory-stage__shade" />
+            <div className="absolute inset-x-0 top-0 z-[2] flex items-center justify-between p-3">
+              <span className="rounded-full bg-black/25 px-2.5 py-1 text-[9px] tracking-widest text-white backdrop-blur-sm">
+                {slide + 1} / {photos.length}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setMusicOn((value) => {
+                    const next = !value
+                    updatePrefs({ memorySound: next })
+                    showToast(next ? '已开启回忆展厅声音' : '已关闭回忆展厅声音')
+                    return next
+                  })
+                }}
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-black/25 text-white backdrop-blur-sm"
+                aria-label={musicOn ? '关闭背景音乐' : '开启背景音乐'}
+              >
+                {musicOn ? (
+                  <Volume2 className="h-4 w-4" />
+                ) : (
+                  <VolumeX className="h-4 w-4" />
+                )}
+              </button>
+            </div>
+            <div className="absolute inset-x-0 bottom-0 z-[2] p-4 text-white">
+              <p className="text-[10px] text-white/75">
+                {currentPhoto.date} · {currentPhoto.location}
+                {musicOn ? ' · ♪ 声音开' : ' · 静音'}
+              </p>
+              <h2 className="mt-1 font-display text-xl">{currentPhoto.title}</h2>
+              <p className="mt-1.5 line-clamp-2 text-[11px] leading-relaxed text-white/90">
+                {currentPhoto.narration}
+              </p>
+            </div>
+          </section>
+        ) : (
+          <section className="rounded-[1.75rem] border border-dashed border-line bg-cream/60 px-6 py-12 text-center">
+            <ImagePlus className="mx-auto h-8 w-8 text-terra-deep" />
+            <h2 className="mt-3 font-display text-lg text-ink">展厅还在等待第一张照片</h2>
+            <p className="mt-2 text-xs leading-5 text-ink-muted">
+              玩偶头像只属于档案。通过「+」保存带照片的日志后，照片才会进入回忆展厅。
             </p>
-            <h2 className="mt-1 font-display text-xl">{currentPhoto.title}</h2>
-            <p className="mt-1.5 line-clamp-2 text-[11px] leading-relaxed text-white/90">
-              {currentPhoto.narration}
-            </p>
-          </div>
-        </section>
+          </section>
+        )}
 
-        <div className="flex items-center justify-center gap-4">
+        {currentPhoto && <div className="flex items-center justify-center gap-4">
           <button
             type="button"
             onClick={() => moveSlide(-1)}
@@ -318,7 +340,7 @@ export function MemoryHallPage() {
           >
             <ChevronRight className="h-5 w-5" />
           </button>
-        </div>
+        </div>}
 
         <section className="card-paper border border-line/60 p-4">
           <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-matcha-deep">

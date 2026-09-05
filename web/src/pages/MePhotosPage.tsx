@@ -1,12 +1,40 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ImageOff, X } from 'lucide-react'
+import { useLocation } from 'react-router-dom'
+import { api } from '../api/client'
 import { PageHeader } from '../components/PageHeader'
 import { useApp } from '../context/AppContext'
+import type { Entry } from '../types'
 
 export function MePhotosPage() {
-  const { currentToy, entries } = useApp()
+  const location = useLocation()
+  const { currentToy: activeToy, entries: activeEntries, toys } = useApp()
+  const toyId = (location.state as { toyId?: string } | null)?.toyId
+  const currentToy =
+    (toyId ? toys.find((toy) => toy.id === toyId) : null) || activeToy
+  const [scopedEntries, setScopedEntries] = useState<{
+    toyId: string
+    entries: Entry[]
+  } | null>(null)
   const [previewIndex, setPreviewIndex] = useState<number | null>(null)
+  useEffect(() => {
+    if (!currentToy) return
+    let cancelled = false
+    void api.listEntries(currentToy.id).then((list) => {
+      if (!cancelled) setScopedEntries({ toyId: currentToy.id, entries: list })
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [currentToy])
+
+  const entries =
+    scopedEntries && scopedEntries.toyId === currentToy?.id
+      ? scopedEntries.entries
+      : currentToy?.id === activeToy?.id
+        ? activeEntries
+        : []
   const photos = entries
     .filter((entry) => Boolean(entry.imageUrl))
     .sort((a, b) => b.date.localeCompare(a.date))
@@ -18,7 +46,7 @@ export function MePhotosPage() {
         subtitle={
           currentToy
             ? `${currentToy.name} · ${photos.length} 张共同回忆`
-            : '只收藏当前玩偶的照片'
+            : '选择一只玩偶查看照片'
         }
         back="/me"
         bare

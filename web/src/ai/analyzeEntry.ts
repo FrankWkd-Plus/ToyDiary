@@ -32,6 +32,7 @@ interface ImageSignals {
 const AI_ENDPOINT =
   (import.meta.env.VITE_AI_ANALYZE_ENDPOINT as string | undefined)?.trim() ||
   '/api/analyze-entry'
+const REMOTE_AI_ENABLED = import.meta.env.VITE_AI_REMOTE_ENABLED !== 'false'
 
 const AI_TIMEOUT_MS = 28_000
 
@@ -47,6 +48,10 @@ export async function analyzeEntry(
   const imageSignals = processedImageUrl
     ? await analyzeImagePalette(processedImageUrl, locale).catch(() => undefined)
     : undefined
+
+  if (!REMOTE_AI_ENABLED) {
+    return generateLocalAnalysis(input, imageSignals, processedImageUrl, locale)
+  }
 
   try {
     const controller = new AbortController()

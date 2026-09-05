@@ -20,7 +20,7 @@ export interface ToyHighlightShot {
 
 export interface ToyCardPhotos {
   profile: string
-  highlights: [ToyHighlightShot, ToyHighlightShot, ToyHighlightShot]
+  highlights: ToyHighlightShot[]
 }
 
 export function ToyCard({
@@ -161,8 +161,9 @@ export function ToyCard({
           </div>
 
           <div className="toy-photo-line" aria-hidden="true" />
-          <div className="toy-highlights">
-            {photos.highlights.map((shot, index) => {
+          {photos.highlights.length > 0 ? (
+            <div className="toy-highlights">
+              {photos.highlights.map((shot, index) => {
               const clickable = Boolean(shot.entryId && onOpenHighlight)
               const label =
                 shot.title?.trim() || captions[index] || `高光 ${index + 1}`
@@ -205,8 +206,16 @@ export function ToyCard({
                   )}
                 </figure>
               )
-            })}
-          </div>
+              })}
+            </div>
+          ) : (
+            <div className="mt-3 rounded-2xl border border-dashed border-line bg-cream/55 px-4 py-5 text-center">
+              <p className="text-xs font-medium text-ink-soft">还没有高光时刻</p>
+              <p className="mt-1 text-[10px] leading-4 text-ink-muted">
+                通过「+」记录带照片的故事后，会出现在这里
+              </p>
+            </div>
+          )}
         </section>
 
       </div>

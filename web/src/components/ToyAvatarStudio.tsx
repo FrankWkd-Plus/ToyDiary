@@ -6,7 +6,6 @@ import {
   LoaderCircle,
   RefreshCw,
   Sparkles,
-  X,
 } from 'lucide-react'
 import {
   createFallbackAvatar,
@@ -15,16 +14,11 @@ import {
   type StickerBorder,
   type StickerPreviewBg,
 } from '../image/createStickerAvatar'
-import {
-  progressLabel,
-  removeToyBackground,
-  type RemoveBgProgress,
-} from '../image/removeToyBackground'
-
 type Stage = 'pick' | 'processing' | 'confirm'
+type AvatarProgress = { progress: number; detail: string }
 
 /**
- * Upload → local AI cutout → white sticker border → confirm avatar.
+ * Upload → local crop/sticker frame → confirm avatar.
  */
 export function ToyAvatarStudio({
   value,
@@ -41,7 +35,7 @@ export function ToyAvatarStudio({
   const [sourceFile, setSourceFile] = useState<File | null>(null)
   const [cutoutBlob, setCutoutBlob] = useState<Blob | null>(null)
   const [removed, setRemoved] = useState(false)
-  const [progress, setProgress] = useState<RemoveBgProgress | null>(null)
+  const [progress, setProgress] = useState<AvatarProgress | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | undefined>(value)
   const [border, setBorder] = useState<StickerBorder>('standard')
   const [previewBg, setPreviewBg] = useState<StickerPreviewBg>('cream')
@@ -51,7 +45,6 @@ export function ToyAvatarStudio({
     null,
   )
   const rebuildToken = useRef(0)
-  const skipRef = useRef(false)
 
   const rebuildPreview = useCallback(
     async (
@@ -100,37 +93,25 @@ export function ToyAvatarStudio({
       onToast('图片请小于 12MB')
       return
     }
-    skipRef.current = false
     setSourceFile(file)
     setStage('processing')
     setProgress({
-      phase: 'import',
-      progress: 0.03,
-      detail: '即将下载约 40MB 最小模型（仅首次）',
+      progress: 0.35,
+      detail: '正在本机裁切并生成贴纸头像…',
     })
     setOffset({ x: 0, y: 0 })
     setZoom(1)
 
-    const result = await removeToyBackground(file, (p) => {
-      if (!skipRef.current) setProgress(p)
-    })
-    if (skipRef.current) return
-
-    setCutoutBlob(result.blob)
-    setRemoved(result.removed)
-    if (result.fallback) {
-      onToast(result.message || '抠图失败，已切换原图裁切')
-    }
-
-    setProgress({ phase: 'done', progress: 0.95, detail: '生成贴纸…' })
-    await rebuildPreview(result.blob, {
+    setCutoutBlob(file)
+    setRemoved(false)
+    setProgress({ progress: 0.75, detail: '正在生成预览…' })
+    await rebuildPreview(file, {
       border,
       zoom: 1,
       offsetX: 0,
       offsetY: 0,
       useSticker: true,
     })
-    if (skipRef.current) return
     setStage('confirm')
     setProgress(null)
   }
@@ -149,29 +130,6 @@ export function ToyAvatarStudio({
     }, 80)
     return () => window.clearTimeout(t)
   }, [border, zoom, offset.x, offset.y, cutoutBlob, stage, rebuildPreview])
-
-  async function applyOriginalOnly() {
-    const file = sourceFile
-    if (!file) {
-      onToast('请先选择照片')
-      return
-    }
-    skipRef.current = true
-    setStage('processing')
-    setProgress({ phase: 'fallback', progress: 0.6, detail: '使用原图生成贴纸…' })
-    setCutoutBlob(file)
-    setRemoved(false)
-    await rebuildPreview(file, {
-      border,
-      zoom: 1,
-      offsetX: 0,
-      offsetY: 0,
-      useSticker: true,
-    })
-    setStage('confirm')
-    setProgress(null)
-    onToast('已跳过 AI 抠图，使用原图贴纸')
-  }
 
   function onPointerDown(e: React.PointerEvent) {
     ;(e.target as HTMLElement).setPointerCapture?.(e.pointerId)
@@ -252,7 +210,7 @@ export function ToyAvatarStudio({
           }}
         />
         <p className="text-[9px] text-ink-muted">
-          本地 AI 抠图 · 最小模型约 40MB（仅首次下载）· AGPL 演示用
+          照片仅在本机处理，不会因制作头像自动上传
         </p>
       </div>
     )
@@ -260,7 +218,7 @@ export function ToyAvatarStudio({
 
   if (stage === 'processing') {
     const pct = Math.round((progress?.progress ?? 0.08) * 100)
-    const label = progress ? progressLabel(progress) : '正在处理…'
+    const label = '正在制作头像…'
     const detail = progress?.detail
     return (
       <div className="card-paper space-y-3 p-5 text-center">
@@ -281,19 +239,8 @@ export function ToyAvatarStudio({
           {pct}%
         </p>
         <p className="text-[10px] leading-relaxed text-ink-muted">
-          使用最小量化模型 <code className="text-[9px]">isnet_quint8</code>
-          （约 40MB）。首次需从 CDN 下载，完成后浏览器会缓存；弱网可能要 1–3 分钟。
-          等不及可点下方跳过。
+          所有裁切、缩放和贴纸边框都在当前设备完成。
         </p>
-        <button
-          type="button"
-          onClick={() => {
-            if (sourceFile) void applyOriginalOnly()
-          }}
-          className="btn-secondary mx-auto py-2 px-4 text-xs"
-        >
-          跳过抠图，直接用原图
-        </button>
       </div>
     )
   }
@@ -443,24 +390,17 @@ export function ToyAvatarStudio({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 pt-1">
-        <button
-          type="button"
-          onClick={() => void applyOriginalOnly()}
-          className="btn-secondary py-2.5 text-xs"
-        >
-          <X className="h-3.5 w-3.5" />
-          使用原图
-        </button>
+      <div className="pt-1">
         <button
           type="button"
           onClick={() => {
-            if (sourceFile) void processFile(sourceFile)
+            setZoom(1)
+            setOffset({ x: 0, y: 0 })
           }}
-          className="btn-secondary py-2.5 text-xs"
+          className="btn-secondary w-full py-2.5 text-xs"
         >
           <RefreshCw className="h-3.5 w-3.5" />
-          重新抠图
+          恢复居中
         </button>
       </div>
 

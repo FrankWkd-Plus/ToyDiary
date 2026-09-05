@@ -30,12 +30,14 @@ export interface ChatToyReplyResult {
 }
 
 const CHAT_ENDPOINT =
-  (import.meta.env.VITE_AI_CHAT_ENDPOINT as string | undefined)?.trim() ||
-  (import.meta.env.VITE_AI_ANALYZE_ENDPOINT as string | undefined)?.replace(
-    /analyze-entry\/?$/,
-    'chat',
-  ) ||
-  '/api/chat'
+  import.meta.env.VITE_AI_REMOTE_ENABLED === 'false'
+    ? ''
+    : (import.meta.env.VITE_AI_CHAT_ENDPOINT as string | undefined)?.trim() ||
+      (import.meta.env.VITE_AI_ANALYZE_ENDPOINT as string | undefined)?.replace(
+        /analyze-entry\/?$/,
+        'chat',
+      ) ||
+      '/api/chat'
 
 function hasTrait(toy: Toy, ...names: string[]) {
   const set = new Set(toy.traits.map((t) => t.toLowerCase()))
@@ -52,8 +54,14 @@ export function localPersonaReply(
   const isEn = locale === 'en'
   const normalized = text.trim().toLowerCase()
   const recent = entries[0]
-  const travel =
-    entries.find((e) => e.type === 'travel' && e.imageUrl) ??
+  const asksForTravel = /travel|trip|去过|旅行/.test(normalized)
+  const asksForMemory =
+    /travel|trip|memory|remember|before|used to|回忆|记得|以前|去过|旅行/.test(
+      normalized,
+    )
+  const memory =
+    (asksForTravel ? entries.find((e) => e.type === 'travel') : undefined) ??
+    entries.find((e) => e.type === 'travel') ??
     entries.find((e) => e.imageUrl) ??
     recent
 
@@ -77,15 +85,45 @@ export function localPersonaReply(
       : '辛苦啦。你不需要马上振作，我会安安静静陪你待一会儿。要不要告诉我，今天最累的是哪一刻？'
   }
 
-  if (
-    /travel|trip|memory|remember|before|used to|回忆|记得|以前|去过|旅行/.test(
-      normalized,
-    ) &&
-    travel?.location
-  ) {
+  if (asksForTravel && !entries.some((entry) => entry.type === 'travel')) {
     return isEn
-      ? `Of course I remember. We left “${travel.title || 'a little journey'}” in ${travel.location}. What I never want to forget is that you chose to show me the world.`
-      : `当然记得。我们在${travel.location}留下了「${travel.title || '一段小小的旅行'}」。我最舍不得忘记的，是那天你愿意带我一起看世界。`
+      ? "We haven't written down a trip together yet. When our first journey begins, let's save it properly so I can always remember it."
+      : '我们还没有一起写下旅行记录呢。等第一次出发的时候，我们把地点和故事认真存下来，这样我就能一直记得。'
+  }
+
+  if (asksForMemory && !memory) {
+    return isEn
+      ? "We haven't written down a shared memory yet, but that's okay. I'd love to start with today — shall we make our first diary entry together?"
+      : '我们还没有一起写下共同回忆呢，不过没关系。以后发生的第一件小事，我想和你认真记住。要不要从今天的第一篇日记开始？'
+  }
+
+  if (asksForMemory && memory) {
+    const memoryTitle =
+      memory.title ||
+      (memory.type === 'travel'
+        ? isEn
+          ? 'that trip'
+          : '那次旅行'
+        : isEn
+          ? 'that day'
+          : '那一天')
+    const place = memory.location
+    const date = memory.date?.replaceAll('-', '.')
+    return isEn
+      ? `Of course I remember “${memoryTitle}”${place ? ` in ${place}` : ''}${date ? ` on ${date}` : ''}. You wrote it down for us, so I can keep it close.`
+      : `当然记得「${memoryTitle}」${place ? `，那是在${place}` : ''}${date ? `，日期是 ${date}` : ''}。因为你把它写进了我们的日记，我才能一直好好记得。`
+  }
+
+  if (/start today|from today|从今天开始|今天开始/.test(normalized)) {
+    return isEn
+      ? "Okay. We don't need a grand beginning — tell me one small thing that happened today, and we'll keep it as our first shared memory."
+      : '好呀。我们的开始不需要很隆重，你告诉我今天发生的一件小事，我们就把它收藏成第一份共同回忆。'
+  }
+
+  if (/today|how was today|说说今天|聊聊今天|今天/.test(normalized)) {
+    return isEn
+      ? 'I’m listening. What moment from today stayed with you the most — happy, tiring, or just very ordinary?'
+      : '我在听呀。今天让你印象最深的是哪一刻？开心的、疲惫的，或者只是一件很普通的小事，都可以告诉我。'
   }
 
   if (/diary|journal|write|record|save|日记|记录|写下来|保存/.test(normalized)) {
@@ -208,6 +246,22 @@ export async function chatToyReply(
         input.entries,
         locale,
       ),
+      source: 'local',
+    }
+  }
+
+  const asksForMemory =
+    /travel|trip|memory|remember|before|used to|回忆|记得|以前|去过|旅行/.test(
+      message.toLowerCase(),
+    )
+  const asksForTravel = /travel|trip|去过|旅行/.test(message.toLowerCase())
+  const hasTravelMemory = input.entries?.some((entry) => entry.type === 'travel') ?? false
+  if (
+    (asksForMemory && (input.entries?.length ?? 0) === 0) ||
+    (asksForTravel && !hasTravelMemory)
+  ) {
+    return {
+      reply: localPersonaReply(input.toy, message, [], locale),
       source: 'local',
     }
   }

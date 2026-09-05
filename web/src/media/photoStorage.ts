@@ -157,6 +157,22 @@ export async function deletePersistedDiaryPhoto(pathOrUri?: string) {
   }
 }
 
+/** Remove every diary photo owned by Toy Diary during a factory reset. */
+export async function deleteAllPersistedDiaryPhotos() {
+  if (!isNativeApp()) return
+  try {
+    await Filesystem.stat({ path: PHOTO_ROOT, directory: Directory.Library })
+  } catch {
+    // A fresh install has no photo directory yet, which is already the desired state.
+    return
+  }
+  await Filesystem.rmdir({
+    path: PHOTO_ROOT,
+    directory: Directory.Library,
+    recursive: true,
+  })
+}
+
 /** Reads all native diary photos referenced by a set of entries for backup. */
 export async function exportDiaryPhotos(entries: Entry[]) {
   if (!isNativeApp()) return [] as DiaryPhotoBackupFile[]

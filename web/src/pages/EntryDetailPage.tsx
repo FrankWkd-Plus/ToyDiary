@@ -10,7 +10,6 @@ import {
   RefreshCw,
   Share2,
   Trash2,
-  UserRound,
   X,
 } from 'lucide-react'
 import { analyzeEntry } from '../ai/analyzeEntry'
@@ -19,7 +18,6 @@ import { LoadingBear } from '../components/LoadingBear'
 import { PageHeader } from '../components/PageHeader'
 import { useApp } from '../context/AppContext'
 import { useLocale } from '../i18n'
-import { loadProfileName } from '../profile/profileStorage'
 import {
   renderDiaryCardPng,
   type DiaryCardLayout,
@@ -36,8 +34,9 @@ export function EntryDetailPage() {
   const location = useLocation()
   const fromState = (location.state as { from?: string } | null)?.from
   const fromMeCollection = fromState === 'me-collection'
+  const fromMeToyArchive = fromState === 'me-toys'
   const backTo =
-    fromMeCollection
+    fromMeCollection || fromMeToyArchive
       ? '/me'
       : fromState === 'growth-timeline'
       ? '/growth'
@@ -48,7 +47,6 @@ export function EntryDetailPage() {
   const [entry, setEntry] = useState<Entry | null>(null)
   const [loading, setLoading] = useState(true)
   const [regen, setRegen] = useState(false)
-  const [ownerName, setOwnerName] = useState(() => loadProfileName())
   const [exportOpen, setExportOpen] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [previewing, setPreviewing] = useState(false)
@@ -60,12 +58,6 @@ export function EntryDetailPage() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
-
-  useEffect(() => {
-    const onFocus = () => setOwnerName(loadProfileName())
-    window.addEventListener('focus', onFocus)
-    return () => window.removeEventListener('focus', onFocus)
-  }, [])
 
   // Lock background scroll while export sheet is open (page-scroll + body)
   useEffect(() => {
@@ -108,7 +100,6 @@ export function EntryDetailPage() {
       void renderDiaryCardPng({
         entry,
         toy,
-        ownerName,
         layout,
         stickerFrame,
         showDayCount,
@@ -139,7 +130,6 @@ export function EntryDetailPage() {
     entry,
     toys,
     currentToy,
-    ownerName,
     layout,
     stickerFrame,
     showDayCount,
@@ -237,7 +227,6 @@ export function EntryDetailPage() {
       const blob = await renderDiaryCardPng({
         entry,
         toy,
-        ownerName,
         layout,
         stickerFrame,
         showDayCount,
@@ -288,13 +277,13 @@ export function EntryDetailPage() {
       ? `今天和 ${toyName} 一起去了${entry.location}。`
       : `今天想把这一刻写给 ${toyName}。`)
   const toyText =
-    entry.aiDiary?.trim() || buildToyFallback(toy, entry, ownerName)
+    entry.aiDiary?.trim() || buildToyFallback(toy, entry)
 
   return (
     <>
       <PageHeader
         title={entry.title || '事件详情'}
-        back={fromMeCollection ? true : backTo}
+        back={fromMeCollection || fromMeToyArchive ? true : backTo}
         soft
         right={
           <div className="flex shrink-0 items-center gap-1">
@@ -361,10 +350,10 @@ export function EntryDetailPage() {
         <div className="space-y-3.5">
           <PerspectiveCard
             tone="owner"
-            badge={`我的视角 · ${ownerName}`}
-            icon={<UserRound className="h-4 w-4" />}
+            badge="你写下的话"
+            icon={<Pencil className="h-4 w-4" />}
             body={ownerText}
-            emptyHint="还没有写下主人的叙述"
+            emptyHint="还没有写下这段记录"
           />
           <PerspectiveCard
             tone="toy"
@@ -375,7 +364,7 @@ export function EntryDetailPage() {
             footer={
               entry.userNote?.trim()
                 ? undefined
-                : '提示：主人备注会作为「我的视角」展示；点右上角「···」可重新生成玩偶视角。'
+                : '提示：你写下的文字会保存在上方；点右上角「···」可重新生成玩偶视角。'
             }
           />
         </div>
@@ -438,7 +427,7 @@ export function EntryDetailPage() {
                 <div className="mt-1.5 grid grid-cols-2 gap-2">
                   <OptionChip
                     active={layout === 'side'}
-                    label="左主右偶"
+                    label="左右双栏"
                     onClick={() => setLayout('side')}
                   />
                   <OptionChip
@@ -481,7 +470,6 @@ export function EntryDetailPage() {
                     void renderDiaryCardPng({
                       entry,
                       toy: toyForPreview,
-                      ownerName,
                       layout,
                       stickerFrame,
                       showDayCount,
@@ -733,7 +721,6 @@ function PerspectiveCard({
 function buildToyFallback(
   toy: Toy | undefined,
   entry: Entry,
-  ownerName: string,
 ): string {
   if (!toy) return '（暂无玩偶视角文案）'
   const place = entry.location || '某个温柔的地方'
@@ -741,7 +728,7 @@ function buildToyFallback(
   const trait = toy.traits[0] || '安静'
   return (
     `${entry.date.replace(/-/g, '年').replace(/年(\d+)$/, '月$1日')}，${place}。\n\n` +
-    `${ownerName} 带着我来到这里。我有点${trait}，但还是把眼睛睁得大大的。\n\n` +
+    `你带着我来到这里。我有点${trait}，但还是把眼睛睁得大大的。\n\n` +
     `${mood}我想，这些瞬间以后都会变成我们的小秘密。` +
     (entry.title ? `\n\n—— 关于「${entry.title}」` : '')
   )

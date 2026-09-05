@@ -10,6 +10,7 @@ import { createPortal } from 'react-dom'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   BellOff,
+  BookHeart,
   Camera,
   Check,
   ChevronDown,
@@ -23,7 +24,6 @@ import {
 } from 'lucide-react'
 import {
   chatToyReply,
-  formatChatApiError,
   localPersonaReply,
 } from '../ai/chatToyReply'
 import {
@@ -43,13 +43,21 @@ import { useApp } from '../context/AppContext'
 import { useLocale } from '../i18n'
 import type { Entry, Toy } from '../types'
 
-const QUICK_TOPICS = [
+const EMPTY_QUICK_TOPICS = [
   '和你说说今天',
-  '回忆一次旅行',
-  '看看你记得什么',
   '给我一点安慰',
-  '一起写日记',
+  '我们从今天开始吧',
 ] as const
+
+const MEMORY_QUICK_TOPICS = [
+  '和你说说今天',
+  '回忆我们的故事',
+  '给我一点安慰',
+] as const
+
+type QuickTopic =
+  | (typeof EMPTY_QUICK_TOPICS)[number]
+  | (typeof MEMORY_QUICK_TOPICS)[number]
 
 const EMPTY_MESSAGES: ChatMessage[] = []
 
@@ -81,7 +89,7 @@ function createOpeningMessage(toy: Toy, entries: Entry[]): ChatMessage {
 
 function getFeaturedMemory(entries: Entry[]) {
   return (
-    entries.find((entry) => entry.type === 'travel' && entry.imageUrl) ??
+    entries.find((entry) => entry.type === 'travel') ??
     entries.find((entry) => entry.imageUrl) ??
     entries[0]
   )
@@ -128,6 +136,7 @@ export function ConversationPage() {
   const messages = currentToy
     ? messagesByToy[currentToy.id] ?? EMPTY_MESSAGES
     : EMPTY_MESSAGES
+  const quickTopics = entries.length > 0 ? MEMORY_QUICK_TOPICS : EMPTY_QUICK_TOPICS
   const latestMemory = getFeaturedMemory(entries)
   const vitality = currentToy
     ? getToyVitality(currentToy, entries)
@@ -210,7 +219,6 @@ export function ConversationPage() {
       .filter((m) => m.text)
 
     let replyText = localPersonaReply(currentToy, userText, entries, locale)
-    let errorMessage: ChatMessage | null = null
     try {
       const result = await chatToyReply({
         toy: currentToy,
@@ -222,45 +230,19 @@ export function ConversationPage() {
       })
       replyText = result.reply
       if (result.apiError) {
-        const errorText = formatChatApiError(result.apiError, locale)
-        errorMessage = {
-          id: uid('error'),
-          role: 'system',
-          kind: 'error',
-          text: errorText,
-          createdAt: new Date().toISOString(),
-        }
-        // Toast is always visible even if chat history is scrolled away.
-        const toastLine =
-          errorText
-            .split('\n')
-            .map((line) => line.trim())
-            .find(
-              (line) =>
-                line &&
-                !line.startsWith('AI 调用失败') &&
-                !line.startsWith('AI request failed'),
-            ) ||
-          (locale === 'en' ? 'AI request failed' : 'AI 调用失败')
-        showToast(toastLine.slice(0, 120))
+        showToast(
+          locale === 'en'
+            ? 'Online service is unavailable; replied on this device'
+            : '在线服务暂不可用，已在本机生成回复',
+        )
         console.warn('[chatToyReply] API failed', result.apiError)
       }
     } catch (err) {
-      const errorText = formatChatApiError(
-        {
-          status: 0,
-          body: err instanceof Error ? err.message : String(err),
-        },
-        locale,
+      showToast(
+        locale === 'en'
+          ? 'Online service is unavailable; replied on this device'
+          : '在线服务暂不可用，已在本机生成回复',
       )
-      errorMessage = {
-        id: uid('error'),
-        role: 'system',
-        kind: 'error',
-        text: errorText,
-        createdAt: new Date().toISOString(),
-      }
-      showToast((err instanceof Error ? err.message : 'AI 调用失败').slice(0, 120))
       console.warn('[chatToyReply] request threw', err)
     }
 
@@ -283,10 +265,8 @@ export function ConversationPage() {
             createdAt: new Date().toISOString(),
           }
         : null
-    // Put the API error after the toy bubble so auto-scroll lands on it.
     const outgoing = [
       reply,
-      ...(errorMessage ? [errorMessage] : []),
       ...(memory ? [memory] : []),
     ]
     appendMessages(currentToy.id, outgoing)
@@ -333,21 +313,21 @@ export function ConversationPage() {
     })
   }
 
-  function chooseTopic(topic: (typeof QUICK_TOPICS)[number]) {
+  function startDiary() {
     if (!currentToy || replying) return
-    if (topic === '一起写日记') {
-      navigate('/compose', {
-        state: {
-          mode: 'text',
-          ocrText:
-            conversationDraft ||
-            `今天想和${currentToy.name}一起，记下一件小小的事。`,
-          fromConversation: true,
-        },
-      })
-      return
-    }
+    navigate('/compose', {
+      state: {
+        mode: 'text',
+        ocrText:
+          conversationDraft ||
+          `今天想和${currentToy.name}一起，记下一件小小的事。`,
+        fromConversation: true,
+      },
+    })
+  }
 
+  function chooseTopic(topic: QuickTopic) {
+    if (!currentToy || replying) return
     const topicMsg: ChatMessage = {
       id: uid('topic'),
       role: 'user',
@@ -692,19 +672,31 @@ export function ConversationPage() {
         </section>
       ) : (
       <section className="z-10 mt-auto shrink-0 border-t border-line/50 bg-white/94 px-3.5 pb-2.5 pt-2.5 backdrop-blur-xl">
-        <div className="mb-2 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {QUICK_TOPICS.map((topic) => (
+        <p className="mb-1.5 px-0.5 text-[9px] font-medium tracking-wide text-ink-muted">
+          想聊点什么？
+        </p>
+        <div className="mb-2 grid grid-cols-3 gap-1.5">
+          {quickTopics.map((topic) => (
             <button
               key={topic}
               type="button"
               onClick={() => chooseTopic(topic)}
               disabled={replying}
-              className="shrink-0 rounded-full border border-line/70 bg-cream/80 px-3 py-1.5 text-[10px] text-ink-soft transition-transform active:scale-95 disabled:opacity-50"
+              className="min-h-9 rounded-xl border border-line/70 bg-cream/80 px-1.5 py-1.5 text-[10px] leading-4 text-ink-soft transition-transform active:scale-95 disabled:opacity-50"
             >
               {topic}
             </button>
           ))}
         </div>
+        <button
+          type="button"
+          onClick={startDiary}
+          disabled={replying}
+          className="mb-2 flex w-full items-center justify-center gap-1.5 rounded-xl bg-mist-soft py-2 text-[11px] font-semibold text-matcha-deep transition-transform active:scale-[0.98] disabled:opacity-50"
+        >
+          <BookHeart className="h-3.5 w-3.5" />
+          {entries.length > 0 ? '一起写日记' : '一起写第一篇日记'}
+        </button>
 
         {pendingImage && (
           <div className="mb-2 flex items-center gap-2 rounded-2xl bg-mist-soft p-2">

@@ -590,19 +590,24 @@ function seed(): StoreData {
   return applyDemoUpdates({ toys, entries, currentToyId: lunaId })
 }
 
+function emptyStore(): StoreData {
+  return { toys: [], entries: [], currentToyId: null }
+}
+
 function load(): StoreData {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) {
-      const s = seed()
-      save(s)
-      return s
+      const empty = emptyStore()
+      save(empty)
+      return empty
     }
     return applyDemoUpdates(JSON.parse(raw) as StoreData)
-  } catch {
-    const s = seed()
-    save(s)
-    return s
+  } catch (error) {
+    // Never overwrite malformed user data: the original value may still be
+    // recoverable through support or a future migration.
+    console.error('[mockStore] local database could not be read', error)
+    return emptyStore()
   }
 }
 
@@ -613,7 +618,7 @@ function save(data: StoreData) {
     // QuotaExceeded — common when avatar/entry images are large data URLs
     console.error('[mockStore] localStorage save failed', err)
     throw new Error(
-      '本机存储已满，无法保存。请到「我的 → 数据」清理或导出后重置演示数据。',
+      '本机存储已满，无法保存。请先到「我的 → 偏好设置 → 本地数据与备份」导出备份，再清理不需要的内容。',
     )
   }
 }

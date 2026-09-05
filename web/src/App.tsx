@@ -13,16 +13,11 @@ import { MePhotosPage } from './pages/MePhotosPage'
 import { DayCountStudioPage } from './pages/DayCountStudioPage'
 import {
   DataBackupPage,
-  HelpAboutPage,
-  HelpCenterPage,
-  HelpDocsPage,
-  HelpSupportPage,
   LegalPage,
   NotifySoundPage,
   PreferencesPage,
-  ProfileSettingsPage,
+  SupportPage,
   ThemePickerPage,
-  VersionPage,
 } from './pages/MeSubpages'
 import { NewToyPage } from './pages/NewToyPage'
 import { TimelinePage } from './pages/TimelinePage'
@@ -56,7 +51,7 @@ export default function App() {
             <BrowserRouter>
               <Suspense fallback={<RouteFallback />}>
                 <Routes>
-                {/* Login removed — always enter as logged-in demo user */}
+                {/* Toy Diary is local-only; account routes intentionally do not exist. */}
                 <Route
                   path="login"
                   element={<Navigate to="/archive" replace />}
@@ -66,6 +61,7 @@ export default function App() {
                   path="legal/privacy"
                   element={<LegalPage kind="privacy" />}
                 />
+                <Route path="support" element={<SupportPage />} />
 
                 <Route element={<AppLayout />}>
                   <Route index element={<Navigate to="/archive" replace />} />
@@ -106,17 +102,10 @@ export default function App() {
                   <Route path="me" element={<MePage />} />
                   <Route path="me/photos" element={<MePhotosPage />} />
                   <Route path="days" element={<DayCountStudioPage />} />
-                  <Route path="me/profile" element={<ProfileSettingsPage />} />
                   <Route path="me/theme" element={<ThemePickerPage />} />
                   <Route path="me/preferences" element={<PreferencesPage />} />
                   <Route path="me/notify" element={<NotifySoundPage />} />
                   <Route path="me/data" element={<DataBackupPage />} />
-                  <Route path="me/version" element={<VersionPage />} />
-                  <Route path="me/settings" element={<ProfileSettingsPage />} />
-                  <Route path="help" element={<HelpCenterPage />} />
-                  <Route path="help/docs" element={<HelpDocsPage />} />
-                  <Route path="help/support" element={<HelpSupportPage />} />
-                  <Route path="help/about" element={<HelpAboutPage />} />
                   <Route path="*" element={<Navigate to="/archive" replace />} />
                 </Route>
               </Routes>

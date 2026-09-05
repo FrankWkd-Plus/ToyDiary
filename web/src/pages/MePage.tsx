@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Link, useNavigate } from 'react-router-dom'
 import {
@@ -15,18 +15,65 @@ import {
   X,
 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
+import { api } from '../api/client'
 import { companionDayStatus, toyAvatar } from '../archive/archiveUtils'
 import { seedPlaceForLabel, uniqueCities } from '../places/placeUtils'
+import type { Entry } from '../types'
+import { deleteAllPersistedDiaryPhotos } from '../media/photoStorage'
+
+const COLLECTION_TOY_KEY = 'toydairy.me.collectionToyId'
 
 export function MePage() {
   const navigate = useNavigate()
-  const { toys, entries, currentToy, setCurrentToyId, showToast } = useApp()
+  const { toys, showToast } = useApp()
   const [collectionPickerOpen, setCollectionPickerOpen] = useState(false)
+  const [resetting, setResetting] = useState(false)
+  const [collectionToyId, setCollectionToyId] = useState(() => {
+    try {
+      return localStorage.getItem(COLLECTION_TOY_KEY) || ''
+    } catch {
+      return ''
+    }
+  })
+  const [collectionEntries, setCollectionEntries] = useState<Entry[]>([])
+  const collectionToy =
+    toys.find((toy) => toy.id === collectionToyId) || toys[0] || null
+
+  useEffect(() => {
+    if (!toys.length) {
+      setCollectionToyId('')
+      setCollectionEntries([])
+      return
+    }
+    if (toys.some((toy) => toy.id === collectionToyId)) return
+    setCollectionToyId(toys[0].id)
+    try {
+      localStorage.setItem(COLLECTION_TOY_KEY, toys[0].id)
+    } catch {
+      /* local selection can safely fall back to this session */
+    }
+  }, [collectionToyId, toys])
+
+  useEffect(() => {
+    if (!collectionToy) {
+      setCollectionEntries([])
+      return
+    }
+    let cancelled = false
+    void api.listEntries(collectionToy.id).then((list) => {
+      if (!cancelled) setCollectionEntries(list)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [collectionToy])
+
   const currentEntries = useMemo(
-    () => entries.filter((entry) => entry.toyId === currentToy?.id),
-    [currentToy?.id, entries],
+    () =>
+      collectionEntries.filter((entry) => entry.toyId === collectionToy?.id),
+    [collectionEntries, collectionToy?.id],
   )
-  const companion = currentToy ? companionDayStatus(currentToy) : null
+  const companion = collectionToy ? companionDayStatus(collectionToy) : null
   const travelCount = currentEntries.filter(
     (entry) => entry.type === 'travel',
   ).length
@@ -36,40 +83,51 @@ export function MePage() {
       .filter((place): place is NonNullable<typeof place> => Boolean(place))
     return uniqueCities(places).length
   }, [currentEntries])
-  const currentToyIndex = toys.findIndex((toy) => toy.id === currentToy?.id)
+  const collectionToyIndex = toys.findIndex(
+    (toy) => toy.id === collectionToy?.id,
+  )
 
-  /** Wipe all Toy Diary localStorage keys and hard-reload to factory defaults. */
-  function onFactoryReset() {
-    if (
-      !window.confirm(
-        '将清除本机全部 Toy Diary 数据（玩偶、日记、主题、正数日与对话记录等）。此操作不可撤销。继续？',
-      )
-    ) {
-      return
-    }
-    if (
-      !window.confirm(
-        '再次确认：清空 localStorage 并重新加载？页面将回到首页。',
-      )
-    ) {
-      return
-    }
+  function selectCollectionToy(id: string) {
+    setCollectionToyId(id)
     try {
+      localStorage.setItem(COLLECTION_TOY_KEY, id)
+    } catch {
+      /* local selection can safely fall back to this session */
+    }
+  }
+
+  /** Wipe all Toy Diary records and native photo files, then start empty. */
+  async function onFactoryReset() {
+    if (
+      !window.confirm(
+        '将永久删除本机中的全部玩偶、日志、照片、对话和偏好设置。删除后无法恢复，建议先导出完整备份。继续？',
+      )
+    ) {
+      return
+    }
+    if (
+      !window.confirm(
+        '再次确认：删除全部本地数据？此操作不可撤销。',
+      )
+    ) {
+      return
+    }
+    setResetting(true)
+    try {
+      await deleteAllPersistedDiaryPhotos()
       const keys: string[] = []
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i)
         if (k && k.startsWith('toydairy.')) keys.push(k)
       }
       for (const k of keys) localStorage.removeItem(k)
+      sessionStorage.clear()
+      // Full reload lets every provider rebuild from the now-empty local database.
+      window.location.assign('/archive')
     } catch {
-      try {
-        localStorage.clear()
-      } catch {
-        /* ignore */
-      }
+      setResetting(false)
+      showToast('删除未完成，请重试；现有数据未被整体重置')
     }
-    // Full reload so ThemeProvider / Auth / mockStore all re-seed from empty storage
-    window.location.assign('/archive')
   }
 
   return (
@@ -156,11 +214,13 @@ export function MePage() {
             </div>
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium text-ink">
-                {currentToy ? `现在陪伴：${currentToy.name}` : '创建第一位玩偶朋友'}
+                {toys.length > 0
+                  ? `收藏着 ${toys.length} 位玩偶朋友`
+                  : '创建第一位玩偶朋友'}
               </p>
               <p className="mt-0.5 truncate text-[11px] text-ink-muted">
-                {currentToy
-                  ? currentToy.signature || currentToy.role || '每一次陪伴，都值得被收藏'
+                {toys.length > 0
+                  ? toys.map((toy) => toy.name).join(' · ')
                   : '从一张角色卡开始你们的故事'}
               </p>
             </div>
@@ -170,7 +230,7 @@ export function MePage() {
         <div className="flex items-end justify-between gap-3 px-1 pt-1">
           <div className="min-w-0">
             <h2 className="truncate text-sm font-semibold tracking-wide text-ink">
-              {currentToy ? `${currentToy.name}的共同收藏` : '共同收藏'}
+              {collectionToy ? `${collectionToy.name}的共同收藏` : '共同收藏'}
             </h2>
             <p className="mt-0.5 text-[11px] text-ink-muted">
               记录你们一起走过的日子
@@ -184,7 +244,7 @@ export function MePage() {
               aria-haspopup="dialog"
               aria-expanded={collectionPickerOpen}
             >
-              切换玩偶
+              选择玩偶
               <ChevronDown className="h-3 w-3" />
             </button>
           )}
@@ -195,8 +255,8 @@ export function MePage() {
             type="button"
             onClick={() =>
               navigate(
-                currentToy ? `/memories/${currentToy.id}` : '/toys/new',
-                { state: { from: 'me' } },
+                collectionToy ? `/memories/${collectionToy.id}` : '/toys/new',
+                { state: { from: 'me', toyId: collectionToy?.id } },
               )
             }
             className="relative flex min-h-[7.6rem] w-full items-center overflow-hidden bg-gradient-to-br from-[#fff8ef] via-mustard-soft/70 to-mist-soft/55 px-4 py-3.5 text-left active:opacity-90"
@@ -208,9 +268,9 @@ export function MePage() {
                 陪伴纪念
               </span>
               <p className="mt-2 text-[11px] font-medium text-ink-soft">
-                {currentToy && companion
+                {collectionToy && companion
                   ? companion.isFuture
-                    ? `距离和 ${currentToy.name} 相遇还有 ${companion.daysUntil} 天`
+                    ? `距离和 ${collectionToy.name} 相遇还有 ${companion.daysUntil} 天`
                     : `今天是我们认识的第 ${companion.days} 天`
                   : '从创建一位玩偶朋友开始'}
               </p>
@@ -220,16 +280,16 @@ export function MePage() {
                   : `${companion?.days ?? 0} DAYS`}
               </p>
               <span className="mt-2 inline-flex items-center text-[10px] font-semibold text-matcha-deep">
-                {currentToy ? '进入回忆展厅' : '创建玩偶'}
+                {collectionToy ? '进入回忆展厅' : '创建玩偶'}
                 <ChevronRight className="h-3.5 w-3.5" />
               </span>
             </div>
             <span className="relative z-[1] flex h-[5.2rem] w-[5.2rem] shrink-0 rotate-3 items-center justify-center overflow-hidden rounded-[1.35rem] border-4 border-white bg-white text-2xl shadow-md">
               <span aria-hidden="true">🧸</span>
-              {currentToy && (
+              {collectionToy && (
                 <img
-                  src={toyAvatar(currentToy, currentToyIndex)}
-                  alt={currentToy.name}
+                  src={toyAvatar(collectionToy, collectionToyIndex)}
+                  alt={collectionToy.name}
                   className="absolute inset-0 h-full w-full object-cover"
                 />
               )}
@@ -243,8 +303,8 @@ export function MePage() {
               value={travelCount}
               unit="次"
               onClick={() =>
-                navigate(currentToy ? '/growth/stats/travel' : '/growth', {
-                  state: { from: 'me' },
+                navigate(collectionToy ? '/growth/stats/travel' : '/growth', {
+                  state: { from: 'me', toyId: collectionToy?.id },
                 })
               }
             />
@@ -254,8 +314,8 @@ export function MePage() {
               value={cityCount}
               unit="座"
               onClick={() =>
-                navigate(currentToy ? '/growth/stats/cities' : '/growth', {
-                  state: { from: 'me' },
+                navigate(collectionToy ? '/growth/stats/cities' : '/growth', {
+                  state: { from: 'me', toyId: collectionToy?.id },
                 })
               }
             />
@@ -265,8 +325,8 @@ export function MePage() {
               value={currentEntries.length}
               unit="条"
               onClick={() =>
-                navigate(currentToy ? '/growth/stats/moments' : '/growth', {
-                  state: { from: 'me' },
+                navigate(collectionToy ? '/growth/stats/moments' : '/growth', {
+                  state: { from: 'me', toyId: collectionToy?.id },
                 })
               }
             />
@@ -277,8 +337,8 @@ export function MePage() {
               unit="张"
               last
               onClick={() =>
-                navigate(currentToy ? '/me/photos' : '/growth', {
-                  state: { from: 'me' },
+                navigate(collectionToy ? '/me/photos' : '/growth', {
+                  state: { from: 'me', toyId: collectionToy?.id },
                 })
               }
             />
@@ -295,8 +355,8 @@ export function MePage() {
           <LinkRow
             to="/me/notify"
             icon={<Bell className="h-4 w-4" />}
-            label="通知设置"
-            hint="玩偶提醒 · 日记 · 声音"
+            label="应用内提醒"
+            hint="使用 App 时的玩偶卡片 · 声音"
             last
           />
         </SectionCard>
@@ -319,11 +379,12 @@ export function MePage() {
 
         <button
           type="button"
-          onClick={onFactoryReset}
-          className="flex w-full items-center justify-center gap-2 rounded-full border border-line/80 bg-white py-3 text-sm font-medium text-ink-soft transition-transform active:scale-[0.99]"
+          onClick={() => void onFactoryReset()}
+          disabled={resetting}
+          className="flex w-full items-center justify-center gap-2 rounded-full border border-line/80 bg-white py-3 text-sm font-medium text-ink-soft transition-transform active:scale-[0.99] disabled:opacity-50"
         >
           <Trash2 className="h-4 w-4 text-rose-deep" />
-          删除本地数据
+          {resetting ? '正在删除…' : '删除全部本地数据'}
         </button>
         <p className="pb-2 text-center text-[10px] leading-relaxed text-ink-muted">
           Toy Diary · 记录默认保存在本机
@@ -352,10 +413,10 @@ export function MePage() {
                     id="collection-toy-picker-title"
                     className="font-display text-lg text-ink"
                   >
-                    切换玩偶
+                    查看谁的收藏
                   </h2>
                   <p className="mt-0.5 text-[10px] text-ink-muted">
-                    陪伴纪念和共同收藏会一起切换
+                    只切换本页收藏，不影响其他功能
                   </p>
                 </div>
                 <button
@@ -370,15 +431,15 @@ export function MePage() {
 
               <div className="mt-4 min-h-0 space-y-2 overflow-y-auto overscroll-contain pb-1">
                 {toys.map((toy, index) => {
-                  const selected = toy.id === currentToy?.id
+                  const selected = toy.id === collectionToy?.id
                   return (
                     <button
                       key={toy.id}
                       type="button"
                       onClick={() => {
-                        setCurrentToyId(toy.id)
+                        selectCollectionToy(toy.id)
                         setCollectionPickerOpen(false)
-                        showToast(`已切换到${toy.name}的共同收藏`)
+                        showToast(`正在查看${toy.name}的共同收藏`)
                       }}
                       className={`flex w-full items-center gap-3 rounded-2xl border px-3 py-2.5 text-left transition-colors ${
                         selected
@@ -406,7 +467,7 @@ export function MePage() {
                             ? 'bg-matcha text-white'
                             : 'border border-line bg-white text-transparent'
                         }`}
-                        aria-label={selected ? '当前玩偶' : undefined}
+                        aria-label={selected ? '正在查看' : undefined}
                       >
                         <Check className="h-4 w-4" strokeWidth={3} />
                       </span>

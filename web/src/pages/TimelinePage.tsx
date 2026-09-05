@@ -7,7 +7,6 @@ import {
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toyAvatar } from '../archive/archiveUtils'
-import { LanguageSwitch } from '../components/LanguageSwitch'
 import { ToyCardCarousel } from '../components/ToyCardCarousel'
 import { useApp } from '../context/AppContext'
 import { useLocale } from '../i18n'
@@ -25,32 +24,39 @@ export function TimelinePage() {
   return (
     <div className="min-h-full">
       <header className="header-band sticky top-0 z-10 flex items-center justify-between gap-2 px-4 py-3.5">
-        <div className="flex min-w-0 flex-1 items-center gap-2">
-          <LanguageSwitch className="shrink-0" />
+        <div className="flex min-w-0 flex-1 items-center">
           <button
             type="button"
-            onClick={() => setPickerOpen(true)}
-            className="flex min-w-0 items-center gap-2.5 rounded-2xl py-0.5 pr-2 text-left transition-transform active:scale-[0.98]"
+            onClick={() => (toys.length ? setPickerOpen(true) : goNewToy())}
+            className="flex min-w-0 flex-1 items-center gap-2.5 rounded-2xl py-0.5 pr-2 text-left transition-transform active:scale-[0.98]"
             aria-haspopup="dialog"
             aria-expanded={pickerOpen}
           >
-            <img
-              src={toyAvatar(
-                currentToy,
-                toys.findIndex((toy) => toy.id === currentToy?.id),
-              )}
-              alt=""
-              className="h-9 w-9 shrink-0 rounded-xl border-2 border-white object-cover shadow-sm ring-1 ring-line/50"
-            />
+            {currentToy ? (
+              <img
+                src={toyAvatar(
+                  currentToy,
+                  toys.findIndex((toy) => toy.id === currentToy.id),
+                )}
+                alt=""
+                className="h-9 w-9 shrink-0 rounded-xl border-2 border-white object-cover shadow-sm ring-1 ring-line/50"
+              />
+            ) : (
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-dashed border-matcha/45 bg-white/75 text-matcha-deep shadow-sm">
+                <Plus className="h-4 w-4" />
+              </span>
+            )}
             <span className="min-w-0">
               <span className="block text-[9px] font-semibold tracking-[0.12em] text-ink-muted">
                 TOY DIARY
               </span>
               <span className="mt-0.5 flex items-center gap-1">
-                <strong className="max-w-[7rem] truncate font-display text-sm text-ink sm:max-w-[8rem]">
+                <strong className="max-w-full truncate font-display text-sm text-ink">
                   {currentToy?.name || t('archive.selectToy')}
                 </strong>
-                <ChevronDown className="h-3.5 w-3.5 shrink-0 text-matcha-deep" />
+                {toys.length > 0 && (
+                  <ChevronDown className="h-3.5 w-3.5 shrink-0 text-matcha-deep" />
+                )}
               </span>
             </span>
           </button>

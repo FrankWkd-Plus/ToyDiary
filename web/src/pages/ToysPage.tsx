@@ -53,7 +53,7 @@ export function ToysPage() {
             }
           />
         ) : (
-          <ToyCardCarousel />
+          <ToyCardCarousel browseOnly={fromMe} />
         )}
       </div>
     </>

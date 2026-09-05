@@ -316,7 +316,7 @@ export const MESSAGES: Record<Locale, Dict> = {
     'toast.needToy': '请先创建一只玩偶',
 
     // share cards
-    'share.myView': '我的视角',
+    'share.myView': '你写下的话',
     'share.toyView': '玩偶视角',
     'share.todayDiary': '今日日记',
     'share.growthTrail': '成长轨迹',
@@ -636,7 +636,7 @@ export const MESSAGES: Record<Locale, Dict> = {
     'toast.failed': 'Something went wrong — try again',
     'toast.needToy': 'Create a toy first',
 
-    'share.myView': 'My view',
+    'share.myView': 'Your words',
     'share.toyView': 'Toy’s view',
     'share.todayDiary': 'Today’s diary',
     'share.growthTrail': 'Growth trail',

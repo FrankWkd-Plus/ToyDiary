@@ -15,13 +15,6 @@ import {
   Volume2,
 } from 'lucide-react'
 import { useAuth } from '../auth/AuthContext'
-import {
-  buildExplorerTxUrl,
-  computeRecordHash,
-  ensureInjectiveNetwork,
-  mintOwnershipSbt,
-  requestAccount,
-} from '../chain/injectiveSbt'
 import { PageHeader } from '../components/PageHeader'
 import { useApp } from '../context/AppContext'
 import { useLocale } from '../i18n'
@@ -30,6 +23,7 @@ import {
   buildFullBackup,
   fullBackupFilename,
   parseFullBackup,
+  restoreFullBackupAppState,
   restoreFullBackupMedia,
 } from '../share/fullBackup'
 import { shareOrDownloadFile } from '../share/shareHelpers'
@@ -73,6 +67,13 @@ export function ProfileSettingsPage() {
     setSbtBusy(true)
     setSbtResult(null)
     try {
+      const {
+        buildExplorerTxUrl,
+        computeRecordHash,
+        ensureInjectiveNetwork,
+        mintOwnershipSbt,
+        requestAccount,
+      } = await import('../chain/injectiveSbt')
       const account = await requestAccount()
       await ensureInjectiveNetwork()
       const latestEntry = entries
@@ -317,7 +318,7 @@ export function NotifySoundPage() {
 
   return (
     <>
-      <PageHeader title="通知与声音" back="/me" soft />
+      <PageHeader title="应用内提醒" back="/me" soft />
       <div className="space-y-3 px-4 py-4">
         <section className="card-paper overflow-hidden">
           <div className="border-b border-line/70 px-4 py-2.5 text-xs font-medium text-ink-muted">
@@ -345,8 +346,8 @@ export function NotifySoundPage() {
           />
           <ToggleRow
             icon={<BookOpen className="h-4 w-4" />}
-            label="日记提醒"
-            desc="玩偶催你写手帐（演示推送）"
+            label="日记卡片提醒"
+            desc="使用 App 时，玩偶会邀请你记下此刻"
             on={prefs.diaryPush}
             onChange={(v) => {
               updatePrefs({ diaryPush: v })
@@ -424,7 +425,7 @@ export function NotifySoundPage() {
         </section>
 
         <p className="px-1 text-[11px] leading-relaxed text-ink-muted">
-          演示环境为应用内卡片提醒，不会发送系统推送。对话页开启「安静陪伴」时也会暂停主动消息。
+          这些提醒只会在你使用 Toy Diary 时显示，不会发送 iOS 系统通知。对话页开启「安静陪伴」时也会暂停主动消息。
         </p>
       </div>
     </>
@@ -498,11 +499,13 @@ export function DataBackupPage() {
       // Restore files first, then reveal the diary records that reference them.
       await restoreFullBackupMedia(backup.photos)
       await importGrowthData(backup.growth)
+      restoreFullBackupAppState(backup.localStorage)
       showToast(
         backup.legacy
-          ? '已导入旧版 JSON（其中不含本地照片）'
+          ? '已导入旧版备份；部分偏好设置可能不包含在内'
           : `已恢复完整备份 · ${backup.photos.length} 张照片`,
       )
+      window.setTimeout(() => window.location.assign('/archive'), 650)
     } catch (err) {
       showToast(err instanceof Error ? err.message : '导入失败，请检查 JSON')
     } finally {
@@ -528,7 +531,7 @@ export function DataBackupPage() {
             <div className="min-w-0 flex-1">
               <p className="text-sm text-ink">导出完整备份</p>
               <p className="text-[11px] text-ink-muted">
-                含全部玩偶、日志和本地照片
+                含玩偶、日志、照片、对话和偏好设置
               </p>
             </div>
             <ChevronRight className="h-4 w-4 text-ink-muted" />
@@ -545,7 +548,7 @@ export function DataBackupPage() {
             <div className="min-w-0 flex-1">
               <p className="text-sm text-ink">导入完整备份</p>
               <p className="text-[11px] text-ink-muted">
-                覆盖当前本地数据，也兼容旧版 JSON
+                覆盖当前本地数据，并兼容旧版备份
               </p>
             </div>
             <ChevronRight className="h-4 w-4 text-ink-muted" />
@@ -666,7 +669,7 @@ export function LegalPage({ kind }: { kind: 'terms' | 'privacy' }) {
           title: '简介',
           body: [
             'Toy Diary 是一款本地优先的玩偶陪伴记录工具。我们重视你的隐私；本政策说明本应用处理哪些信息、如何使用这些信息，以及你可如何管理自己的数据。',
-            '生效日期：2026 年 9 月 4 日 · 最后更新：2026 年 9 月 4 日。',
+            '生效日期：2026 年 9 月 4 日 · 最后更新：2026 年 9 月 5 日。',
           ],
         },
         {
@@ -693,7 +696,7 @@ export function LegalPage({ kind }: { kind: 'terms' | 'privacy' }) {
         {
           title: '备份、删除与分享',
           body: [
-            '完整备份由你主动导出，可能包含玩偶、日志与本地照片。保存到“文件”、电脑或网盘后，该文件的保管责任由你和对应服务承担。',
+            '完整备份由你主动导出，包含玩偶、日志、本地照片、对话记录和偏好设置。备份文件未加密；保存到“文件”、电脑或网盘后，该文件的保管责任由你和对应服务承担，请勿随意分享。',
             '你可以在应用内删除单篇日志、玩偶或清除本地数据。删除日志时，关联的本地照片会一并清理。',
           ],
         },
@@ -716,7 +719,7 @@ export function LegalPage({ kind }: { kind: 'terms' | 'privacy' }) {
           title: '接受条款',
           body: [
             '下载、安装或使用 Toy Diary，即表示你同意本使用条款；如不同意，请停止使用本应用。',
-            '生效日期：2026 年 9 月 4 日 · 最后更新：2026 年 9 月 4 日。',
+            '生效日期：2026 年 9 月 4 日 · 最后更新：2026 年 9 月 5 日。',
           ],
         },
         {
@@ -763,6 +766,37 @@ export function LegalPage({ kind }: { kind: 'terms' | 'privacy' }) {
       ]
 
   return <LegalDocument title={title} sections={sections} />
+}
+
+export function SupportPage() {
+  return (
+    <LegalDocument
+      title="Toy Diary 支持"
+      sections={[
+        {
+          title: '需要帮助？',
+          body: [
+            'Toy Diary 是一款无需登录、本地优先的玩偶陪伴记录工具。你可以创建玩偶档案、记录日常与旅行、查看成长轨迹，并导出完整备份。',
+            '问题反馈请发送邮件至：gxz4992563@gmail.com。请描述使用的 iPhone 型号、iOS 版本、操作步骤和看到的提示；请勿发送私人日志、原始照片或备份文件。',
+          ],
+        },
+        {
+          title: '数据与备份',
+          body: [
+            '数据默认保存在当前设备。更换设备、卸载 App 或清除数据前，请前往“我的 → 偏好设置 → 本地数据与备份”导出完整备份。',
+            '恢复备份会覆盖当前玩偶和日志数据。导入前请确认文件来源可信，并为当前数据另存一份备份。',
+          ],
+        },
+        {
+          title: '权限与网络',
+          body: [
+            '相机、相册和定位都只会在你主动使用对应功能时请求。拒绝定位后仍可手动输入地点；拒绝相机或相册后仍可创建纯文字记录。',
+            '在线地点搜索不可用时，可以直接使用输入的地点文字。玩偶日记和对话具备本机生成方式，离线时仍可继续记录。',
+          ],
+        },
+      ]}
+    />
+  )
 }
 
 function LegalDocument({

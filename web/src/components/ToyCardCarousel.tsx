@@ -1,23 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import { latestToyChatLine } from '../conversation/chatStorage'
 import { useApp } from '../context/AppContext'
 import type { Entry, Toy } from '../types'
 import { ToyCard, type ToyCardPhotos } from './ToyCard'
 
-const FALLBACK_PHOTOS = [
-  '/toy-cards/highlight-1.jpg',
-  '/toy-cards/highlight-2.jpg',
-  '/toy-cards/highlight-3.jpg',
-] as const
-
-const FALLBACK_TITLES = ['出发', '看海', '收藏风景'] as const
-
 function photosForToy(
   toy: { avatarUrl?: string },
   toyEntries: Entry[],
-  index: number,
 ): ToyCardPhotos {
   // Prefer real diary photos (newest first) so highlights open the matching entry
   const fromEntries = [...toyEntries]
@@ -37,44 +28,29 @@ function photosForToy(
     highlights.push(shot)
     if (highlights.length >= 3) break
   }
-  for (let i = 0; highlights.length < 3 && i < FALLBACK_PHOTOS.length * 2; i++) {
-    const src = FALLBACK_PHOTOS[i % FALLBACK_PHOTOS.length]
-    if (seen.has(src)) continue
-    seen.add(src)
-    highlights.push({ src, title: FALLBACK_TITLES[i % FALLBACK_TITLES.length] })
-  }
-  // Hard pad if still short (duplicate last real shot as non-clickable filler)
-  while (highlights.length < 3) {
-    const last = highlights[highlights.length - 1] || {
-      src: FALLBACK_PHOTOS[0],
-      title: FALLBACK_TITLES[0],
-    }
-    highlights.push({ src: last.src, title: last.title })
-  }
-
   return {
-    profile:
-      toy.avatarUrl ||
-      (index === 0 ? '/toy-cards/profile.jpg' : FALLBACK_PHOTOS[index % 3]),
-    highlights: highlights as ToyCardPhotos['highlights'],
+    profile: toy.avatarUrl || '/toy-cards/profile.jpg',
+    highlights,
   }
 }
 
 /** Shared by 档案 and 我的 → 玩偶 so both surfaces always stay identical. */
 export function ToyCardCarousel({
   onVisibleToyChange,
+  browseOnly = false,
 }: {
   onVisibleToyChange?: (toy: Toy) => void
+  /** Browse profiles without changing the app-wide active toy. */
+  browseOnly?: boolean
 }) {
   const navigate = useNavigate()
-  const location = useLocation()
   const { toys, currentToy, entries, setCurrentToyId } = useApp()
   const carouselRef = useRef<HTMLDivElement>(null)
   const programmaticTargetIndexRef = useRef<number | null>(null)
   const [entriesByToy, setEntriesByToy] = useState<Record<string, Entry[]>>({})
   const initialVisibleIndex = Math.max(
     0,
-    toys.findIndex((toy) => toy.id === currentToy?.id),
+    browseOnly ? 0 : toys.findIndex((toy) => toy.id === currentToy?.id),
   )
   const visibleIndexRef = useRef(initialVisibleIndex)
   const [visibleIndex, setVisibleIndex] = useState(initialVisibleIndex)
@@ -92,6 +68,7 @@ export function ToyCardCarousel({
   }, [toys])
 
   useEffect(() => {
+    if (browseOnly) return
     const nextIndex = Math.max(
       0,
       toys.findIndex((toy) => toy.id === currentToy?.id),
@@ -111,7 +88,7 @@ export function ToyCardCarousel({
       })
     })
     return () => window.cancelAnimationFrame(frame)
-  }, [currentToy?.id, toys])
+  }, [browseOnly, currentToy?.id, toys])
 
   function syncVisibleCard() {
     const carousel = carouselRef.current
@@ -139,7 +116,9 @@ export function ToyCardCarousel({
 
     // A carousel card is not only a preview: it represents the active toy
     // across the app. Keep the global selection (and its entry set) in sync.
-    if (visibleToy.id !== currentToy?.id) setCurrentToyId(visibleToy.id)
+    if (!browseOnly && visibleToy.id !== currentToy?.id) {
+      setCurrentToyId(visibleToy.id)
+    }
     onVisibleToyChange?.(visibleToy)
   }
 
@@ -149,9 +128,9 @@ export function ToyCardCarousel({
         ref={carouselRef}
         onScroll={syncVisibleCard}
         className="toy-card-carousel flex snap-x snap-mandatory overflow-x-auto"
-        aria-label="左右滑动切换玩偶"
+        aria-label={browseOnly ? '左右滑动浏览玩偶档案' : '左右滑动切换玩偶'}
       >
-        {toys.map((toy, index) => {
+        {toys.map((toy) => {
           const toyEntries =
             entriesByToy[toy.id] ??
             entries.filter((entry) => entry.toyId === toy.id)
@@ -159,7 +138,7 @@ export function ToyCardCarousel({
             <div key={toy.id} className="w-full min-w-full snap-center">
               <ToyCard
                 toy={toy}
-                photos={photosForToy(toy, toyEntries, index)}
+                photos={photosForToy(toy, toyEntries)}
                 entries={toyEntries}
                 chatPreview={latestToyChatLine(
                   toy.id,
@@ -171,20 +150,17 @@ export function ToyCardCarousel({
                   navigate('/conversation')
                 }}
                 onEditToy={() => {
-                  setCurrentToyId(toy.id)
+                  if (!browseOnly) setCurrentToyId(toy.id)
                   navigate(`/toys/${toy.id}/edit`, {
                     state: {
-                      from:
-                        location.pathname === '/toys'
-                          ? 'me'
-                          : 'archive',
+                      from: browseOnly ? 'me' : 'archive',
                     },
                   })
                 }}
                 onOpenHighlight={(entryId) => {
-                  setCurrentToyId(toy.id)
+                  if (!browseOnly) setCurrentToyId(toy.id)
                   navigate(`/entries/${entryId}`, {
-                    state: { from: 'archive' },
+                    state: { from: browseOnly ? 'me-toys' : 'archive' },
                   })
                 }}
               />

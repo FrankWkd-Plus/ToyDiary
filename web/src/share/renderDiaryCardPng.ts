@@ -1,6 +1,6 @@
 /**
  * Export a dual-perspective diary card as PNG.
- * Layouts: side (左主右偶) | stack (上下对称)
+ * Layouts: side (左右双栏) | stack (上下对称)
  * Location is drawn as a clear grey label with a pin glyph (not a faint watermark).
  */
 import { companionDays, toyAvatar } from '../archive/archiveUtils'
@@ -12,7 +12,6 @@ export type DiaryCardLayout = 'side' | 'stack'
 export interface DiaryCardOptions {
   entry: Entry
   toy?: Toy | null
-  ownerName: string
   layout: DiaryCardLayout
   /** decorative sticker frame */
   stickerFrame: boolean
@@ -28,7 +27,6 @@ export async function renderDiaryCardPng(
   const {
     entry,
     toy,
-    ownerName,
     layout,
     stickerFrame,
     showDayCount,
@@ -163,7 +161,7 @@ export async function renderDiaryCardPng(
       : `今天想把这一刻写给 ${toyName}。`)
   const toyText =
     entry.aiDiary?.trim() ||
-    `我是${toyName}。${locationText ? `在${locationText}，` : ''}和 ${ownerName} 的这一天，我想记住。`
+    `我是${toyName}。${locationText ? `在${locationText}，` : ''}和你一起经历的这一天，我想记住。`
 
   if (layout === 'side') {
     const colW = (W - pad * 2 - 56) / 2
@@ -177,7 +175,7 @@ export async function renderDiaryCardPng(
       y: boxY,
       w: colW,
       h: boxH,
-      title: `我的视角 · ${ownerName}`,
+      title: '你写下的话',
       body: ownerText,
       tint: cream,
       ink,
@@ -205,7 +203,7 @@ export async function renderDiaryCardPng(
       y: contentTop,
       w: boxW,
       h: boxH,
-      title: `我的视角 · ${ownerName}`,
+      title: '你写下的话',
       body: ownerText,
       tint: cream,
       ink,

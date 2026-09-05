@@ -371,16 +371,17 @@ function buildMilestones(
     path?: string
   }[] = []
 
-  const today = formatToday()
-  items.push({
-    id: 'milestone-days',
-    date: today,
-    icon: <CalendarHeart className="h-4 w-4" strokeWidth={1.8} />,
-    tone: 'bg-peach-soft text-rose-deep',
-    title: `陪伴第 ${days} 天`,
-    desc: '每一个普通日子，都算数。',
-    path: '/growth/stats/companion',
-  })
+  if (birthDate && days >= 1) {
+    items.push({
+      id: 'milestone-meet',
+      date: birthDate,
+      icon: <CalendarHeart className="h-4 w-4" strokeWidth={1.8} />,
+      tone: 'bg-peach-soft text-rose-deep',
+      title: '相遇的第一天',
+      desc: '从这一天开始，我们成为了彼此的陪伴。',
+      path: '/growth/stats/companion',
+    })
+  }
 
   const first = [...entries].sort((a, b) => a.date.localeCompare(b.date))[0]
   if (first) {
@@ -413,27 +414,30 @@ function buildMilestones(
     })
   }
 
-  if (days >= 100 && birthDate) {
-    items.push({
-      id: 'milestone-100',
-      date: addDaysIso(birthDate, 99),
-      icon: <PartyPopper className="h-4 w-4" strokeWidth={1.8} />,
-      tone: 'bg-lavender/60 text-matcha-deep',
-      title: '百日纪念',
-      desc: '一百个「今天也在一起」。',
-      path: '/growth/stats/companion',
-    })
+  if (birthDate) {
+    const timeMilestones = [
+      { days: 100, title: '百日纪念', desc: '一百个「今天也在一起」。' },
+      { days: 365, title: '一周年纪念', desc: '四季走了一圈，我们仍然在一起。' },
+      { days: 520, title: '520 天纪念', desc: '把喜欢藏进五百二十个日夜。' },
+      { days: 1000, title: '一千天纪念', desc: '一千个平凡日子，组成了特别的我们。' },
+      { days: 10000, title: '一万天纪念', desc: '走过很长很长的时间，陪伴仍在继续。' },
+    ] as const
+
+    for (const milestone of timeMilestones) {
+      if (days < milestone.days) continue
+      items.push({
+        id: `milestone-${milestone.days}`,
+        date: addDaysIso(birthDate, milestone.days - 1),
+        icon: <PartyPopper className="h-4 w-4" strokeWidth={1.8} />,
+        tone: 'bg-lavender/60 text-matcha-deep',
+        title: milestone.title,
+        desc: milestone.desc,
+        path: '/growth/stats/companion',
+      })
+    }
   }
 
   return items
-}
-
-function formatToday() {
-  const d = new Date()
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
 }
 
 function addDaysIso(iso: string, daysToAdd: number) {

@@ -2,7 +2,7 @@
  * In-app proactive toy nudges (demo stand-in for push).
  * Granular prefs: miss / diary / travel / night + frequency.
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { MessageCircle, X } from 'lucide-react'
 import { toyAvatar } from '../archive/archiveUtils'
@@ -173,13 +173,13 @@ export function ToyNudgeHost() {
     pathname.startsWith('/conversation') ||
     pathname.startsWith('/toys/')
 
-  const quiet = useMemo(() => {
+  const quiet = (() => {
     try {
       return window.localStorage.getItem('toydairy.quietMode') === 'true'
     } catch {
       return false
     }
-  }, [nudge])
+  })()
 
   const timing = frequencyMs(prefs.nudgeFrequency ?? 'normal')
 

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import {
   ChevronLeft,
@@ -8,6 +8,7 @@ import {
   Sparkles,
 } from 'lucide-react'
 import { companionDays, companionDayStatus, toyAvatar } from '../archive/archiveUtils'
+import { api } from '../api/client'
 import { DayCountNumber } from '../components/DayCountNumber'
 import { PageHeader } from '../components/PageHeader'
 import { useApp } from '../context/AppContext'
@@ -61,8 +62,49 @@ export function GrowthStatsPage() {
   const { kind } = useParams<{ kind: string }>()
   const navigate = useNavigate()
   const location = useLocation()
-  const { currentToy, entries, toys, showToast } = useApp()
+  const locationState = location.state as {
+    from?: string
+    toyId?: string
+  } | null
+  const fromMe = locationState?.from === 'me'
+  const {
+    currentToy: activeToy,
+    entries: activeEntries,
+    toys,
+    showToast,
+  } = useApp()
+  const currentToy =
+    (fromMe && locationState?.toyId
+      ? toys.find((toy) => toy.id === locationState.toyId)
+      : null) || activeToy
+  const [scopedEntries, setScopedEntries] = useState<{
+    toyId: string
+    entries: Entry[]
+  } | null>(null)
   const [sharing, setSharing] = useState(false)
+
+  useEffect(() => {
+    if (!fromMe || !currentToy) return
+    let cancelled = false
+    void api.listEntries(currentToy.id).then((list) => {
+      if (!cancelled) setScopedEntries({ toyId: currentToy.id, entries: list })
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [fromMe, currentToy])
+
+  const entries = useMemo(
+    () =>
+      fromMe
+        ? scopedEntries && scopedEntries.toyId === currentToy?.id
+          ? scopedEntries.entries
+          : currentToy?.id === activeToy?.id
+            ? activeEntries
+            : []
+        : activeEntries,
+    [activeEntries, activeToy?.id, currentToy?.id, fromMe, scopedEntries],
+  )
   const statKind = (
     ['companion', 'travel', 'cities', 'moments'] as const
   ).includes(kind as StatKind)
@@ -84,8 +126,6 @@ export function GrowthStatsPage() {
   const cityGroups = useMemo(() => groupByCity(entries), [entries])
   const toyIndex = toys.findIndex((t) => t.id === currentToy?.id)
   const photoUrl = entries.find((e) => e.imageUrl)?.imageUrl
-  const fromMe =
-    (location.state as { from?: string } | null)?.from === 'me'
   const backTo = fromMe ? '/me' : '/growth'
 
   if (!statKind) {
