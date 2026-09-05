@@ -342,7 +342,7 @@ export function EntryDetailPage() {
 
         {entry.imageAnalysis && (
           <p className="mb-4 rounded-2xl bg-mist-soft/70 px-3.5 py-3 text-xs leading-relaxed text-matcha-deep">
-            <span className="font-medium">照片理解 · </span>
+            <span className="font-medium">画面印象 · </span>
             {entry.imageAnalysis}
           </p>
         )}

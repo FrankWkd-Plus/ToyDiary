@@ -1,16 +1,14 @@
 import {
   useEffect,
-  useMemo,
   useRef,
   useState,
   type ChangeEvent,
   type FormEvent,
 } from 'react'
 import { createPortal } from 'react-dom'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import {
   BellOff,
-  BookHeart,
   Camera,
   Check,
   ChevronDown,
@@ -43,21 +41,7 @@ import { useApp } from '../context/AppContext'
 import { useLocale } from '../i18n'
 import type { Entry, Toy } from '../types'
 
-const EMPTY_QUICK_TOPICS = [
-  '和你说说今天',
-  '给我一点安慰',
-  '我们从今天开始吧',
-] as const
-
-const MEMORY_QUICK_TOPICS = [
-  '和你说说今天',
-  '回忆我们的故事',
-  '给我一点安慰',
-] as const
-
-type QuickTopic =
-  | (typeof EMPTY_QUICK_TOPICS)[number]
-  | (typeof MEMORY_QUICK_TOPICS)[number]
+type QuickTopic = '说说今天' | '回忆我们的故事'
 
 const EMPTY_MESSAGES: ChatMessage[] = []
 
@@ -105,7 +89,6 @@ function fileToDataUrl(file: File) {
 }
 
 export function ConversationPage() {
-  const navigate = useNavigate()
   const { locale } = useLocale()
   const {
     currentToy,
@@ -136,7 +119,8 @@ export function ConversationPage() {
   const messages = currentToy
     ? messagesByToy[currentToy.id] ?? EMPTY_MESSAGES
     : EMPTY_MESSAGES
-  const quickTopics = entries.length > 0 ? MEMORY_QUICK_TOPICS : EMPTY_QUICK_TOPICS
+  const quickTopic: QuickTopic =
+    entries.length > 0 ? '回忆我们的故事' : '说说今天'
   const latestMemory = getFeaturedMemory(entries)
   const vitality = currentToy
     ? getToyVitality(currentToy, entries)
@@ -152,16 +136,6 @@ export function ConversationPage() {
           .map((entry) => entry.location)
           .filter((place): place is string => Boolean(place)),
   ).size
-
-  const conversationDraft = useMemo(
-    () =>
-      messages
-        .filter((message) => message.role === 'user' && message.text)
-        .slice(-4)
-        .map((message) => message.text)
-        .join('\n'),
-    [messages],
-  )
 
   useEffect(() => {
     if (!currentToy) return
@@ -310,19 +284,6 @@ export function ConversationPage() {
     void sendToyReply(pendingImage ? `${text || '想把这一刻给你看看'}（附照片）` : text, {
       includeMemory: /旅行|回忆|记得|以前|去过/.test(text),
       priorMessages,
-    })
-  }
-
-  function startDiary() {
-    if (!currentToy || replying) return
-    navigate('/compose', {
-      state: {
-        mode: 'text',
-        ocrText:
-          conversationDraft ||
-          `今天想和${currentToy.name}一起，记下一件小小的事。`,
-        fromConversation: true,
-      },
     })
   }
 
@@ -672,31 +633,17 @@ export function ConversationPage() {
         </section>
       ) : (
       <section className="z-10 mt-auto shrink-0 border-t border-line/50 bg-white/94 px-3.5 pb-2.5 pt-2.5 backdrop-blur-xl">
-        <p className="mb-1.5 px-0.5 text-[9px] font-medium tracking-wide text-ink-muted">
-          想聊点什么？
-        </p>
-        <div className="mb-2 grid grid-cols-3 gap-1.5">
-          {quickTopics.map((topic) => (
-            <button
-              key={topic}
-              type="button"
-              onClick={() => chooseTopic(topic)}
-              disabled={replying}
-              className="min-h-9 rounded-xl border border-line/70 bg-cream/80 px-1.5 py-1.5 text-[10px] leading-4 text-ink-soft transition-transform active:scale-95 disabled:opacity-50"
-            >
-              {topic}
-            </button>
-          ))}
+        <div className="mb-2 flex">
+          <button
+            type="button"
+            onClick={() => chooseTopic(quickTopic)}
+            disabled={replying}
+            className="inline-flex min-h-8 items-center justify-center gap-1 rounded-full border border-line/70 bg-cream/75 px-3 py-1.5 text-[10px] font-medium text-ink-soft transition-transform active:scale-[0.98] disabled:opacity-50"
+          >
+            <Sparkles className="h-3 w-3 text-terra-deep" />
+            {quickTopic}
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={startDiary}
-          disabled={replying}
-          className="mb-2 flex w-full items-center justify-center gap-1.5 rounded-xl bg-mist-soft py-2 text-[11px] font-semibold text-matcha-deep transition-transform active:scale-[0.98] disabled:opacity-50"
-        >
-          <BookHeart className="h-3.5 w-3.5" />
-          {entries.length > 0 ? '一起写日记' : '一起写第一篇日记'}
-        </button>
 
         {pendingImage && (
           <div className="mb-2 flex items-center gap-2 rounded-2xl bg-mist-soft p-2">

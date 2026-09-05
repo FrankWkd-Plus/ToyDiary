@@ -19,6 +19,7 @@ const BACKUP_LOCAL_STORAGE_KEYS = [
   'toydiary.daycount.style',
   'toydiary.quietMode',
   'toydiary.me.collectionToyId',
+  'toydiary.growth.perspective',
 ] as const
 
 export interface FullBackupPayload {

@@ -36,7 +36,9 @@ type AnalyzeBody = {
   date?: string
   location?: string
   userNote?: string
-  imageDataUrl?: string
+  hasPhoto?: boolean
+  /** Neutral client-side colour observation; never a scene classification. */
+  imageToneDescription?: string
   /** 'zh' | 'en' — language for generated diary copy */
   locale?: string
   language?: string
@@ -94,7 +96,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   const date = body.date?.trim() || new Date().toISOString().slice(0, 10)
   const location = body.location?.trim()
   const userNote = body.userNote?.trim()
-  const imageDataUrl = body.imageDataUrl?.trim()
+  const hasPhoto = body.hasPhoto === true
+  const imageToneDescription = body.imageToneDescription?.trim()
 
   const system = isEn
     ? [
@@ -107,9 +110,12 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         'toyReply: string (one warm sentence said to the user before saving, English)',
         'mood: string (one English mood word, e.g. gentle / happy / calm / curious)',
         'tags: string[] (1-4 short English tags)',
-        'imageAnalysis: string (brief scene description if a photo is provided, otherwise empty string)',
+        'imageAnalysis: string (neutral colour/lighting impression if a photo is provided, otherwise empty string)',
         'entryType: "travel" | "daily" | "memorial" | "text"',
         "Match the toy's personality. Keep the tone warm and diary-like, not template-y.",
+        'GROUNDING: Treat only the owner note, selected location, date and type as event facts.',
+        'Never infer sunset, evening, night, beach, outdoors, weather, objects or a place from colour tone alone.',
+        'If the owner did not describe a scene, use a neutral title and neutral wording about this moment.',
       ].join('\n')
     : [
         '你是 Toy Diary 的文案助手，为用户的玩偶生成成长手帐。',
@@ -121,9 +127,12 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         'toyReply: string（保存前对用户说的一句话，中文）',
         'mood: string（一个中文心情词，如 温柔/开心/平静/好奇）',
         'tags: string[]（1-4 个中文标签）',
-        'imageAnalysis: string（若有图则简述画面，否则空字符串）',
+        'imageAnalysis: string（若有图，仅描述中性的色调或光线印象；否则为空字符串）',
         'entryType: "travel" | "daily" | "memorial" | "text"',
         '口吻要贴合玩偶性格，温暖、手帐感，不要模板腔。',
+        '事实约束：只有用户备注、主动选择的地点、日期和类型可以作为事件事实。',
+        '禁止仅凭暖色、暗色、蓝色或绿色推断日落、傍晚、夜晚、海边、户外、天气、物体或地点。',
+        '用户没有说明具体场景时，标题和正文必须使用“这一刻”等中性表达。',
       ].join('\n')
 
   const textBrief = isEn
@@ -136,8 +145,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         `Date: ${date}`,
         location ? `Location: ${location}` : '',
         userNote ? `Owner note: ${userNote}` : 'No owner note.',
-        imageDataUrl
-          ? 'The user attached a photo — use the image when writing.'
+        hasPhoto
+          ? `A photo is attached. Use only this neutral visual note: ${imageToneDescription || 'No reliable scene information.'}`
           : 'No photo attached.',
       ]
         .filter(Boolean)
@@ -151,18 +160,14 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         `日期：${date}`,
         location ? `地点：${location}` : '',
         userNote ? `主人备注：${userNote}` : '主人未写备注',
-        imageDataUrl ? '用户附带了一张照片，请结合画面。' : '没有照片。',
+        hasPhoto
+          ? `用户附带了一张照片。只能使用这条中性画面信息：${imageToneDescription || '没有可靠的场景信息'}。`
+          : '没有照片。',
       ]
         .filter(Boolean)
         .join('\n')
 
   const userContent: ContentPart[] = [{ type: 'text', text: textBrief }]
-  if (imageDataUrl?.startsWith('data:image/')) {
-    userContent.push({
-      type: 'image_url',
-      image_url: { url: imageDataUrl },
-    })
-  }
 
   const messages: ChatMessage[] = [
     { role: 'system', content: system },
@@ -246,7 +251,12 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     toyReply: String(parsed.toyReply ?? '').trim() || defaultReply,
     mood: String(parsed.mood ?? defaultMood).trim() || defaultMood,
     tags,
-    imageAnalysis: String(parsed.imageAnalysis ?? '').trim(),
+    imageAnalysis: hasPhoto
+      ? imageToneDescription ||
+        (isEn
+          ? 'The photo keeps a shared moment without making a scene assumption.'
+          : '照片记录了一个共同瞬间，不对具体场景作推断。')
+      : '',
     entryType,
     auth,
   })

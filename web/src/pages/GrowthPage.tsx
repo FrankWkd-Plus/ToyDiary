@@ -11,6 +11,7 @@ import {
   MapPin,
   MapPinned,
   PartyPopper,
+  PencilLine,
   Sparkles,
 } from 'lucide-react'
 import { companionDays, toyAvatar } from '../archive/archiveUtils'
@@ -23,6 +24,19 @@ const TravelMapView = lazy(() =>
 )
 
 type GrowthTab = 'timeline' | 'map'
+type TimelinePerspective = 'toy' | 'owner'
+
+const PERSPECTIVE_STORAGE_KEY = 'toydiary.growth.perspective'
+
+function loadTimelinePerspective(): TimelinePerspective {
+  try {
+    return window.localStorage.getItem(PERSPECTIVE_STORAGE_KEY) === 'owner'
+      ? 'owner'
+      : 'toy'
+  } catch {
+    return 'toy'
+  }
+}
 
 type TimelineItem =
   | {
@@ -51,6 +65,9 @@ export function GrowthPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { currentToy, entries, toys, setCurrentToyId, showToast } = useApp()
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [perspective, setPerspective] = useState<TimelinePerspective>(
+    loadTimelinePerspective,
+  )
 
   const tab: GrowthTab =
     searchParams.get('tab') === 'map' ? 'map' : 'timeline'
@@ -60,6 +77,14 @@ export function GrowthPage() {
       setCurrentToyId(toys[0].id)
     }
   }, [currentToy?.id, toys, setCurrentToyId])
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(PERSPECTIVE_STORAGE_KEY, perspective)
+    } catch {
+      // The selected view can remain session-only if storage is unavailable.
+    }
+  }, [perspective])
 
   const toyIndex = toys.findIndex((t) => t.id === currentToy?.id)
   const days = currentToy ? companionDays(currentToy) : 0
@@ -204,6 +229,46 @@ export function GrowthPage() {
             地图
           </button>
         </div>
+
+        {tab === 'timeline' && currentToy && (
+          <div className="mb-3 flex items-center justify-between gap-3 px-1">
+            <span className="text-[10px] font-medium tracking-wide text-ink-muted">
+              故事视角
+            </span>
+            <div
+              className="inline-grid grid-cols-2 rounded-full bg-white/80 p-0.5 shadow-[var(--shadow-warm-sm)] ring-1 ring-line/60"
+              role="group"
+              aria-label="切换成长时间线故事视角"
+            >
+              <button
+                type="button"
+                onClick={() => setPerspective('toy')}
+                aria-pressed={perspective === 'toy'}
+                className={`flex min-h-7 items-center justify-center gap-1 rounded-full px-2.5 text-[10px] font-medium transition-colors ${
+                  perspective === 'toy'
+                    ? 'bg-mist-soft text-matcha-deep'
+                    : 'text-ink-muted active:bg-cream'
+                }`}
+              >
+                <Sparkles className="h-3 w-3" />
+                玩偶眼中
+              </button>
+              <button
+                type="button"
+                onClick={() => setPerspective('owner')}
+                aria-pressed={perspective === 'owner'}
+                className={`flex min-h-7 items-center justify-center gap-1 rounded-full px-2.5 text-[10px] font-medium transition-colors ${
+                  perspective === 'owner'
+                    ? 'bg-peach-soft text-rose-deep'
+                    : 'text-ink-muted active:bg-cream'
+                }`}
+              >
+                <PencilLine className="h-3 w-3" />
+                我写的
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {tab === 'timeline' ? (
@@ -285,7 +350,7 @@ export function GrowthPage() {
 
                   const entry = item.entry
                   const location = entry.place?.displayName || entry.location
-                  const text = entry.aiDiary?.trim() || entry.userNote?.trim()
+                  const text = timelinePerspectiveText(entry, perspective)
                   return (
                     <article key={item.id} className="growth-row">
                       <div className="growth-date">
@@ -324,11 +389,25 @@ export function GrowthPage() {
                               {location}
                             </p>
                           )}
-                          {text && (
-                            <p className="mt-2 line-clamp-3 text-[13px] leading-relaxed text-ink-soft">
-                              {text}
-                            </p>
-                          )}
+                          <p
+                            className={`mt-2 inline-flex items-center gap-1 text-[9px] font-semibold tracking-wide ${
+                              perspective === 'toy'
+                                ? 'text-matcha-deep'
+                                : 'text-rose-deep'
+                            }`}
+                          >
+                            {perspective === 'toy' ? (
+                              <Sparkles className="h-3 w-3" />
+                            ) : (
+                              <PencilLine className="h-3 w-3" />
+                            )}
+                            {perspective === 'toy'
+                              ? `${currentToy.name} 记得`
+                              : '你写下'}
+                          </p>
+                          <p className="mt-1 line-clamp-3 text-[13px] leading-relaxed text-ink-soft">
+                            {text}
+                          </p>
                         </div>
                       </Link>
                     </article>
@@ -353,6 +432,22 @@ export function GrowthPage() {
       )}
     </div>
   )
+}
+
+function timelinePerspectiveText(
+  entry: Entry,
+  perspective: TimelinePerspective,
+) {
+  if (perspective === 'toy') {
+    return (
+      entry.aiDiary?.trim() ||
+      '还没有生成玩偶视角，点开日志可以生成。'
+    )
+  }
+  if (entry.userNote?.trim()) return entry.userNote.trim()
+  return entry.imageUrl
+    ? '这一次，你只收藏了一张照片。'
+    : '这一天没有留下文字。'
 }
 
 function buildMilestones(

@@ -1,26 +1,25 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
-  CheckCircle2,
-  ChevronLeft,
   ImagePlus,
   LoaderCircle,
-  RefreshCw,
   ScanText,
   Sparkles,
   X,
 } from 'lucide-react'
-import { analyzeEntry, type EntryAnalysis } from '../ai/analyzeEntry'
+import { analyzeEntry, summarizeEntryTitle } from '../ai/analyzeEntry'
 import { api } from '../api/client'
 import { PlacePicker } from '../components/PlacePicker'
 import { PageHeader } from '../components/PageHeader'
 import { useApp } from '../context/AppContext'
 import { useLocale } from '../i18n'
-import { persistDiaryPhoto } from '../media/photoStorage'
+import {
+  deletePersistedDiaryPhoto,
+  persistDiaryPhoto,
+} from '../media/photoStorage'
 import {
   COMPOSE_ENTRY_TYPES,
   entryTypeLabel,
-  moodOptionsFor,
   type EntryType,
   type Entry,
   type Place,
@@ -63,12 +62,10 @@ export function ComposePage() {
   const [nativeImageUri, setNativeImageUri] = useState<string | undefined>(
     routeState?.nativeImageUri,
   )
-  const [aiEnabled, setAiEnabled] = useState(true)
-  const [analysis, setAnalysis] = useState<EntryAnalysis | null>(null)
   const [title, setTitle] = useState(() => editingEntry?.title || '')
   const [aiDiary, setAiDiary] = useState(() => editingEntry?.aiDiary || '')
   const [mood, setMood] = useState(() => editingEntry?.mood || '温柔')
-  const [analyzing, setAnalyzing] = useState(false)
+  const [imageRemoved, setImageRemoved] = useState(false)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -108,10 +105,10 @@ export function ComposePage() {
     setImageUrl(URL.createObjectURL(file))
     setImageFile(file)
     setNativeImageUri(undefined)
-    setAnalysis(null)
+    setImageRemoved(false)
   }
 
-  async function onAnalyze(e?: FormEvent) {
+  async function onCreate(e?: FormEvent) {
     e?.preventDefault()
     if (!currentToy) {
       showToast('请先选择或创建玩偶')
@@ -126,9 +123,40 @@ export function ComposePage() {
       return
     }
 
-    setAnalyzing(true)
+    setSaving(true)
+    let persistedPhoto: Awaited<ReturnType<typeof persistDiaryPhoto>>
+    let createdEntry: Entry | undefined
     try {
-      if (aiEnabled) {
+      // The user's original photo and words are committed first. Diary
+      // generation enriches that record afterwards and can never block it.
+      persistedPhoto = await persistDiaryPhoto({
+        file: imageFile,
+        nativeUri: nativeImageUri,
+        previewUrl: imageUrl,
+      })
+      const savedType: EntryType = entryType === 'heart' ? 'daily' : entryType
+      const provisionalTitle = summarizeEntryTitle({
+        note: userNote.trim(),
+        location: place?.displayName,
+        toyName: currentToy.name,
+        hasImage: Boolean(imageUrl),
+        locale,
+      })
+      createdEntry = await api.createEntry(currentToy.id, {
+        type: savedType,
+        date,
+        location: place?.displayName,
+        place,
+        title: provisionalTitle,
+        userNote: userNote.trim() || undefined,
+        mood: locale === 'en' ? 'gentle' : '温柔',
+        imageUrl: persistedPhoto?.url,
+        localImagePath: persistedPhoto?.nativePath,
+        aiDiary: userNote.trim() || provisionalTitle,
+        tags: [entryTypeLabel(savedType, locale)],
+      })
+
+      try {
         const result = await analyzeEntry({
           toy: currentToy,
           date,
@@ -137,92 +165,29 @@ export function ComposePage() {
           imageUrl,
           locale,
         })
-        // Respect user-selected type (heart maps to daily for AI if needed)
-        setAnalysis({
-          ...result,
-          entryType:
-            entryType === 'heart'
-              ? 'daily'
-              : entryType === 'text'
-                ? result.entryType
-                : entryType,
+        createdEntry = await api.updateEntry(createdEntry.id, {
+          title: result.title,
+          aiDiary: result.aiDiary,
+          mood: result.mood,
+          tags: result.tags,
+          imageAnalysis: result.imageAnalysis,
         })
-        setTitle(result.title)
-        setAiDiary(result.aiDiary)
-        setMood(result.mood)
-        if (result.source === 'local') {
-          showToast('已在本机生成玩偶日记')
-        }
-      } else {
-        const fallbackTitle =
-          userNote.trim().slice(0, 18) ||
-          (place ? `${place.city || place.displayName}的一天` : '今天的小记录')
-        const fallbackDiary =
-          `${date}，${place?.displayName || '某个温柔的地方'}。\n\n` +
-          (userNote.trim()
-            ? `主人说：${userNote.trim()}\n\n`
-            : '') +
-          `我是${currentToy.name}，把这一刻悄悄收进绒毛里。`
-        const local: EntryAnalysis = {
-          title: fallbackTitle,
-          aiDiary: fallbackDiary,
-          toyReply: '好呀，我已经准备好把这一刻记下来啦。',
-          mood,
-          tags: [entryTypeLabel(entryType, locale), place?.city || (locale === 'en' ? 'daily' : '日常')].filter(Boolean),
-          entryType: entryType === 'heart' ? 'daily' : entryType,
-          processedImageUrl: imageUrl,
-          source: 'local',
-        }
-        setAnalysis(local)
-        setTitle(local.title)
-        setAiDiary(local.aiDiary)
+      } catch (generationError) {
+        console.warn('[ComposePage] diary generation failed:', generationError)
+        showToast('原始记录已保存，玩偶日记可稍后重新生成')
       }
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : '分析失败，请重试')
-    } finally {
-      setAnalyzing(false)
-    }
-  }
 
-  async function onSave() {
-    if (!currentToy || !analysis) return
-    if (!title.trim() || !aiDiary.trim()) {
-      showToast('标题和玩偶日记不能为空')
-      return
-    }
-    if (entryType === 'travel' && !place) {
-      showToast('旅行记录需要地点')
-      return
-    }
-    setSaving(true)
-    try {
-      const persistedPhoto = await persistDiaryPhoto({
-        file: imageFile,
-        nativeUri: nativeImageUri,
-        previewUrl: imageUrl,
-      })
-      const savedType: EntryType =
-        entryType === 'heart' ? 'daily' : analysis.entryType || entryType
-      // Persist diary to localStorage (demo DB) — REST/D1 contract kept on api.*
-      await api.createEntry(currentToy.id, {
-        type: savedType,
-        date,
-        location: place?.displayName,
-        place,
-        title: title.trim(),
-        userNote: userNote.trim() || undefined,
-        mood,
-        // Never persist a temporary blob: URL as the diary photo.
-        imageUrl: persistedPhoto?.url || analysis.processedImageUrl || imageUrl,
-        localImagePath: persistedPhoto?.nativePath,
-        aiDiary: aiDiary.trim(),
-        tags: analysis.tags,
-        imageAnalysis: analysis.imageAnalysis,
-      })
       await refreshEntries(currentToy.id)
       showToast(`${currentToy.name} 已把这一刻存进本机手帐`)
-      nav(place ? '/growth?tab=map' : '/growth')
+      nav(`/entries/${createdEntry.id}`, {
+        replace: true,
+        state: { from: 'growth-timeline' },
+      })
     } catch (error) {
+      // If the durable file was written but no entry owns it, clean it up.
+      if (!createdEntry && persistedPhoto?.nativePath) {
+        await deletePersistedDiaryPhoto(persistedPhoto.nativePath)
+      }
       showToast(error instanceof Error ? error.message : '保存失败')
     } finally {
       setSaving(false)
@@ -250,14 +215,26 @@ export function ComposePage() {
         date,
         location: place?.displayName,
         place,
+        title: title.trim() || undefined,
+        aiDiary: aiDiary.trim() || undefined,
+        mood: mood.trim() || undefined,
         userNote: userNote.trim() || undefined,
-        imageUrl:
-          nextPhoto?.url ||
-          (editingEntry.localImagePath
-            ? `toydiary-media://${editingEntry.localImagePath}`
-            : imageUrl),
-        localImagePath: nextPhoto?.nativePath || editingEntry.localImagePath,
+        imageUrl: imageRemoved
+          ? undefined
+          : nextPhoto?.url ||
+            (editingEntry.localImagePath
+              ? `toydiary-media://${editingEntry.localImagePath}`
+              : imageUrl),
+        localImagePath: imageRemoved
+          ? undefined
+          : nextPhoto?.nativePath || editingEntry.localImagePath,
       })
+      if (
+        (imageRemoved || nextPhoto?.nativePath) &&
+        editingEntry.localImagePath !== nextPhoto?.nativePath
+      ) {
+        await deletePersistedDiaryPhoto(editingEntry.localImagePath)
+      }
       await refreshEntries(currentToy.id)
       showToast('日志修改已保存')
       nav(routeState?.from || `/entries/${editingEntry.id}`, { replace: true })
@@ -279,128 +256,6 @@ export function ComposePage() {
     )
   }
 
-  if (analysis) {
-    return (
-      <>
-        <PageHeader title="玩偶写好了" back="/growth" soft />
-        <main className="space-y-4 px-4 py-4">
-          <section className="overflow-hidden rounded-[1.35rem] bg-gradient-to-br from-mist-soft via-white to-mustard-soft p-4 shadow-[var(--shadow-warm)] ring-1 ring-line/50">
-            <div className="flex items-start gap-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white text-lg shadow-sm">
-                ✨
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="text-[10px] font-medium tracking-wider text-matcha-deep">
-                  {currentToy.name} 的成长记录
-                  {analysis.source === 'local' ? ' · 本地模板' : ' · AI'}
-                </p>
-                <p className="mt-1 text-xs leading-relaxed text-ink-soft">
-                  {analysis.toyReply}
-                </p>
-              </div>
-            </div>
-          </section>
-
-          {imageUrl && (
-            <div className="overflow-hidden rounded-[1.25rem] bg-cream shadow-[var(--shadow-warm)] ring-1 ring-line/50">
-              <img
-                src={analysis.processedImageUrl || imageUrl}
-                alt="本次成长记录"
-                className="max-h-64 w-full object-cover"
-              />
-            </div>
-          )}
-
-          {place && (
-            <div className="rounded-2xl bg-mist-soft px-3.5 py-2.5 text-xs text-matcha-deep">
-              📍 {place.displayName}
-            </div>
-          )}
-
-          <section className="card-paper space-y-4 p-4">
-            <label className="block">
-              <span className="mb-1.5 block text-xs font-medium text-ink-soft">
-                日记标题
-              </span>
-              <input
-                className="input !rounded-2xl"
-                value={title}
-                onChange={(event) => setTitle(event.target.value)}
-              />
-            </label>
-
-            <label className="block">
-              <span className="mb-1.5 block text-xs font-medium text-ink-soft">
-                玩偶视角记录
-              </span>
-              <textarea
-                className="input min-h-[210px] resize-none !rounded-2xl !leading-7"
-                value={aiDiary}
-                onChange={(event) => setAiDiary(event.target.value)}
-              />
-            </label>
-
-            <label className="block">
-              <span className="mb-1.5 block text-xs font-medium text-ink-soft">
-                这一刻的心情
-              </span>
-              <select
-                className="input !rounded-2xl"
-                value={mood}
-                onChange={(event) => setMood(event.target.value)}
-              >
-                {moodOptionsFor(locale).map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </section>
-
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              type="button"
-              onClick={() => setAnalysis(null)}
-              className="btn-secondary py-3 text-xs"
-            >
-              <ChevronLeft className="h-4 w-4" />
-              返回修改
-            </button>
-            <button
-              type="button"
-              onClick={() => void onAnalyze()}
-              disabled={analyzing}
-              className="btn-secondary flex items-center justify-center gap-1.5 py-3 text-xs disabled:opacity-50"
-            >
-              <RefreshCw className={`h-4 w-4 ${analyzing ? 'animate-spin' : ''}`} />
-              {analyzing ? '生成中…' : '重新生成'}
-            </button>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => void onSave()}
-            disabled={saving}
-            className="btn-primary w-full py-3.5 text-sm"
-          >
-            {saving ? (
-              <>
-                <LoaderCircle className="h-4 w-4 animate-spin" />
-                正在保存…
-              </>
-            ) : (
-              <>
-                <CheckCircle2 className="h-4 w-4" />
-                保存到成长轨迹
-              </>
-            )}
-          </button>
-        </main>
-      </>
-    )
-  }
-
   return (
     <>
       <PageHeader title={editingEntry ? '编辑日志' : '记录这一刻'} back={routeState?.from || '/archive'} soft />
@@ -408,7 +263,7 @@ export function ComposePage() {
         onSubmit={(event) => {
           event.preventDefault()
           if (editingEntry) void onSaveEdit()
-          else void onAnalyze()
+          else void onCreate()
         }}
         className="space-y-5 px-4 py-4"
       >
@@ -416,13 +271,13 @@ export function ComposePage() {
           <div className="flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-terra-deep" />
             <strong className="font-display text-base text-ink">
-              {editingEntry ? `修改和${currentToy.name}的这一刻` : `让${currentToy.name}写下这一刻`}
+              {editingEntry ? `修改和${currentToy.name}的这一刻` : '写下这一刻'}
             </strong>
           </div>
           <p className="mt-1.5 text-[11px] leading-relaxed text-ink-muted">
             {editingEntry
               ? '修改原始记录后保存；玩偶日记不会自动改写。'
-              : '选择类型与地点，再让玩偶用第一视角记下来。'}
+              : `照片和文字会先安全保存，${currentToy.name}会自动整理成日记。`}
           </p>
         </section>
 
@@ -440,7 +295,7 @@ export function ComposePage() {
                   setImageUrl(undefined)
                   setImageFile(undefined)
                   setNativeImageUri(undefined)
-                  setAnalysis(null)
+                  setImageRemoved(true)
                 }}
                 className="absolute right-2.5 top-2.5 flex h-8 w-8 items-center justify-center rounded-full bg-ink/75 text-white shadow-md"
                 aria-label="移除照片"
@@ -483,10 +338,7 @@ export function ComposePage() {
             <select
               className="input !rounded-2xl"
               value={currentToy.id}
-              onChange={(event) => {
-                setCurrentToyId(event.target.value)
-                setAnalysis(null)
-              }}
+              onChange={(event) => setCurrentToyId(event.target.value)}
             >
               {toys.map((toy) => (
                 <option key={toy.id} value={toy.id}>
@@ -544,25 +396,48 @@ export function ComposePage() {
             />
           </label>
 
-          <label className="flex items-center justify-between gap-3 rounded-2xl bg-cream/80 px-3.5 py-3">
-            <span className="text-xs text-ink-soft">
-              <strong className="text-ink">AI 生成玩偶日记</strong>
-              <span className="mt-0.5 block text-[10px] text-ink-muted">
-                关闭后使用本地模板，保证演示不中断
-              </span>
-            </span>
-            <input
-              type="checkbox"
-              checked={aiEnabled}
-              onChange={(e) => setAiEnabled(e.target.checked)}
-              className="h-5 w-5 accent-[var(--color-matcha)]"
-            />
-          </label>
+          {editingEntry && (
+            <div className="space-y-4 border-t border-line/60 pt-5">
+              <p className="text-[11px] font-medium tracking-wide text-ink-muted">
+                日记呈现
+              </p>
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-medium text-ink-soft">
+                  日记标题
+                </span>
+                <input
+                  className="input !rounded-2xl"
+                  value={title}
+                  onChange={(event) => setTitle(event.target.value)}
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-medium text-ink-soft">
+                  玩偶视角
+                </span>
+                <textarea
+                  className="input min-h-[150px] resize-none !rounded-2xl !leading-7"
+                  value={aiDiary}
+                  onChange={(event) => setAiDiary(event.target.value)}
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-medium text-ink-soft">
+                  心情
+                </span>
+                <input
+                  className="input !rounded-2xl"
+                  value={mood}
+                  onChange={(event) => setMood(event.target.value)}
+                />
+              </label>
+            </div>
+          )}
         </section>
 
         <button
           type="submit"
-          disabled={analyzing || saving}
+          disabled={saving}
           className="btn-primary w-full py-3.5 text-sm"
         >
           {saving ? (
@@ -570,37 +445,14 @@ export function ComposePage() {
               <LoaderCircle className="h-4 w-4 animate-spin" />
               正在保存…
             </>
-          ) : analyzing ? (
-            <>
-              <LoaderCircle className="h-4 w-4 animate-spin" />
-              正在理解这一刻…
-            </>
           ) : (
             <>
               <Sparkles className="h-4 w-4" />
-              {editingEntry
-                ? '保存修改'
-                : aiEnabled
-                  ? '让玩偶写下来'
-                  : '用模板生成并预览'}
+              {editingEntry ? '保存修改' : '保存并生成日志'}
             </>
           )}
         </button>
       </form>
-
-      {analyzing && (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-ink/45 px-6 backdrop-blur-sm"
-          role="status"
-        >
-          <section className="w-full max-w-[330px] rounded-[1.75rem] bg-white p-5 text-center shadow-2xl">
-            <Sparkles className="mx-auto h-8 w-8 animate-pulse text-matcha-deep" />
-            <h2 className="mt-3 font-display text-lg text-ink">
-              {currentToy.name} 正在写日记…
-            </h2>
-          </section>
-        </div>
-      )}
     </>
   )
 }

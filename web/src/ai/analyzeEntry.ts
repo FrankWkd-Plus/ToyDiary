@@ -23,9 +23,7 @@ export interface EntryAnalysis {
 }
 
 interface ImageSignals {
-  scene: string
   description: string
-  tags: string[]
 }
 
 /** Default to Pages Function; override with VITE_AI_ANALYZE_ENDPOINT if needed. */
@@ -75,14 +73,10 @@ export async function analyzeEntry(
           userNote: input.userNote,
           locale,
           language: locale,
-          // Prefer compressed data URL so the function can vision-read photos
-          imageDataUrl: processedImageUrl?.startsWith('data:')
-            ? processedImageUrl
-            : undefined,
-          imageUrl:
-            !processedImageUrl?.startsWith('data:') && input.imageUrl
-              ? input.imageUrl
-              : undefined,
+          // MVP safety: the server receives only a neutral palette observation,
+          // never the image itself. Colour must not be treated as scene facts.
+          hasPhoto: Boolean(input.imageUrl),
+          imageToneDescription: imageSignals?.description,
         }),
       })
     } finally {
@@ -102,8 +96,16 @@ export async function analyzeEntry(
         isEn ? 'AI response incomplete' : 'AI 返回内容不完整',
       )
     }
+    const grounded = generateLocalAnalysis(
+      input,
+      imageSignals,
+      processedImageUrl,
+      locale,
+    )
     return {
-      title: result.title.trim(),
+      // Titles, tags and image descriptions stay evidence-based even when a
+      // remote model writes the warmer long-form toy diary.
+      title: grounded.title,
       aiDiary: result.aiDiary.trim(),
       toyReply:
         result.toyReply?.trim() ||
@@ -111,9 +113,8 @@ export async function analyzeEntry(
           ? 'I wrote this moment down and will keep it safe in our growth journal.'
           : '我已经把这一刻写下来啦，会好好放进我们的成长里。'),
       mood: result.mood?.trim() || (isEn ? 'gentle' : '温柔'),
-      tags: result.tags?.filter(Boolean).slice(0, 4) || [],
-      imageAnalysis:
-        result.imageAnalysis?.trim() || imageSignals?.description,
+      tags: grounded.tags,
+      imageAnalysis: grounded.imageAnalysis,
       entryType: result.entryType || inferEntryType(input),
       processedImageUrl: processedImageUrl || input.imageUrl,
       source: 'api',
@@ -142,7 +143,6 @@ function generateLocalAnalysis(
   const explicitScene = inferSceneFromText(note, input.location)
   const scene =
     explicitScene ||
-    imageSignals?.scene ||
     (note ? (isEn ? "today's story" : '今天的故事') : isEn ? 'this moment' : '这一刻')
   const needsComfort =
     /sad|upset|tired|exhausted|stressed|anxious|lonely|depressed|bad day|rough day|心情不好|不开心|难过|疲惫|好累|很累|压力|焦虑|烦|孤单/i.test(
@@ -159,14 +159,17 @@ function generateLocalAnalysis(
         ? "today's story"
         : '今天的故事'
       : scene
-  const title = titleForScene(
-    scene,
-    needsComfort,
-    Boolean(input.imageUrl),
+  const title = summarizeEntryTitle({
+    note,
+    location: input.location,
+    toyName,
+    hasImage: Boolean(input.imageUrl),
     locale,
-  )
+  })
   const resolvedImageAnalysis = input.imageUrl
-    ? imageDescriptionForScene(scene, imageSignals, locale)
+    ? explicitScene
+      ? imageDescriptionForScene(scene, locale)
+      : imageSignals?.description || neutralImageDescription(locale)
     : undefined
   const visualSentence = input.imageUrl
     ? `${
@@ -214,8 +217,7 @@ function generateLocalAnalysis(
           : '开心'
         : moodForScene(scene, locale),
     tags: uniqueTags([
-      ...tagsForScene(scene, locale),
-      ...(!explicitScene ? imageSignals?.tags || [] : []),
+      ...(explicitScene ? tagsForScene(scene, locale) : []),
       needsComfort ? (isEn ? 'companionship' : '陪伴') : '',
       input.imageUrl
         ? isEn
@@ -232,8 +234,58 @@ function generateLocalAnalysis(
   }
 }
 
+export function summarizeEntryTitle(input: {
+  note: string
+  location?: string
+  toyName: string
+  hasImage: boolean
+  locale: Locale
+}) {
+  const { note, location, toyName, hasImage, locale } = input
+  if (note) {
+    const normalizedNote = note
+      .replace(/\s+/g, ' ')
+      .replace(/[，,。！？!?；;\s]+$/g, '')
+    const firstLine = note
+      .replace(/\s+/g, ' ')
+      .split(/[，,。！？!?；;\n]/)[0]
+      .replace(
+        locale === 'en'
+          ? /^(today|just now|then|well|i want to (?:write down|remember))\s+/i
+          : /^(今天|刚刚|然后|就是|嗯+|我想记录一下|想记录一下|记录一下)+[，,、\s]*/,
+        '',
+      )
+      .replace(locale === 'en' ? /^i\s+/i : /^我和/, locale === 'en' ? '' : '和')
+      .replace(/(真的)?(特别|非常|超级|太)?(好吃|好看|开心|美味|可爱|棒)[呀啊啦~～]*$/g, '')
+      .replace(/^[，,、\s]+|[，,、\s]+$/g, '')
+    if (firstLine) {
+      const limit = locale === 'en' ? 42 : 14
+      const summary = firstLine.length > limit
+        ? firstLine.slice(0, limit).replace(/[的了着过和与、\s]+$/g, '')
+        : firstLine
+      return summary === normalizedNote
+        ? locale === 'en'
+          ? `${summary} — A Note`
+          : `${summary} · 小记`
+        : summary
+    }
+  }
+  if (location) {
+    return locale === 'en' ? `A day in ${location}` : `在${location}的一天`
+  }
+  if (hasImage) {
+    return locale === 'en'
+      ? `A moment with ${toyName}`
+      : `和${toyName}收藏的这一刻`
+  }
+  return locale === 'en' ? 'Something to remember today' : '今天想记住的事'
+}
+
 function inferSceneFromText(note: string, location: string | undefined) {
-  const text = `${note} ${location || ''}`.toLowerCase()
+  const text = `${note} ${location || ''}`
+    .replace(/(?:并)?不是[^，。！？!?]{0,8}(?:日落|晚霞|夕阳|落日|海边|大海|沙滩|海浪|夜景|夜晚)/g, '')
+    .replace(/not (?:a |the )?(?:sunset|beach|ocean|night)/gi, '')
+    .toLowerCase()
   if (/sunset|dusk|golden hour|日落|晚霞|夕阳|落日/.test(text)) return 'sunset'
   if (/beach|ocean|sea|sand|海边|大海|沙滩|海浪/.test(text)) return 'seaside'
   if (/coffee|latte|cafe|咖啡|拿铁|咖啡店/.test(text)) return 'cafe'
@@ -246,39 +298,6 @@ function inferSceneFromText(note: string, location: string | undefined) {
   if (/home|room|bedroom|nap|在家|回家|房间|卧室|午睡/.test(text))
     return 'home time'
   return undefined
-}
-
-function titleForScene(
-  scene: string,
-  needsComfort: boolean,
-  hasImage: boolean,
-  locale: Locale,
-) {
-  const isEn = locale === 'en'
-  if (scene === 'sunset') {
-    if (isEn) return needsComfort ? 'Sunset company' : 'Pocketing the sunset'
-    return needsComfort ? '陪你看日落的傍晚' : '把日落装进口袋'
-  }
-  if (scene === 'seaside')
-    return isEn ? 'Sea breeze keeps today' : '海风替我们收藏今天'
-  if (scene === 'cafe') return isEn ? 'Coffee scent together' : '一起闻到咖啡香'
-  if (scene === 'rainy day')
-    return isEn ? 'Listening to the rain' : '听雨慢慢落下来'
-  if (scene === 'night lights')
-    return isEn ? 'After the lights came on' : '灯光亮起来以后'
-  if (scene === 'green path')
-    return isEn ? 'A moment in the green' : '藏在绿意里的时光'
-  if (scene === 'journey')
-    return isEn ? 'One more step into the world' : '今天又向世界走了一步'
-  if (scene === 'home time')
-    return isEn ? 'Doing nothing is okay too' : '什么都不做也很好'
-  return hasImage
-    ? isEn
-      ? 'A moment worth keeping'
-      : '这一刻，想和你一起记住'
-    : isEn
-      ? 'Something I wanted to tell you'
-      : '今天想和你说的话'
 }
 
 function comfortLine(toy: Toy, toyName: string, locale: Locale) {
@@ -382,7 +401,6 @@ function tagsForScene(scene: string, locale: Locale) {
 
 function imageDescriptionForScene(
   scene: string,
-  imageSignals: ImageSignals | undefined,
   locale: Locale,
 ) {
   const isEn = locale === 'en'
@@ -414,11 +432,14 @@ function imageDescriptionForScene(
       }
   return (
     descriptions[scene] ||
-    imageSignals?.description ||
-    (isEn
-      ? 'The photo keeps a shared moment between you and your toy.'
-      : '照片记录了你和玩偶共同经历的一个生活瞬间。')
+    neutralImageDescription(locale)
   )
+}
+
+function neutralImageDescription(locale: Locale) {
+  return locale === 'en'
+    ? 'The photo keeps a shared moment between you and your toy.'
+    : '照片记录了你和玩偶共同经历的一个生活瞬间。'
 }
 
 function uniqueTags(tags: string[]) {
@@ -490,46 +511,34 @@ async function analyzeImagePalette(
 
   if (warmRatio > 0.16) {
     return {
-      scene: 'sunset',
       description: isEn
-        ? 'Warm orange light fills the frame — like late-day glow before sunset.'
-        : '画面里有大片暖橙色的光，像是太阳落下时的晚霞。',
-      tags: isEn ? ['warm sky', 'evening'] : ['暖色天空', '傍晚'],
+        ? 'The photo has an overall warm, yellow-orange colour tone.'
+        : '照片整体呈现温暖的黄橙色调。',
     }
   }
   if (blueRatio > 0.2) {
     return {
-      scene: 'blue scenery',
       description: isEn
-        ? 'Open blue fills the frame — the sky looks far and quiet.'
-        : '画面里有开阔的蓝色风景，天空显得很远也很安静。',
-      tags: isEn ? ['blue sky', 'outdoors'] : ['蓝色天空', '户外'],
+        ? 'The photo has an overall clear blue colour tone.'
+        : '照片整体以清透的蓝色调为主。',
     }
   }
   if (greenRatio > 0.18) {
     return {
-      scene: 'green path',
       description: isEn
-        ? 'Lots of green in the frame, as if you stepped into nature.'
-        : '画面里有很多绿色，像是一起走进了自然里。',
-      tags: isEn ? ['nature', 'green'] : ['自然', '绿色'],
+        ? 'The photo has an overall soft green colour tone.'
+        : '照片整体以柔和的绿色调为主。',
     }
   }
   if (averageBrightness < 72) {
     return {
-      scene: 'night lights',
       description: isEn
-        ? 'The light is soft and dim — a quiet night fragment.'
-        : '画面光线偏暗，像是夜晚留下的一段安静时光。',
-      tags: isEn ? ['night', 'lights'] : ['夜晚', '灯光'],
+        ? 'The photo is relatively dim, with a subdued overall tone.'
+        : '照片整体光线偏暗，色调比较沉静。',
     }
   }
   return {
-    scene: isEn ? 'this moment' : '这一刻',
-    description: isEn
-      ? 'The photo keeps a shared moment between you and your toy.'
-      : '照片记录了你和玩偶共同经历的一个生活瞬间。',
-    tags: isEn ? ['shared memory'] : ['共同记忆'],
+    description: neutralImageDescription(locale),
   }
 }
 
