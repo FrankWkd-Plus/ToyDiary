@@ -309,11 +309,11 @@ export function EntryDetailPage() {
       />
       <article className="px-4 py-4">
         {entry.imageUrl && (
-          <div className="mb-4 overflow-hidden rounded-[1.25rem] shadow-[var(--shadow-elevated)] ring-1 ring-line/40">
+          <div className="mb-4 flex max-h-[68vh] items-center justify-center overflow-hidden rounded-[1.25rem] bg-paper shadow-[var(--shadow-elevated)] ring-1 ring-line/40">
             <img
               src={entry.imageUrl}
               alt=""
-              className="max-h-72 w-full object-cover"
+              className="max-h-[68vh] w-full object-contain"
             />
           </div>
         )}
@@ -402,12 +402,12 @@ export function EntryDetailPage() {
                 </button>
               </div>
 
-              <div className="mt-3 overflow-hidden rounded-2xl bg-cream ring-1 ring-line/50">
+              <div className="mt-3 overflow-hidden rounded-2xl bg-white ring-1 ring-line/50">
                 {previewUrl ? (
                   <img
                     src={previewUrl}
                     alt="导出预览"
-                    className="max-h-64 w-full object-contain"
+                    className="max-h-[70vh] w-full object-contain"
                   />
                 ) : (
                   <div className="flex h-40 flex-col items-center justify-center gap-1.5 px-4 text-center text-xs text-ink-muted">

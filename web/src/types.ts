@@ -31,6 +31,8 @@ export interface Toy {
   bio?: string
   monologue?: string
   avatarUrl?: string
+  /** Relative Library path used to re-resolve the native sticker avatar. */
+  localAvatarPath?: string
   createdAt: string
 }
 
@@ -44,6 +46,7 @@ export interface CreateToyInput {
   bio?: string
   monologue?: string
   avatarUrl?: string
+  localAvatarPath?: string
   zodiac?: string
 }
 

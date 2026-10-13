@@ -283,11 +283,11 @@ export function ComposePage() {
 
         {imageUrl ? (
           <div className="card-paper overflow-hidden p-0">
-            <div className="relative overflow-hidden bg-cream-dark">
+            <div className="relative flex items-center justify-center overflow-hidden bg-cream-dark">
               <img
                 src={imageUrl}
                 alt="已选照片"
-                className="max-h-64 w-full object-cover"
+                className="max-h-[60vh] w-full object-contain"
               />
               <button
                 type="button"

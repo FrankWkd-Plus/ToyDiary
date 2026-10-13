@@ -15,6 +15,8 @@ export function AppLayout() {
     pathname.startsWith('/conversation') ||
     (pathname === '/growth' &&
       new URLSearchParams(search).get('tab') === 'map')
+  const hideChrome =
+    pathname === '/toys/new' || /^\/toys\/[^/]+\/edit$/.test(pathname)
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: 0 })
@@ -54,8 +56,8 @@ export function AppLayout() {
             >
               <Outlet />
             </div>
-            <BottomNav />
-            <ToyNudgeHost />
+            {!hideChrome && <BottomNav />}
+            {!hideChrome && <ToyNudgeHost />}
           </>
         )}
       </div>

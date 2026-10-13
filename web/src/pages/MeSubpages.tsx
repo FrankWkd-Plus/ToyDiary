@@ -466,7 +466,7 @@ export function DataBackupPage() {
         blob,
         filename,
         title: 'Toy Diary 成长轨迹备份',
-        text: `${toys.length} 只玩偶 · ${entries.length} 条日记 · ${payload.media.photos.length} 张本地照片`,
+        text: `${toys.length} 只玩偶 · ${entries.length} 条日记 · ${payload.media.photos.length} 张日志照片 · ${payload.media.avatars.length} 张档案照`,
       })
       showToast(
         mode === 'shared' ? '已分享完整备份' : '完整备份已下载',

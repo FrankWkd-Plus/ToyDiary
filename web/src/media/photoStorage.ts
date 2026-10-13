@@ -7,6 +7,7 @@ import type { Entry } from '../types'
  * get copied into the native app container before an entry is persisted.
  */
 const PHOTO_ROOT = 'ToyDiary/photos'
+const AVATAR_ROOT = 'ToyDiary/avatars'
 const LOCAL_MEDIA_PREFIX = 'toydiary-media://'
 
 export function isNativeApp() {
@@ -63,11 +64,19 @@ export interface DiaryPhotoBackupFile {
 }
 
 function relativePhotoPath(value?: string) {
+  return relativeOwnedPath(value, PHOTO_ROOT)
+}
+
+function relativeAvatarPath(value?: string) {
+  return relativeOwnedPath(value, AVATAR_ROOT)
+}
+
+function relativeOwnedPath(value: string | undefined, root: string) {
   if (!value) return undefined
   const source = value.startsWith(LOCAL_MEDIA_PREFIX)
     ? value.slice(LOCAL_MEDIA_PREFIX.length)
     : value
-  const marker = PHOTO_ROOT + '/'
+  const marker = root + '/'
   const index = source.indexOf(marker)
   if (index < 0) return undefined
   const path = source.slice(index).split(/[?#]/, 1)[0]
@@ -77,6 +86,8 @@ function relativePhotoPath(value?: string) {
 export function localDiaryPhotoReference(path: string) {
   return `${LOCAL_MEDIA_PREFIX}${path}`
 }
+
+export const localToyAvatarReference = localDiaryPhotoReference
 
 /**
  * Maps a stable logical photo path to the current native container on every
@@ -104,6 +115,61 @@ export function getRelativeDiaryPhotoPath(
   localImagePath?: string,
 ) {
   return relativePhotoPath(localImagePath) || relativePhotoPath(imageUrl)
+}
+
+export function getRelativeToyAvatarPath(
+  avatarUrl?: string,
+  localAvatarPath?: string,
+) {
+  return relativeAvatarPath(localAvatarPath) || relativeAvatarPath(avatarUrl)
+}
+
+export async function resolveToyAvatarUrl(
+  avatarUrl?: string,
+  localAvatarPath?: string,
+) {
+  if (!isNativeApp()) return avatarUrl
+  const path = getRelativeToyAvatarPath(avatarUrl, localAvatarPath)
+  if (!path) return avatarUrl
+  try {
+    await Filesystem.stat({ path, directory: Directory.Library })
+    const uri = await Filesystem.getUri({ path, directory: Directory.Library })
+    return Capacitor.convertFileSrc(uri.uri)
+  } catch {
+    return avatarUrl
+  }
+}
+
+/** Stores the final transparent sticker outside localStorage. */
+export async function persistToyAvatar(dataUrl: string) {
+  if (!isNativeApp()) return { url: dataUrl, nativePath: undefined }
+  const comma = dataUrl.indexOf(',')
+  if (!dataUrl.startsWith('data:image/') || comma < 0) {
+    throw new Error('头像格式无效')
+  }
+  const mime = dataUrl.slice(5, dataUrl.indexOf(';')).toLowerCase()
+  const extension = mime.includes('webp') ? 'webp' : 'png'
+  const path = `${AVATAR_ROOT}/${Date.now()}-${Math.random()
+    .toString(36)
+    .slice(2, 9)}.${extension}`
+  await Filesystem.writeFile({
+    path,
+    data: dataUrl.slice(comma + 1),
+    directory: Directory.Library,
+    recursive: true,
+  })
+  return { url: localDiaryPhotoReference(path), nativePath: path }
+}
+
+export async function deletePersistedToyAvatar(pathOrUri?: string) {
+  if (!pathOrUri || !isNativeApp()) return
+  const path = relativeAvatarPath(pathOrUri)
+  if (!path) return
+  try {
+    await Filesystem.deleteFile({ path, directory: Directory.Library })
+  } catch {
+    // Replacing a missing legacy avatar should still succeed.
+  }
 }
 
 /**
@@ -160,17 +226,18 @@ export async function deletePersistedDiaryPhoto(pathOrUri?: string) {
 /** Remove every diary photo owned by Toy Diary during a factory reset. */
 export async function deleteAllPersistedDiaryPhotos() {
   if (!isNativeApp()) return
-  try {
-    await Filesystem.stat({ path: PHOTO_ROOT, directory: Directory.Library })
-  } catch {
-    // A fresh install has no photo directory yet, which is already the desired state.
-    return
+  for (const root of [PHOTO_ROOT, AVATAR_ROOT]) {
+    try {
+      await Filesystem.stat({ path: root, directory: Directory.Library })
+      await Filesystem.rmdir({
+        path: root,
+        directory: Directory.Library,
+        recursive: true,
+      })
+    } catch {
+      // A fresh install may have neither directory, which is already correct.
+    }
   }
-  await Filesystem.rmdir({
-    path: PHOTO_ROOT,
-    directory: Directory.Library,
-    recursive: true,
-  })
 }
 
 /** Reads all native diary photos referenced by a set of entries for backup. */
@@ -199,7 +266,10 @@ export async function exportDiaryPhotos(entries: Entry[]) {
 export async function importDiaryPhotos(photos: DiaryPhotoBackupFile[]) {
   if (!isNativeApp() || !photos.length) return
   for (const photo of photos) {
-    if (!relativePhotoPath(photo.path) || typeof photo.data !== 'string') continue
+    if (
+      (!relativePhotoPath(photo.path) && !relativeAvatarPath(photo.path)) ||
+      typeof photo.data !== 'string'
+    ) continue
     await Filesystem.writeFile({
       path: photo.path,
       data: photo.data,
@@ -207,4 +277,27 @@ export async function importDiaryPhotos(photos: DiaryPhotoBackupFile[]) {
       recursive: true,
     })
   }
+}
+
+export async function exportToyAvatars(
+  toys: Array<{ avatarUrl?: string; localAvatarPath?: string }>,
+) {
+  if (!isNativeApp()) return [] as DiaryPhotoBackupFile[]
+  const paths = [
+    ...new Set(
+      toys
+        .map((toy) => getRelativeToyAvatarPath(toy.avatarUrl, toy.localAvatarPath))
+        .filter((path): path is string => Boolean(path)),
+    ),
+  ]
+  const avatars: DiaryPhotoBackupFile[] = []
+  for (const path of paths) {
+    try {
+      const result = await Filesystem.readFile({ path, directory: Directory.Library })
+      if (typeof result.data === 'string') avatars.push({ path, data: result.data })
+    } catch {
+      // Keep the remaining backup usable if one old avatar is missing.
+    }
+  }
+  return avatars
 }

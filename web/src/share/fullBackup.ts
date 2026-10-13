@@ -1,15 +1,18 @@
 import type { Entry, Toy } from '../types'
 import {
   exportDiaryPhotos,
+  exportToyAvatars,
   getRelativeDiaryPhotoPath,
+  getRelativeToyAvatarPath,
   importDiaryPhotos,
   localDiaryPhotoReference,
+  localToyAvatarReference,
   type DiaryPhotoBackupFile,
 } from '../media/photoStorage'
 import { buildGrowthExport, parseGrowthImport, type GrowthExportPayload } from './growthJson'
 
 export const FULL_BACKUP_FORMAT = 'toydairy.backup' as const
-export const FULL_BACKUP_VERSION = 2 as const
+export const FULL_BACKUP_VERSION = 3 as const
 
 const BACKUP_LOCAL_STORAGE_KEYS = [
   'toydiary.user.prefs',
@@ -27,7 +30,10 @@ export interface FullBackupPayload {
   version: typeof FULL_BACKUP_VERSION
   exportedAt: string
   growth: GrowthExportPayload
-  media: { photos: DiaryPhotoBackupFile[] }
+  media: {
+    photos: DiaryPhotoBackupFile[]
+    avatars: DiaryPhotoBackupFile[]
+  }
   appState: { localStorage: Record<string, string> }
 }
 
@@ -54,18 +60,39 @@ function stableEntries(entries: Entry[]) {
   })
 }
 
+function stableToys(toys: Toy[]) {
+  return toys.map((toy) => {
+    const path = getRelativeToyAvatarPath(toy.avatarUrl, toy.localAvatarPath)
+    return path
+      ? {
+          ...toy,
+          avatarUrl: localToyAvatarReference(path),
+          localAvatarPath: path,
+        }
+      : toy
+  })
+}
+
 export async function buildFullBackup(input: {
   toys: Toy[]
   entries: Entry[]
   currentToyId: string | null
 }): Promise<FullBackupPayload> {
   const normalizedEntries = stableEntries(input.entries)
+  const normalizedToys = stableToys(input.toys)
   return {
     format: FULL_BACKUP_FORMAT,
     version: FULL_BACKUP_VERSION,
     exportedAt: new Date().toISOString(),
-    growth: buildGrowthExport({ ...input, entries: normalizedEntries }),
-    media: { photos: await exportDiaryPhotos(normalizedEntries) },
+    growth: buildGrowthExport({
+      ...input,
+      toys: normalizedToys,
+      entries: normalizedEntries,
+    }),
+    media: {
+      photos: await exportDiaryPhotos(normalizedEntries),
+      avatars: await exportToyAvatars(normalizedToys),
+    },
     appState: { localStorage: captureLocalAppState() },
   }
 }
@@ -87,11 +114,22 @@ export function parseFullBackup(raw: unknown): {
       legacy: true,
     }
   }
-  if ((version !== 1 && version !== FULL_BACKUP_VERSION) || !data.growth) {
+  if ((version !== 1 && version !== 2 && version !== FULL_BACKUP_VERSION) || !data.growth) {
     throw new Error('不支持的备份版本')
   }
   const photos = Array.isArray(data.media?.photos)
     ? data.media.photos.filter(
+        (photo): photo is DiaryPhotoBackupFile =>
+          Boolean(
+            photo &&
+              typeof photo === 'object' &&
+              typeof (photo as DiaryPhotoBackupFile).path === 'string' &&
+              typeof (photo as DiaryPhotoBackupFile).data === 'string',
+          ),
+      )
+    : []
+  const avatars = Array.isArray(data.media?.avatars)
+    ? data.media.avatars.filter(
         (photo): photo is DiaryPhotoBackupFile =>
           Boolean(
             photo &&
@@ -114,9 +152,9 @@ export function parseFullBackup(raw: unknown): {
   }
   return {
     growth: parseGrowthImport(data.growth),
-    photos,
+    photos: [...photos, ...avatars],
     localStorage: localStorageSnapshot,
-    legacy: version === 1,
+    legacy: version === 1 || version === 2,
   }
 }
 

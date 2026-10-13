@@ -5,17 +5,18 @@ import { generateToyProfileCopy } from '../ai/generateToyProfile'
 import { api } from '../api/client'
 import { toyAvatar, toySignature } from '../archive/archiveUtils'
 import {
-  dateFromZodiac,
-  isZodiacSign,
-  ZODIAC_SIGNS,
   zodiacFromDate,
   zodiacRangeLabel,
-  type ZodiacSign,
 } from '../archive/zodiac'
 import { PageHeader } from '../components/PageHeader'
 import { ToyAvatarStudio } from '../components/ToyAvatarStudio'
 import { useApp } from '../context/AppContext'
 import { useLocale } from '../i18n'
+import {
+  deletePersistedToyAvatar,
+  localToyAvatarReference,
+  persistToyAvatar,
+} from '../media/photoStorage'
 
 const DEFAULT_ROLE = '陪伴伙伴'
 const TRAIT_OPTIONS = [
@@ -73,9 +74,7 @@ export function NewToyPage() {
           )
         : undefined,
   )
-  const [avatarConfirmed, setAvatarConfirmed] = useState(
-    () => Boolean(editingToy),
-  )
+  const [avatarChanged, setAvatarChanged] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [aiWriting, setAiWriting] = useState(false)
 
@@ -86,14 +85,6 @@ export function NewToyPage() {
 
   function onBirthDateChange(next: string) {
     setBirthDate(next)
-  }
-
-  function onZodiacChange(next: string) {
-    if (!isZodiacSign(next)) return
-    const year = Number(birthDate.slice(0, 4)) || new Date().getFullYear()
-    const matched = dateFromZodiac(next as ZodiacSign, year)
-    setBirthDate(matched)
-    showToast(`已按「${next}」匹配出生日期 ${matched}`)
   }
 
   function toggleTrait(t: string) {
@@ -141,8 +132,8 @@ export function NewToyPage() {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
-    if (!avatarConfirmed || !avatarUrl) {
-      showToast('请先确认玩偶贴纸头像')
+    if (!avatarUrl) {
+      showToast('请先为玩偶选择一张照片')
       return
     }
     if (!name.trim() || !birthPlace.trim()) {
@@ -154,7 +145,14 @@ export function NewToyPage() {
       return
     }
     setSubmitting(true)
+    let persistedAvatar: Awaited<ReturnType<typeof persistToyAvatar>> | undefined
+    let toySaved = false
     try {
+      if (avatarChanged) persistedAvatar = await persistToyAvatar(avatarUrl)
+      const stableAvatarUrl = persistedAvatar?.url ||
+        (editingToy?.localAvatarPath
+          ? localToyAvatarReference(editingToy.localAvatarPath)
+          : avatarUrl)
       // Demo: localStorage via api.*; contract = POST/PATCH /toys
       const payload = {
         name: name.trim(),
@@ -163,14 +161,26 @@ export function NewToyPage() {
         role,
         traits,
         signature: signature.trim() || undefined,
-        avatarUrl,
+        avatarUrl: stableAvatarUrl,
+        localAvatarPath:
+          persistedAvatar?.nativePath || editingToy?.localAvatarPath,
         zodiac,
       }
       const toy =
         editing && editingToyId
           ? await api.updateToy(editingToyId, payload)
           : await api.createToy(payload)
+      // From this point the new avatar belongs to the saved toy. A later UI
+      // refresh error must never delete the file referenced by that record.
+      toySaved = true
       await refreshToys()
+      if (
+        persistedAvatar?.nativePath &&
+        editingToy?.localAvatarPath &&
+        editingToy.localAvatarPath !== persistedAvatar.nativePath
+      ) {
+        await deletePersistedToyAvatar(editingToy.localAvatarPath)
+      }
       showToast(
         editing
           ? `${toy.name} 的档案已更新（本机）`
@@ -182,6 +192,9 @@ export function NewToyPage() {
         nav(`/archive/toys/${toy.id}`)
       }
     } catch (err) {
+      if (!toySaved && persistedAvatar?.nativePath) {
+        await deletePersistedToyAvatar(persistedAvatar.nativePath)
+      }
       showToast(err instanceof Error ? err.message : '创建失败')
     } finally {
       setSubmitting(false)
@@ -219,22 +232,9 @@ export function NewToyPage() {
           onToast={showToast}
           onConfirm={(url) => {
             setAvatarUrl(url)
-            setAvatarConfirmed(true)
+            setAvatarChanged(true)
           }}
         />
-
-        {!editing && avatarConfirmed && avatarUrl && (
-          <div className="flex items-center gap-3 rounded-2xl bg-mist-soft px-3 py-2.5 text-xs text-matcha-deep">
-            <img
-              src={avatarUrl}
-              alt="已确认头像"
-              className="h-12 w-12 rounded-2xl bg-white object-contain shadow-sm ring-1 ring-line/40"
-            />
-            <span className="min-w-0 flex-1">
-              贴纸头像已就绪，继续填写档案信息吧。
-            </span>
-          </div>
-        )}
 
         <Field label="玩偶名称">
           <input
@@ -258,31 +258,17 @@ export function NewToyPage() {
           </span>
         </Field>
 
-        <Field label="星座">
-          <div className="rounded-2xl bg-mustard-soft/70 px-3.5 py-2.5">
-            <div className="mb-2 flex items-center gap-1.5 text-xs text-terra-deep">
-              <Sparkles className="h-3.5 w-3.5 shrink-0" />
-              <span>
-                当前：<strong>{zodiac}</strong>
-                <span className="ml-1 text-[10px] text-ink-muted">
-                  （{zodiacRangeLabel(zodiac)}）
-                </span>
+        <div className="rounded-2xl bg-mustard-soft/70 px-3.5 py-3">
+          <div className="flex items-center gap-2 text-xs text-terra-deep">
+            <Sparkles className="h-3.5 w-3.5 shrink-0" />
+            <span>
+              根据出生日期自动得到：<strong>{zodiac}</strong>
+              <span className="ml-1 text-[10px] text-ink-muted">
+                （{zodiacRangeLabel(zodiac)}）
               </span>
-            </div>
-            <select
-              className="input !rounded-2xl !bg-white"
-              value={zodiac}
-              onChange={(e) => onZodiacChange(e.target.value)}
-              aria-label="选择星座"
-            >
-              {ZODIAC_SIGNS.map((sign) => (
-                <option key={sign} value={sign}>
-                  {sign} · {zodiacRangeLabel(sign)}
-                </option>
-              ))}
-            </select>
+            </span>
           </div>
-        </Field>
+        </div>
 
         <Field label="出生地">
           <input
@@ -342,18 +328,18 @@ export function NewToyPage() {
 
         <button
           type="submit"
-          disabled={submitting || !avatarConfirmed}
+          disabled={submitting || !avatarUrl}
           className="btn-primary w-full py-3.5 text-sm disabled:opacity-60"
         >
           {submitting
             ? editing
               ? '保存修改中…'
               : '生成档案中…'
-            : avatarConfirmed
+            : avatarUrl
               ? editing
                 ? '保存档案修改'
                 : '保存并生成档案'
-              : '请先确认贴纸头像'}
+              : '请先选择玩偶照片'}
         </button>
       </form>
     </>

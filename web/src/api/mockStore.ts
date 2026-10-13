@@ -647,6 +647,7 @@ export const mockStore: ToyDairyRepository = {
       role: input.role,
       traits: input.traits,
       avatarUrl: input.avatarUrl,
+      localAvatarPath: input.localAvatarPath,
       ...profile,
       createdAt: new Date().toISOString(),
     }

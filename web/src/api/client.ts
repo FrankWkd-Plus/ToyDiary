@@ -37,8 +37,10 @@ import {
 import { mockStore } from './mockStore'
 import {
   getRelativeDiaryPhotoPath,
+  getRelativeToyAvatarPath,
   localDiaryPhotoReference,
   resolveDiaryPhotoUrl,
+  resolveToyAvatarUrl,
 } from '../media/photoStorage'
 
 /**
@@ -84,6 +86,16 @@ async function hydrateEntryMedia<T extends Pick<Entry, 'id' | 'imageUrl' | 'loca
   }
 }
 
+async function hydrateToyAvatar(toy: Toy): Promise<Toy> {
+  const path = getRelativeToyAvatarPath(toy.avatarUrl, toy.localAvatarPath)
+  if (!path) return toy
+  return {
+    ...toy,
+    localAvatarPath: path,
+    avatarUrl: await resolveToyAvatarUrl(toy.avatarUrl, path),
+  }
+}
+
 async function http<T>(path: string, init?: RequestInit): Promise<T> {
   if (!BASE) throw new Error('VITE_API_BASE not set (remote persistence)')
   const res = await fetch(`${BASE}${path}`, init)
@@ -107,7 +119,9 @@ export const api = {
   persistence: PERSISTENCE,
 
   async listToys(): Promise<Toy[]> {
-    if (PERSISTENCE === 'localStorage') return localRepo.listToys()
+    if (PERSISTENCE === 'localStorage') {
+      return Promise.all((await localRepo.listToys()).map(hydrateToyAvatar))
+    }
     return http('/toys')
   },
 
@@ -115,14 +129,16 @@ export const api = {
     if (PERSISTENCE === 'localStorage') {
       const t = await localRepo.getToy(id)
       if (!t) throw new Error('玩偶不存在')
-      return t
+      return hydrateToyAvatar(t)
     }
     return http(`/toys/${id}`)
   },
 
   async createToy(input: CreateToyInput): Promise<Toy> {
     assertLocalForDemo('createToy')
-    if (PERSISTENCE === 'localStorage') return localRepo.createToy(input)
+    if (PERSISTENCE === 'localStorage') {
+      return hydrateToyAvatar(await localRepo.createToy(input))
+    }
     return http('/toys', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -135,7 +151,9 @@ export const api = {
     input: Partial<CreateToyInput>,
   ): Promise<Toy> {
     assertLocalForDemo('updateToy')
-    if (PERSISTENCE === 'localStorage') return localRepo.updateToy(id, input)
+    if (PERSISTENCE === 'localStorage') {
+      return hydrateToyAvatar(await localRepo.updateToy(id, input))
+    }
     return http(`/toys/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },

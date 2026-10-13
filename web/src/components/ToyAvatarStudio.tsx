@@ -10,15 +10,14 @@ import {
 import {
   createFallbackAvatar,
   createStickerAvatar,
-  PREVIEW_BG,
   type StickerBorder,
-  type StickerPreviewBg,
 } from '../image/createStickerAvatar'
+import { removeToyBackgroundNative } from '../image/removeToyBackgroundNative'
 type Stage = 'pick' | 'processing' | 'confirm'
 type AvatarProgress = { progress: number; detail: string }
 
 /**
- * Upload → local crop/sticker frame → confirm avatar.
+ * Upload → on-device cutout → sticker preview → automatically use as avatar.
  */
 export function ToyAvatarStudio({
   value,
@@ -35,16 +34,21 @@ export function ToyAvatarStudio({
   const [sourceFile, setSourceFile] = useState<File | null>(null)
   const [cutoutBlob, setCutoutBlob] = useState<Blob | null>(null)
   const [removed, setRemoved] = useState(false)
+  const [processingNote, setProcessingNote] = useState<string | null>(null)
   const [progress, setProgress] = useState<AvatarProgress | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | undefined>(value)
   const [border, setBorder] = useState<StickerBorder>('standard')
-  const [previewBg, setPreviewBg] = useState<StickerPreviewBg>('cream')
   const [zoom, setZoom] = useState(1)
   const [offset, setOffset] = useState({ x: 0, y: 0 })
   const dragRef = useRef<{ x: number; y: number; ox: number; oy: number } | null>(
     null,
   )
   const rebuildToken = useRef(0)
+  const onConfirmRef = useRef(onConfirm)
+
+  useEffect(() => {
+    onConfirmRef.current = onConfirm
+  }, [onConfirm])
 
   const rebuildPreview = useCallback(
     async (
@@ -76,9 +80,11 @@ export function ToyAvatarStudio({
               size: 512,
             })
         if (token === rebuildToken.current) setPreviewUrl(dataUrl)
+        return dataUrl
       } catch (err) {
         console.warn(err)
         onToast('生成贴纸失败，请重试')
+        return undefined
       }
     },
     [onToast],
@@ -94,24 +100,34 @@ export function ToyAvatarStudio({
       return
     }
     setSourceFile(file)
+    setProcessingNote(null)
     setStage('processing')
     setProgress({
-      progress: 0.35,
-      detail: '正在本机裁切并生成贴纸头像…',
+      progress: 0.2,
+      detail: '正在本机识别玩偶主体…',
     })
     setOffset({ x: 0, y: 0 })
     setZoom(1)
 
-    setCutoutBlob(file)
-    setRemoved(false)
-    setProgress({ progress: 0.75, detail: '正在生成预览…' })
-    await rebuildPreview(file, {
+    const result = await removeToyBackgroundNative(file)
+    setCutoutBlob(result.blob)
+    setRemoved(result.removed)
+    setProcessingNote(result.message ?? null)
+    if (result.message) onToast(result.message)
+    setProgress({ progress: 0.75, detail: '正在生成贴纸头像…' })
+    const nextAvatar = await rebuildPreview(result.blob, {
       border,
       zoom: 1,
       offsetX: 0,
       offsetY: 0,
       useSticker: true,
     })
+    if (!nextAvatar) {
+      setStage('pick')
+      setProgress(null)
+      return
+    }
+    onConfirmRef.current(nextAvatar)
     setStage('confirm')
     setProgress(null)
   }
@@ -126,6 +142,8 @@ export function ToyAvatarStudio({
         offsetX: offset.x,
         offsetY: offset.y,
         useSticker: true,
+      }).then((nextAvatar) => {
+        if (nextAvatar) onConfirmRef.current(nextAvatar)
       })
     }, 80)
     return () => window.clearTimeout(t)
@@ -225,7 +243,7 @@ export function ToyAvatarStudio({
         <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-mist-soft text-matcha-deep">
           <LoaderCircle className="h-7 w-7 animate-spin" />
         </span>
-        <p className="font-display text-base text-ink">{label}</p>
+        <p className="text-base font-semibold text-ink">{label}</p>
         {detail && (
           <p className="text-[11px] leading-relaxed text-ink-muted">{detail}</p>
         )}
@@ -260,7 +278,7 @@ export function ToyAvatarStudio({
           </span>
         </div>
         <div className="min-w-0 flex-1">
-          <p className="font-display text-base text-ink">现在的档案照</p>
+          <p className="text-base font-semibold text-ink">现在的档案照</p>
           <p className="mt-1 text-[11px] leading-5 text-ink-muted">
             保留这张照片，或重新制作一枚玩偶贴纸头像。
           </p>
@@ -286,7 +304,7 @@ export function ToyAvatarStudio({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5 text-xs font-medium text-matcha-deep">
           <Sparkles className="h-3.5 w-3.5" />
-          {removed ? '贴纸头像预览' : '原图贴纸预览'}
+          {removed ? '已自动抠出玩偶主体' : '原图裁切预览'}
         </div>
         <button
           type="button"
@@ -294,6 +312,7 @@ export function ToyAvatarStudio({
             setStage('pick')
             setCutoutBlob(null)
             setSourceFile(null)
+            setProcessingNote(null)
             setPreviewUrl(value)
           }}
           className="text-[10px] text-ink-muted"
@@ -302,13 +321,16 @@ export function ToyAvatarStudio({
         </button>
       </div>
 
+      {processingNote && (
+        <p className="rounded-2xl bg-cream px-3 py-2 text-[10px] leading-5 text-ink-muted">
+          {processingNote}
+        </p>
+      )}
+
       <div
         className="relative mx-auto flex h-56 w-56 touch-none items-center justify-center overflow-hidden rounded-[1.75rem] shadow-[var(--shadow-warm)] ring-1 ring-line/50"
         style={{
-          background:
-            previewBg === 'transparent'
-              ? 'repeating-conic-gradient(#eee 0% 25%, #fff 0% 50%) 50% / 16px 16px'
-              : PREVIEW_BG[previewBg],
+          background: '#ffffff',
         }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -368,28 +390,6 @@ export function ToyAvatarStudio({
         </div>
       </div>
 
-      <div>
-        <span className="mb-1.5 block text-[10px] text-ink-muted">预览背景</span>
-        <div className="flex gap-2">
-          {(
-            [
-              ['transparent', '透明'],
-              ['cream', '奶油白'],
-              ['mint', '淡绿色'],
-            ] as const
-          ).map(([id, label]) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setPreviewBg(id)}
-              className={previewBg === id ? 'chip chip-soft-active' : 'chip'}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-
       <div className="pt-1">
         <button
           type="button"
@@ -404,19 +404,10 @@ export function ToyAvatarStudio({
         </button>
       </div>
 
-      <button
-        type="button"
-        disabled={!previewUrl}
-        onClick={() => {
-          if (!previewUrl) return
-          onConfirm(previewUrl)
-          onToast('头像已确认')
-        }}
-        className="btn-primary w-full py-3 text-sm"
-      >
-        <Check className="h-4 w-4" />
-        确认作为头像
-      </button>
+      <div className="flex items-center gap-2 rounded-2xl bg-mist-soft px-3.5 py-3 text-xs text-matcha-deep">
+        <Check className="h-4 w-4 shrink-0" />
+        <span>已作为档案照，可继续调整或直接填写资料</span>
+      </div>
     </div>
   )
 }

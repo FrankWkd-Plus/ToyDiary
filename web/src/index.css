@@ -6,7 +6,7 @@
  * Feature styles (archive / community / OCR / growth) live below.
  */
 @theme {
-  --font-sans: 'Noto Sans SC', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Noto Sans SC', ui-sans-serif, system-ui, sans-serif;
   --font-display: 'ZCOOL XiaoWei', 'Noto Sans SC', serif;
 
   /* Defaults = 抹茶绿; runtime overrides via data-theme / applyTheme() */
