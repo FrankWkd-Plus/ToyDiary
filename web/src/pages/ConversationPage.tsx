@@ -14,7 +14,6 @@ import {
   ChevronDown,
   ChevronRight,
   ImagePlus,
-  Mic,
   Send,
   Sparkles,
   Trash2,
@@ -700,14 +699,7 @@ export function ConversationPage() {
               placeholder={`和${currentToy.name}说点什么…`}
               className="max-h-20 min-h-5 min-w-0 flex-1 resize-none bg-transparent text-xs leading-5 text-ink outline-none placeholder:text-ink-muted"
             />
-            <button
-              type="button"
-              onClick={() => showToast('按住说话功能将在下一版本开放')}
-              className="ml-1 flex h-5 w-5 shrink-0 items-center justify-center text-ink-muted"
-              aria-label="语音输入"
-            >
-              <Mic className="h-4 w-4" />
-            </button>
+
           </div>
 
           <button

@@ -134,7 +134,9 @@ function hasTrait(toy: Toy, ...names: string[]) {
 
 function generateLocalAnalysis(
   input: AnalyzeEntryInput,
-  imageSignals: ImageSignals | undefined,
+  // Kept for call-site symmetry; palette tones are no longer injected into
+  // the diary body (only passed to the remote AI as atmosphere reference).
+  _imageSignals: ImageSignals | undefined,
   processedImageUrl: string | undefined,
   locale: Locale,
 ): EntryAnalysis {
@@ -166,19 +168,14 @@ function generateLocalAnalysis(
     hasImage: Boolean(input.imageUrl),
     locale,
   })
+  // Image note: only when we have a REAL scene (from the owner's text/location).
+  // Palette-only tone lines ("warm yellow-orange") felt like rote photo critique
+  // in every diary — users asked for occasional garnish, not a fixed sentence.
   const resolvedImageAnalysis = input.imageUrl
     ? explicitScene
       ? imageDescriptionForScene(scene, locale)
-      : imageSignals?.description || neutralImageDescription(locale)
+      : undefined
     : undefined
-  const visualSentence = input.imageUrl
-    ? `${
-        resolvedImageAnalysis ||
-        (isEn
-          ? `The photo holds a little of ${scenePhrase}.`
-          : `照片里留下了${scenePhrase}。`)
-      }`
-    : ''
   const eventSentence = note
     ? isEn
       ? `You told me: “${note}”`
@@ -199,7 +196,7 @@ function generateLocalAnalysis(
 
   return {
     title,
-    aiDiary: `${formatDate(input.date, locale)}${place}.\n\n${visualSentence}${visualSentence ? '\n\n' : ''}${eventSentence}\n\n${comfort}`,
+    aiDiary: `${formatDate(input.date, locale)}${place}.\n\n${eventSentence}\n\n${comfort}`,
     toyReply: needsComfort
       ? isEn
         ? `I wrote this moment down. You don't have to force a smile today — ${toyName} is here with you.`

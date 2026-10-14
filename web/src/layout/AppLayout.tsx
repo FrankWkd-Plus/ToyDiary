@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import { BottomNav } from '../components/BottomNav'
 import { LoadingBear } from '../components/LoadingBear'
@@ -10,6 +10,7 @@ export function AppLayout() {
   const { loading } = useApp()
   const { t } = useLocale()
   const { pathname, search } = useLocation()
+  const [keyboardOpen, setKeyboardOpen] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const lockPageScroll =
     pathname.startsWith('/conversation') ||
@@ -22,8 +23,31 @@ export function AppLayout() {
     scrollRef.current?.scrollTo({ top: 0 })
   }, [pathname])
 
+  useEffect(() => {
+    const viewport = window.visualViewport
+    const update = () => {
+      const typing = document.activeElement?.matches('input, textarea, [contenteditable="true"]')
+      const reduced = Boolean(viewport && window.innerHeight - viewport.height > 70)
+      setKeyboardOpen(Boolean(typing && (reduced || window.innerWidth < 430)))
+      if (viewport) document.documentElement.style.setProperty('--visible-height', `${viewport.height}px`)
+      if (typing && lockPageScroll) window.scrollTo(0, 0)
+    }
+    viewport?.addEventListener('resize', update)
+    viewport?.addEventListener('scroll', update)
+    document.addEventListener('focusin', update)
+    document.addEventListener('focusout', update)
+    update()
+    return () => {
+      viewport?.removeEventListener('resize', update)
+      viewport?.removeEventListener('scroll', update)
+      document.removeEventListener('focusin', update)
+      document.removeEventListener('focusout', update)
+      document.documentElement.style.removeProperty('--visible-height')
+    }
+  }, [lockPageScroll])
+
   return (
-    <div className="app-shell">
+    <div className={`app-shell${keyboardOpen ? ' keyboard-open' : ''}`}>
       <div className="app-frame">
         {loading ? (
           <div className="loading-screen">
@@ -56,7 +80,7 @@ export function AppLayout() {
             >
               <Outlet />
             </div>
-            {!hideChrome && <BottomNav />}
+            {!hideChrome && !keyboardOpen && <BottomNav />}
             {!hideChrome && <ToyNudgeHost />}
           </>
         )}

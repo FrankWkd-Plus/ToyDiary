@@ -1,3 +1,4 @@
+import { diaryExcerpt } from '../share/memoryShareContent'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
@@ -73,10 +74,46 @@ function OpenPopupWhenActive({
     if (!active) return
     const t = window.setTimeout(() => {
       markerRefs.current[entryId]?.openPopup()
-    }, 400)
+    }, 1250)
     return () => window.clearTimeout(t)
   }, [active, entryId, markerRefs])
   return null
+}
+
+function TravelTiles({ onStatus }: { onStatus: (status: 'loading' | 'failed' | 'ready') => void }) {
+  const map = useMap()
+  const [loading, setLoading] = useState(true)
+  const [failed, setFailed] = useState(false)
+  useEffect(() => {
+    const timer = window.setTimeout(() => { if (loading) setFailed(true) }, 15_000)
+    return () => window.clearTimeout(timer)
+  }, [loading])
+  useEffect(() => { onStatus(failed ? 'failed' : loading ? 'loading' : 'ready') }, [failed, loading, onStatus])
+  useEffect(() => {
+    const observer = new ResizeObserver(() => map.invalidateSize({ pan: false }))
+    observer.observe(map.getContainer())
+    return () => observer.disconnect()
+  }, [map])
+  return <>
+    <TileLayer
+      attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+      eventHandlers={{ loading: () => setLoading(true), load: () => setLoading(false), tileerror: () => setFailed(true) }} />
+
+  </>
+}
+
+function TravelPopup({ point, cityCount }: { point: TravelMapPoint; cityCount: number }) {
+  const map = useMap()
+  const [maxHeight, setMaxHeight] = useState(Math.max(100, map.getSize().y - 110))
+  useEffect(() => {
+    const resize = () => setMaxHeight(Math.max(100, map.getSize().y - 110))
+    map.on('resize', resize)
+    return () => { map.off('resize', resize) }
+  }, [map])
+  return <Popup className="polaroid-popup" maxWidth={240} maxHeight={maxHeight} keepInView autoPanPadding={[16, 16]}>
+    <PolaroidCard point={point} cityCount={cityCount} />
+  </Popup>
 }
 
 function makeAvatarIcon(avatarUrl: string, label: string, active: boolean) {
@@ -103,6 +140,8 @@ export function TravelMapView({ embedded = false }: { embedded?: boolean }) {
   const [data, setData] = useState<TravelMapResponse | null>(null)
   const [year, setYear] = useState<'all' | number>('all')
   const [loading, setLoading] = useState(true)
+  const [tileStatus, setTileStatus] = useState<'loading' | 'failed' | 'ready'>('loading')
+  const [tileAttempt, setTileAttempt] = useState(0)
   const [replaying, setReplaying] = useState(false)
   const [paused, setPaused] = useState(false)
   const [replayIndex, setReplayIndex] = useState(-1)
@@ -371,13 +410,16 @@ export function TravelMapView({ embedded = false }: { embedded?: boolean }) {
             {activePoint.title ? ` · ${activePoint.title}` : ''}
           </p>
           <p className="mt-0.5 line-clamp-2 text-[10px] text-ink-soft">
-            {activePoint.aiDiary?.split('\n').filter(Boolean)[0] ||
-              activePoint.userNote ||
+            {diaryExcerpt(activePoint) ||
               '这一站也被好好记住了。'}
           </p>
         </div>
       )}
 
+      {!loading && filtered.length > 0 && tileStatus !== 'ready' && <div role="status" className="flex shrink-0 items-center justify-between gap-2 border-b border-line/50 bg-paper px-3 py-2 text-[11px] text-ink-muted">
+        <span>{tileStatus === 'failed' ? '底图暂未完整加载，足迹仍可查看' : '正在加载地图…'}</span>
+        {tileStatus === 'failed' && <button type="button" className="shrink-0 text-matcha-deep" onClick={() => { setTileStatus('loading'); setTileAttempt((n) => n + 1) }}>重试</button>}
+      </div>}
       <div className="relative min-h-0 flex-1">
         {loading ? (
           <div className="flex h-full items-center justify-center text-sm text-ink-muted">
@@ -405,10 +447,7 @@ export function TravelMapView({ embedded = false }: { embedded?: boolean }) {
               className="h-full w-full"
               scrollWheelZoom
             >
-              <TileLayer
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              />
+              <TravelTiles key={`${toyId}:${tileAttempt}`} onStatus={setTileStatus} />
               <FitBounds
                 points={filtered}
                 active={!replaying}
@@ -457,33 +496,12 @@ export function TravelMapView({ embedded = false }: { embedded?: boolean }) {
                       entryId={point.entryId}
                       markerRefs={markerRefs}
                     />
-                    <Popup className="polaroid-popup" maxWidth={240}>
-                      <PolaroidCard point={point} cityCount={count} />
-                    </Popup>
+                    <TravelPopup point={point} cityCount={count} />
                   </Marker>
                 )
               })}
             </MapContainer>
-            {!replaying && (
-              <div className="pointer-events-none absolute inset-x-3 bottom-7 z-[500]">
-                <div className="flex items-center gap-2.5 rounded-2xl border border-white/80 bg-paper/90 px-3 py-2 shadow-[var(--shadow-elevated)] backdrop-blur-md">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-mustard-soft text-base shadow-sm">
-                    🧭
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <strong className="block truncate text-[11px] text-ink">
-                      {currentToy.name} 的旅行手账
-                    </strong>
-                    <span className="mt-0.5 block truncate text-[9px] text-ink-muted">
-                      最近一站 · {filtered[filtered.length - 1].place.displayName}
-                    </span>
-                  </span>
-                  <span className="shrink-0 rounded-full bg-mist-soft px-2 py-1 text-[9px] font-semibold text-matcha-deep">
-                    {filtered.length} 个足迹
-                  </span>
-                </div>
-              </div>
-            )}
+
           </>
         )}
       </div>
@@ -543,8 +561,7 @@ function PolaroidCard({
           {cityCount > 1 ? ` · 同城 ${cityCount} 次` : ''}
         </span>
         <p className="mt-1 line-clamp-3 text-[10px] leading-relaxed text-ink-soft">
-          {point.aiDiary?.split('\n').filter(Boolean)[0] ||
-            point.userNote ||
+          {diaryExcerpt(point) ||
             point.place.displayName}
         </p>
         <Link

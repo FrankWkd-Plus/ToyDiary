@@ -110,11 +110,12 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         'toyReply: string (one warm sentence said to the user before saving, English)',
         'mood: string (one English mood word, e.g. gentle / happy / calm / curious)',
         'tags: string[] (1-4 short English tags)',
-        'imageAnalysis: string (neutral colour/lighting impression if a photo is provided, otherwise empty string)',
+        'imageAnalysis: string (OPTIONAL garnish: only ONE short sentence about photo colour/lighting when it genuinely adds atmosphere; return empty string in most cases)',
         'entryType: "travel" | "daily" | "memorial" | "text"',
         "Match the toy's personality. Keep the tone warm and diary-like, not template-y.",
         'GROUNDING: Treat only the owner note, selected location, date and type as event facts.',
         'Never infer sunset, evening, night, beach, outdoors, weather, objects or a place from colour tone alone.',
+        'Colour and lighting are an occasional garnish only — do NOT describe the photo colour tone in every diary entry; spend the words on the story and feelings of this moment.',
         'If the owner did not describe a scene, use a neutral title and neutral wording about this moment.',
       ].join('\n')
     : [
@@ -127,11 +128,12 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         'toyReply: string（保存前对用户说的一句话，中文）',
         'mood: string（一个中文心情词，如 温柔/开心/平静/好奇）',
         'tags: string[]（1-4 个中文标签）',
-        'imageAnalysis: string（若有图，仅描述中性的色调或光线印象；否则为空字符串）',
+        'imageAnalysis: string（可选点缀：仅当照片色调/光线确实为这篇日记增添氛围时写一句；大多数情况返回空字符串）',
         'entryType: "travel" | "daily" | "memorial" | "text"',
         '口吻要贴合玩偶性格，温暖、手帐感，不要模板腔。',
         '事实约束：只有用户备注、主动选择的地点、日期和类型可以作为事件事实。',
         '禁止仅凭暖色、暗色、蓝色或绿色推断日落、傍晚、夜晚、海边、户外、天气、物体或地点。',
+        '色调与光线只是偶尔的点缀——不要每篇日记都例行描述照片的色调，把笔墨放在这一刻的故事和感受上。',
         '用户没有说明具体场景时，标题和正文必须使用“这一刻”等中性表达。',
       ].join('\n')
 
@@ -146,7 +148,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         location ? `Location: ${location}` : '',
         userNote ? `Owner note: ${userNote}` : 'No owner note.',
         hasPhoto
-          ? `A photo is attached. Use only this neutral visual note: ${imageToneDescription || 'No reliable scene information.'}`
+          ? `A photo is attached. Tone impression is for atmosphere reference only (${imageToneDescription || 'none'}); do not put it into the diary body unless it truly enhances the mood.`
           : 'No photo attached.',
       ]
         .filter(Boolean)
@@ -161,7 +163,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         location ? `地点：${location}` : '',
         userNote ? `主人备注：${userNote}` : '主人未写备注',
         hasPhoto
-          ? `用户附带了一张照片。只能使用这条中性画面信息：${imageToneDescription || '没有可靠的场景信息'}。`
+          ? `用户附带了一张照片。色调印象仅供参考氛围（${imageToneDescription || '无'}），不必写进正文，除非确实为氛围加分。`
           : '没有照片。',
       ]
         .filter(Boolean)

@@ -1,11 +1,16 @@
 import type { Entry, Toy } from '../types'
+import { diaryExcerpt } from '../share/memoryShareContent'
+
+export function companionStartDate(toy: Toy) {
+  return toy.encounterDate || toy.birthDate
+}
 
 export function companionDays(toy: Toy) {
   return companionDayStatus(toy).days
 }
 
 export function companionDayStatus(toy: Toy) {
-  const [year, month, day] = toy.birthDate.split('-').map(Number)
+  const [year, month, day] = companionStartDate(toy).split('-').map(Number)
   const today = new Date()
   const startOrdinal = Date.UTC(year, month - 1, day) / 86400000
   const todayOrdinal =
@@ -45,10 +50,7 @@ export function toySignature(toy: Toy | null | undefined) {
 
 /** Memory-hall card copy — always first-person from the toy's POV. */
 export function toyPerspectiveNarration(entry: Entry): string {
-  const diaryLine = entry.aiDiary
-    ?.split('\n')
-    .map((line) => line.trim())
-    .find(Boolean)
+  const diaryLine = diaryExcerpt({ ...entry, userNote: undefined })
   if (diaryLine) return diaryLine
 
   const place =

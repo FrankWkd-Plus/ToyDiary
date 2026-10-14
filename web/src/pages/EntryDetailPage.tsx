@@ -1,9 +1,8 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import {
   Download,
-  Eye,
   Ellipsis,
   MapPin,
   Pencil,
@@ -18,10 +17,7 @@ import { LoadingBear } from '../components/LoadingBear'
 import { PageHeader } from '../components/PageHeader'
 import { useApp } from '../context/AppContext'
 import { useLocale } from '../i18n'
-import {
-  renderDiaryCardPng,
-  type DiaryCardLayout,
-} from '../share/renderDiaryCardPng'
+import { renderDiaryCardPng } from '../share/renderDiaryCardPng'
 import { isMobileClient, shareOrDownloadFile } from '../share/shareHelpers'
 import { deletePersistedDiaryPhoto } from '../media/photoStorage'
 import type { Entry, Toy } from '../types'
@@ -51,10 +47,10 @@ export function EntryDetailPage() {
   const [exporting, setExporting] = useState(false)
   const [previewing, setPreviewing] = useState(false)
   const [previewUrl, setPreviewUrl] = useState<string>()
-  const [layout, setLayout] = useState<DiaryCardLayout>('side')
-  const [stickerFrame, setStickerFrame] = useState(true)
-  const [showDayCount, setShowDayCount] = useState(true)
-  const [showLocation, setShowLocation] = useState(true)
+  const [previewBlob, setPreviewBlob] = useState<Blob>()
+  const previewObjectUrl = useRef<string | undefined>(undefined)
+  const exportPanelRef = useRef<HTMLDivElement>(null)
+  const exportCloseRef = useRef<HTMLButtonElement>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -80,62 +76,44 @@ export function EntryDetailPage() {
     }
   }, [exportOpen, menuOpen, confirmDelete])
 
-  // Live export preview — re-render when options change (debounced)
   useEffect(() => {
     if (!exportOpen || !entry) {
-      setPreviewUrl((prev) => {
-        if (prev) URL.revokeObjectURL(prev)
-        return undefined
-      })
+      if (previewObjectUrl.current) URL.revokeObjectURL(previewObjectUrl.current)
+      previewObjectUrl.current = undefined
+      setPreviewUrl(undefined)
+      setPreviewBlob(undefined)
       setPreviewing(false)
       return
     }
-
     let cancelled = false
-    const timer = window.setTimeout(() => {
-      setPreviewing(true)
-      const toy =
-        toys.find((t) => t.id === entry.toyId) ||
-        (currentToy?.id === entry.toyId ? currentToy : undefined)
-      void renderDiaryCardPng({
-        entry,
-        toy,
-        layout,
-        stickerFrame,
-        showDayCount,
-        showLocation,
-      })
-        .then((blob) => {
-          if (cancelled) return
-          const url = URL.createObjectURL(blob)
-          setPreviewUrl((prev) => {
-            if (prev) URL.revokeObjectURL(prev)
-            return url
-          })
-        })
-        .catch(() => {
-          if (!cancelled) showToast('预览生成失败')
-        })
-        .finally(() => {
-          if (!cancelled) setPreviewing(false)
-        })
-    }, 220)
+    setPreviewing(true)
+    setPreviewBlob(undefined)
+    const toy = toys.find((item) => item.id === entry.toyId)
+    void renderDiaryCardPng({ entry, toy }).then((blob) => {
+      if (cancelled) return
+      const url = URL.createObjectURL(blob)
+      if (previewObjectUrl.current) URL.revokeObjectURL(previewObjectUrl.current)
+      previewObjectUrl.current = url
+      setPreviewUrl(url)
+      setPreviewBlob(blob)
+    }).catch((error) => {
+      if (!cancelled) showToast(error instanceof Error ? error.message : '预览生成失败')
+    }).finally(() => {
+      if (!cancelled) setPreviewing(false)
+    })
+    return () => { cancelled = true }
+  }, [exportOpen, entry, toys, showToast])
 
-    return () => {
-      cancelled = true
-      window.clearTimeout(timer)
-    }
-  }, [
-    exportOpen,
-    entry,
-    toys,
-    currentToy,
-    layout,
-    stickerFrame,
-    showDayCount,
-    showLocation,
-    showToast,
-  ])
+  useEffect(() => () => {
+    if (previewObjectUrl.current) URL.revokeObjectURL(previewObjectUrl.current)
+  }, [])
+
+  useEffect(() => {
+    if (!exportOpen) return
+    const previousFocus = document.activeElement as HTMLElement | null
+    exportCloseRef.current?.focus()
+    return () => previousFocus?.focus()
+  }, [exportOpen])
 
   useEffect(() => {
     if (!id) return
@@ -217,36 +195,21 @@ export function EntryDetailPage() {
     }
   }
 
-  async function onExportCard() {
-    if (!entry || exporting) return
+  async function onExportCard(action: 'save' | 'share') {
+    if (!entry || exporting || previewing || !previewBlob) return
     setExporting(true)
     try {
-      const toy =
-        toys.find((t) => t.id === entry.toyId) ||
-        (currentToy?.id === entry.toyId ? currentToy : undefined)
-      const blob = await renderDiaryCardPng({
-        entry,
-        toy,
-        layout,
-        stickerFrame,
-        showDayCount,
-        showLocation,
-      })
-      const filename = `toydairy-diary-${entry.date}.jpg`
       const mode = await shareOrDownloadFile({
-        blob,
-        filename,
-        title: entry.title || '今日日记',
-        text: '来自 Toy Diary 的双视角日记卡',
+        blob: previewBlob,
+        filename: `toydiary-diary-${entry.id}-${entry.date}.jpg`,
+        title: entry.title || '陪伴日记',
+        text: '来自 Toy Diary 的照片日记',
       })
-      showToast(
-        mode === 'shared'
-          ? '请在系统菜单选择「存储图像」保存到相册'
-          : '日记卡已下载',
-      )
-      setExportOpen(false)
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : '导出失败')
+      showToast(mode === 'downloaded' ? '照片日记已下载' : action === 'save'
+        ? '请在系统菜单选择「存储图像」保存到相册'
+        : '已打开系统分享')
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '导出失败')
     } finally {
       setExporting(false)
     }
@@ -370,144 +333,38 @@ export function EntryDetailPage() {
         </div>
       </article>
 
-      {exportOpen &&
-        createPortal(
-          <div
-            className="export-sheet-overlay"
-            role="dialog"
-            aria-modal="true"
-            aria-label="导出日记"
-            onClick={() => !exporting && setExportOpen(false)}
-          >
-            <div
-              data-modal-sheet
-              className="export-sheet-panel"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-display text-lg text-ink">导出当日日记</p>
-                  <p className="text-[10px] text-ink-muted">
-                    手机：保存到相册 · 电脑：自动下载
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  disabled={exporting}
-                  onClick={() => setExportOpen(false)}
-                  className="flex h-8 w-8 items-center justify-center rounded-full bg-cream"
-                  aria-label="关闭"
-                >
-                  <X className="h-4 w-4" />
-                </button>
+      {exportOpen && createPortal(
+        <div className="export-sheet-overlay" role="dialog" aria-modal="true" aria-labelledby="diary-export-title"
+          onClick={() => !exporting && setExportOpen(false)}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape' && !exporting) setExportOpen(false)
+            if (event.key !== 'Tab') return
+            const buttons = exportPanelRef.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')
+            if (!buttons?.length) return
+            const first = buttons[0]
+            const last = buttons[buttons.length - 1]
+            if (!exportPanelRef.current?.contains(document.activeElement)) { event.preventDefault(); first.focus() }
+            else if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus() }
+            else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus() }
+          }}>
+          <div ref={exportPanelRef} data-modal-sheet className="export-sheet-panel diary-photo-sheet" onClick={(event) => event.stopPropagation()}>
+            <div className="memory-editorial-header">
+              <div>
+                <h2 id="diary-export-title">导出照片日记</h2>
+                <p>把这一天的陪伴，好好收藏。</p>
               </div>
-
-              <div className="mt-3 overflow-hidden rounded-2xl bg-white ring-1 ring-line/50">
-                {previewUrl ? (
-                  <img
-                    src={previewUrl}
-                    alt="导出预览"
-                    className="max-h-[70vh] w-full object-contain"
-                  />
-                ) : (
-                  <div className="flex h-40 flex-col items-center justify-center gap-1.5 px-4 text-center text-xs text-ink-muted">
-                    <Eye className="h-5 w-5 text-matcha-deep" />
-                    {previewing ? '正在生成预览…' : '预览将显示在这里'}
-                  </div>
-                )}
-                {previewing && previewUrl && (
-                  <p className="border-t border-line/40 bg-white/70 py-1 text-center text-[10px] text-ink-muted">
-                    更新预览中…
-                  </p>
-                )}
-              </div>
-
-              <div className="mt-3">
-                <p className="text-[11px] font-medium text-ink-muted">排版</p>
-                <div className="mt-1.5 grid grid-cols-2 gap-2">
-                  <OptionChip
-                    active={layout === 'side'}
-                    label="左右双栏"
-                    onClick={() => setLayout('side')}
-                  />
-                  <OptionChip
-                    active={layout === 'stack'}
-                    label="上下对称"
-                    onClick={() => setLayout('stack')}
-                  />
-                </div>
-              </div>
-
-              <div className="mt-3 space-y-1">
-                <ToggleOption
-                  label="贴纸边框"
-                  on={stickerFrame}
-                  onChange={setStickerFrame}
-                />
-                <ToggleOption
-                  label="正数日数字"
-                  on={showDayCount}
-                  onChange={setShowDayCount}
-                />
-                <ToggleOption
-                  label="显示地点（📍 灰色文字）"
-                  on={showLocation}
-                  onChange={setShowLocation}
-                />
-              </div>
-
-              <div className="mt-4 grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  disabled={exporting || previewing}
-                  onClick={() => {
-                    // Force re-preview by clearing then re-triggering via option touch
-                    if (!entry || previewing) return
-                    setPreviewing(true)
-                    const toyForPreview =
-                      toys.find((t) => t.id === entry.toyId) ||
-                      (currentToy?.id === entry.toyId ? currentToy : undefined)
-                    void renderDiaryCardPng({
-                      entry,
-                      toy: toyForPreview,
-                      layout,
-                      stickerFrame,
-                      showDayCount,
-                      showLocation,
-                    })
-                      .then((blob) => {
-                        const url = URL.createObjectURL(blob)
-                        setPreviewUrl((prev) => {
-                          if (prev) URL.revokeObjectURL(prev)
-                          return url
-                        })
-                      })
-                      .catch(() => showToast('预览生成失败'))
-                      .finally(() => setPreviewing(false))
-                  }}
-                  className="btn-secondary flex items-center justify-center gap-1.5 py-3 text-xs disabled:opacity-50"
-                >
-                  <Eye className="h-4 w-4" />
-                  {previewing ? '预览中…' : '刷新预览'}
-                </button>
-                <button
-                  type="button"
-                  disabled={exporting || previewing}
-                  onClick={() => void onExportCard()}
-                  className="btn-primary flex items-center justify-center gap-1.5 py-3 text-xs disabled:opacity-60"
-                >
-                  <Download className="h-4 w-4" />
-                  {exporting
-                    ? '生成中…'
-                    : isMobileClient()
-                      ? '保存到相册'
-                      : '下载'}
-                </button>
-              </div>
+              <button ref={exportCloseRef} type="button" className="memory-editorial-close" disabled={exporting} onClick={() => setExportOpen(false)} aria-label="关闭导出"><X size={20} /></button>
             </div>
-          </div>,
-          document.body,
-        )}
+            <div className="diary-export-preview" aria-busy={previewing}>
+              {previewUrl ? <img src={previewUrl} alt="照片日记导出预览" /> : <div className="diary-export-placeholder">{previewing ? '正在整理这一天的回忆…' : '照片暂时无法载入，请重新打开试试'}</div>}
+            </div>
+            <div className="memory-editorial-actions">
+              <button type="button" disabled={exporting || previewing || !previewBlob} onClick={() => void onExportCard('save')}><Download size={17} />{isMobileClient() ? '保存到相册' : '下载图片'}</button>
+              <button type="button" disabled={exporting || previewing || !previewBlob} onClick={() => void onExportCard('share')}><Share2 size={17} />{exporting ? '正在导出…' : '分享日记'}</button>
+            </div>
+          </div>
+        </div>, document.body,
+      )}
 
       {menuOpen &&
         createPortal(
@@ -616,61 +473,6 @@ export function EntryDetailPage() {
           document.body,
         )}
     </>
-  )
-}
-
-function OptionChip({
-  active,
-  label,
-  onClick,
-}: {
-  active: boolean
-  label: string
-  onClick: () => void
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-2xl py-2.5 text-xs font-semibold ${
-        active
-          ? 'bg-mist-soft text-matcha-deep ring-2 ring-matcha'
-          : 'bg-cream text-ink-soft ring-1 ring-line/50'
-      }`}
-    >
-      {label}
-    </button>
-  )
-}
-
-function ToggleOption({
-  label,
-  on,
-  onChange,
-}: {
-  label: string
-  on: boolean
-  onChange: (v: boolean) => void
-}) {
-  return (
-    <button
-      type="button"
-      onClick={() => onChange(!on)}
-      className="flex w-full items-center justify-between rounded-xl px-1 py-2 text-left"
-    >
-      <span className="text-sm text-ink">{label}</span>
-      <span
-        className={`relative h-6 w-11 rounded-full transition-colors ${
-          on ? 'bg-matcha' : 'bg-cream-dark'
-        }`}
-      >
-        <span
-          className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-            on ? 'left-5' : 'left-0.5'
-          }`}
-        />
-      </span>
-    </button>
   )
 }
 

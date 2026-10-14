@@ -88,12 +88,42 @@ function mapNominatim(row: Record<string, unknown>) {
     city,
     district,
     poi,
-    displayName: String(row.display_name || ''),
+    displayName: compactDisplayName(poi, district, city, region, row.display_name),
     lat,
     lng,
     providerPlaceId: row.place_id != null ? String(row.place_id) : undefined,
     provider: 'nominatim' as const,
   }
+}
+
+/**
+ * Build a compact 3-level display name: "POI · 区 · 市".
+ * Nominatim's raw display_name is a full mailing address (house numbers,
+ * postcode like "100193") — too specific for a diary card.
+ * NOTE: keep in sync with reverse.ts compactDisplayName and
+ * web/src/places/placeUtils.ts placeFromNominatim.
+ */
+function compactDisplayName(
+  poi?: string,
+  district?: string,
+  city?: string,
+  region?: string,
+  raw?: unknown,
+): string {
+  const seen = new Set<string>()
+  const parts = [poi, district, city].filter((p): p is string => {
+    if (!p || seen.has(p)) return false
+    seen.add(p)
+    return true
+  })
+  if (parts.length) return parts.join(' · ')
+  if (region) return region
+  return String(raw || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s && !/^\d{4,6}$/.test(s))
+    .slice(0, 3)
+    .join(' · ')
 }
 
 function json(data: unknown, status = 200) {

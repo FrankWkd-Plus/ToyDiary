@@ -1,3 +1,4 @@
+import { companionStartDate } from '../archive/archiveUtils'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import {
@@ -297,7 +298,7 @@ export function GrowthStatsPage() {
         {statKind === 'companion' && (
           <CompanionDetail
             days={days}
-            birthDate={currentToy.birthDate}
+            birthDate={companionStartDate(currentToy)}
             birthPlace={currentToy.birthPlace}
             entryCount={entries.length}
             firstEntry={momentEntries[momentEntries.length - 1]}
@@ -338,7 +339,7 @@ function CompanionDetail({
 }) {
   return (
     <div className="space-y-2">
-      <InfoRow label="相识 / 出生日期" value={birthDate} />
+      <InfoRow label="相遇日期" value={birthDate} />
       <InfoRow label="出生地" value={birthPlace} />
       <InfoRow label="累计日志" value={`${entryCount} 条`} />
       {firstEntry && (

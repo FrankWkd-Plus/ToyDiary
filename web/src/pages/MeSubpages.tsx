@@ -12,7 +12,6 @@ import {
   Info,
   Link2,
   Upload,
-  Volume2,
 } from 'lucide-react'
 import { useAuth } from '../auth/AuthContext'
 import { PageHeader } from '../components/PageHeader'
@@ -374,17 +373,7 @@ export function NotifySoundPage() {
               showToast(v ? '已开启夜间提醒' : '已关闭夜间提醒')
             }}
           />
-          <ToggleRow
-            icon={<Volume2 className="h-4 w-4" />}
-            label="声音"
-            desc="回忆展厅幻灯片背景音开关"
-            on={prefs.memorySound}
-            onChange={(v) => {
-              updatePrefs({ memorySound: v })
-              showToast(v ? '已开启声音' : '已关闭声音')
-            }}
-            last
-          />
+
         </section>
 
         <section className="card-paper p-4">

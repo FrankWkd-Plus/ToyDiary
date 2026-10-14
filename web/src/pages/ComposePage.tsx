@@ -1,3 +1,4 @@
+import { localDate } from '../utils/localDate'
 import { useEffect, useState, type FormEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
@@ -38,22 +39,38 @@ interface ComposeRouteState {
   from?: string
 }
 
+interface DiaryDraft { date: string; entryType: EntryType; place?: Place; userNote: string; title: string; aiDiary: string; mood: string }
+function readDraft(key: string): Partial<DiaryDraft> {
+  try { const value = JSON.parse(localStorage.getItem(key) || '{}'); return value && typeof value === 'object' ? value : {} } catch { return {} }
+}
+
 export function ComposePage() {
+  const { currentToy } = useApp()
+  const location = useLocation()
+  const route = location.state as ComposeRouteState | null
+  return <ComposeForm key={`${route?.editEntry?.id || currentToy?.id || 'none'}:${location.key}`} />
+}
+
+function ComposeForm() {
   const nav = useNavigate()
   const { locale } = useLocale()
   const routeState = useLocation().state as ComposeRouteState | null
   const { currentToy, toys, setCurrentToyId, refreshEntries, showToast } =
     useApp()
   const editingEntry = routeState?.editEntry
+  const draftKey = `toydiary.draft.v1.${editingEntry ? `entry.${editingEntry.id}` : `toy.${currentToy?.id || 'none'}`}`
+  const [restoredDraft] = useState(() => readDraft(draftKey))
+  const textMode = routeState?.mode === 'text' && !editingEntry
+  const [draftSaved, setDraftSaved] = useState(Boolean(restoredDraft.userNote || restoredDraft.aiDiary))
   const [date, setDate] = useState(
-    () => editingEntry?.date || new Date().toISOString().slice(0, 10),
+    () => restoredDraft.date || editingEntry?.date || localDate(),
   )
   const [entryType, setEntryType] = useState<EntryType>(
-    () => editingEntry?.type || 'daily',
+    () => restoredDraft.entryType || editingEntry?.type || 'daily',
   )
-  const [place, setPlace] = useState<Place | undefined>(() => editingEntry?.place)
+  const [place, setPlace] = useState<Place | undefined>(() => restoredDraft.place || editingEntry?.place)
   const [userNote, setUserNote] = useState(
-    () => editingEntry?.userNote || routeState?.ocrText || '',
+    () => restoredDraft.userNote ?? editingEntry?.userNote ?? routeState?.ocrText ?? '',
   )
   const [imageUrl, setImageUrl] = useState<string | undefined>(
     () => editingEntry?.imageUrl || routeState?.imageUrl,
@@ -62,9 +79,9 @@ export function ComposePage() {
   const [nativeImageUri, setNativeImageUri] = useState<string | undefined>(
     routeState?.nativeImageUri,
   )
-  const [title, setTitle] = useState(() => editingEntry?.title || '')
-  const [aiDiary, setAiDiary] = useState(() => editingEntry?.aiDiary || '')
-  const [mood, setMood] = useState(() => editingEntry?.mood || '温柔')
+  const [title, setTitle] = useState(() => restoredDraft.title ?? editingEntry?.title ?? '')
+  const [aiDiary, setAiDiary] = useState(() => restoredDraft.aiDiary ?? editingEntry?.aiDiary ?? '')
+  const [mood, setMood] = useState(() => restoredDraft.mood ?? editingEntry?.mood ?? '温柔')
   const [imageRemoved, setImageRemoved] = useState(false)
   const [saving, setSaving] = useState(false)
 
@@ -91,6 +108,30 @@ export function ComposePage() {
     routeState?.nativeImageUri,
     routeState?.ocrText,
   ])
+
+  useEffect(() => {
+    if (!currentToy) return
+    const changed = editingEntry
+      ? userNote !== (editingEntry.userNote || '') || title !== (editingEntry.title || '') || aiDiary !== (editingEntry.aiDiary || '') || date !== editingEntry.date || entryType !== editingEntry.type || mood !== (editingEntry.mood || '温柔') || JSON.stringify(place) !== JSON.stringify(editingEntry.place)
+      : Boolean(userNote.trim())
+    try {
+      if (changed) localStorage.setItem(draftKey, JSON.stringify({ date, entryType, place, userNote, title, aiDiary, mood }))
+      else localStorage.removeItem(draftKey)
+      setDraftSaved(changed)
+    } catch { setDraftSaved(false) }
+  }, [draftKey, currentToy, editingEntry, date, entryType, place, userNote, title, aiDiary, mood])
+
+  function discardDraft() {
+    setDate(editingEntry?.date || localDate())
+    setEntryType(editingEntry?.type || 'daily')
+    setPlace(editingEntry?.place)
+    setUserNote(editingEntry?.userNote || '')
+    setTitle(editingEntry?.title || '')
+    setAiDiary(editingEntry?.aiDiary || '')
+    setMood(editingEntry?.mood || '温柔')
+    localStorage.removeItem(draftKey)
+    setDraftSaved(false)
+  }
 
   function onPickFile(file: File | null) {
     if (!file) return
@@ -177,6 +218,7 @@ export function ComposePage() {
         showToast('原始记录已保存，玩偶日记可稍后重新生成')
       }
 
+      localStorage.removeItem(draftKey)
       await refreshEntries(currentToy.id)
       showToast(`${currentToy.name} 已把这一刻存进本机手帐`)
       nav(`/entries/${createdEntry.id}`, {
@@ -235,6 +277,7 @@ export function ComposePage() {
       ) {
         await deletePersistedDiaryPhoto(editingEntry.localImagePath)
       }
+      localStorage.removeItem(draftKey)
       await refreshEntries(currentToy.id)
       showToast('日志修改已保存')
       nav(routeState?.from || `/entries/${editingEntry.id}`, { replace: true })
@@ -281,6 +324,25 @@ export function ComposePage() {
           </p>
         </section>
 
+        <section className="card-paper p-4">
+          <label className="block">
+            <span className="mb-1.5 block text-xs font-medium text-ink-soft">
+              今天发生了什么
+            </span>
+            <textarea
+              className="input min-h-[130px] resize-none !rounded-2xl"
+              placeholder="例如：今天带熊看日落…"
+              value={userNote}
+              onChange={(event) => setUserNote(event.target.value)}
+            />
+          </label>
+          {draftSaved && <div className="mt-2 flex items-center justify-between text-[11px] text-ink-muted">
+            <span>文字草稿已保存在本机 · {currentToy.name}</span>
+            <button type="button" onClick={discardDraft} className="px-2 py-1 text-terra-deep">清除草稿</button>
+          </div>}
+          {!editingEntry && <p className="mt-2 text-[10px] text-ink-muted">离开后可继续填写；未保存的照片需重新选择。</p>}
+        </section>
+
         {imageUrl ? (
           <div className="card-paper overflow-hidden p-0">
             <div className="relative flex items-center justify-center overflow-hidden bg-cream-dark">
@@ -315,7 +377,7 @@ export function ComposePage() {
             <span className="mb-2.5 block text-xs font-medium text-ink-soft">
               照片（可选）
             </span>
-            <label className="flex cursor-pointer flex-col items-center justify-center gap-2.5 rounded-2xl border-2 border-dashed border-line/80 bg-cream/50 py-10 text-ink-muted">
+            <label className="flex cursor-pointer items-center justify-center gap-2.5 rounded-2xl border border-dashed border-line/80 bg-cream/50 py-3 text-ink-muted">
               <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-mustard-soft to-peach-soft text-matcha-deep">
                 <ImagePlus className="h-6 w-6" />
               </span>
@@ -330,7 +392,8 @@ export function ComposePage() {
           </div>
         )}
 
-        <section className="card-paper space-y-5 p-4">
+        <details open={!textMode || entryType === 'travel' || Boolean(editingEntry)} className="card-paper space-y-5 p-4">
+          <summary className="cursor-pointer text-xs text-ink-soft">记录信息 · {currentToy.name} · {date}</summary>
           <div>
             <span className="mb-1.5 block text-xs font-medium text-ink-soft">
               关联玩偶
@@ -384,17 +447,7 @@ export function ComposePage() {
             required={entryType === 'travel'}
           />
 
-          <label className="block">
-            <span className="mb-1.5 block text-xs font-medium text-ink-soft">
-              今天发生了什么
-            </span>
-            <textarea
-              className="input min-h-[130px] resize-none !rounded-2xl"
-              placeholder="例如：今天带熊看日落…"
-              value={userNote}
-              onChange={(event) => setUserNote(event.target.value)}
-            />
-          </label>
+
 
           {editingEntry && (
             <div className="space-y-4 border-t border-line/60 pt-5">
@@ -433,7 +486,7 @@ export function ComposePage() {
               </label>
             </div>
           )}
-        </section>
+        </details>
 
         <button
           type="submit"

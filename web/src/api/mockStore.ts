@@ -643,6 +643,7 @@ export const mockStore: ToyDairyRepository = {
       id: uid('toy'),
       name: input.name,
       birthDate: input.birthDate,
+      encounterDate: input.encounterDate || input.birthDate,
       birthPlace: input.birthPlace,
       role: input.role,
       traits: input.traits,

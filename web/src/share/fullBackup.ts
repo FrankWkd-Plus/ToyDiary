@@ -1,3 +1,4 @@
+import { localDate } from '../utils/localDate'
 import type { Entry, Toy } from '../types'
 import {
   exportDiaryPhotos,
@@ -178,5 +179,5 @@ export function restoreFullBackupAppState(snapshot: Record<string, string>) {
 }
 
 export function fullBackupFilename() {
-  return `toydairy-backup-${new Date().toISOString().slice(0, 10)}.json`
+  return `toydairy-backup-${localDate()}.json`
 }

@@ -551,29 +551,25 @@ textarea.input {
   position: relative;
   display: grid;
   place-items: center;
-  aspect-ratio: 16 / 10;
   overflow: hidden;
-  background: linear-gradient(135deg, var(--color-mist-soft), var(--color-mustard-soft));
-}
-
-.growth-entry-image::before {
-  content: '🧸';
-  position: absolute;
-  font-size: 2.25rem;
-  filter: grayscale(0.15);
-  opacity: 0.62;
+  padding: 12px 12px 0;
+  background: #faf7f1;
 }
 
 .growth-entry-image--only {
-  aspect-ratio: 4 / 3;
+  padding-bottom: 12px;
 }
 
 .growth-entry-image img {
   position: relative;
   z-index: 1;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 420px;
+  border-radius: 6px;
+  object-fit: contain;
   object-position: center;
 }
 
@@ -1576,21 +1572,6 @@ button:focus-visible {
   box-shadow: var(--shadow-warm-sm);
 }
 
-.memory-share-preview {
-  border: 1px solid var(--color-line);
-  border-radius: 1.25rem;
-  background: linear-gradient(145deg, var(--color-mustard-soft), var(--color-mist-soft));
-  padding: 0.75rem;
-  text-align: center;
-}
-
-.memory-share-preview img {
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  border-radius: 0.9rem;
-  object-fit: cover;
-}
-
 /* Centered export / share sheet — portaled to body, above bottom-nav */
 .export-sheet-overlay {
   position: fixed;
@@ -1623,6 +1604,55 @@ button:focus-visible {
   box-shadow: 0 24px 60px rgb(0 0 0 / 0.28);
   -webkit-overflow-scrolling: touch;
 }
+
+/* The keepsake uses its own quiet paper palette, independent of the app theme. */
+.memory-editorial-sheet {
+  max-width: min(430px, calc(100vw - 32px));
+  max-height: 92dvh;
+  background: #faf7f1;
+  color: #38291f;
+  padding: 18px;
+}
+
+.memory-editorial-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.memory-editorial-header h2 { font-family: 'Songti SC', 'ZCOOL XiaoWei', Georgia, serif; font-size: 23px; }
+.memory-editorial-header p { margin-top: 4px; font-size: 11px; color: #87796c; }
+.memory-editorial-close { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 36px; height: 36px; border-radius: 50%; }
+.memory-editorial-preview { position: relative; overflow: hidden; aspect-ratio: 3 / 4; background: #fffcf7; border-radius: 3px; box-shadow: 0 6px 24px rgb(71 49 26 / 8%); }
+.memory-editorial-preview img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.memory-editorial-placeholder { display: grid; place-items: center; height: 100%; font-size: 12px; color: #87796c; }
+.memory-editorial-updating { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); padding: 5px 10px; border-radius: 12px; background: #fffaf0ed; color: #87796c; font-size: 10px; }
+.memory-editorial-hint { margin-top: 14px; font-size: 11px; color: #87796c; }
+.memory-editorial-selection { display: grid; grid-template-columns: repeat(3, 1fr) 1.15fr; gap: 9px; margin-top: 8px; }
+.memory-moment-slot { position: relative; display: grid; place-items: center; aspect-ratio: 1; overflow: hidden; border: 1px solid #e4dbcf; border-radius: 7px; background: #f1ece4; color: #a48268; }
+.memory-moment-slot img { width: 100%; height: 100%; object-fit: cover; }
+.memory-moment-slot > span { position: absolute; top: 0; left: 0; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 0 0 5px 0; background: #9f7255; color: white; font-size: 10px; }
+.memory-shuffle-button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; border: 1px solid #e4dbcf; border-radius: 7px; font-size: 10px; }
+.memory-editorial-tools { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 14px; color: #87796c; font-size: 10px; }
+.memory-editorial-tools button { display: inline-flex; align-items: center; gap: 4px; min-height: 32px; color: #80593f; }
+.memory-editorial-actions { position: sticky; bottom: -18px; display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin: 10px -2px -2px; padding: 10px 2px 2px; background: #faf7f1; }
+.memory-editorial-actions button { display: flex; align-items: center; justify-content: center; gap: 7px; min-height: 43px; border: 1px solid #aa836b; border-radius: 999px; font-size: 12px; }
+.memory-editorial-actions button:last-child { border-color: #9f7255; background: #9f7255; color: #fffcf7; }
+.memory-editorial-sheet button:disabled { opacity: .45; }
+.memory-editorial-sheet button:focus-visible { outline: 2px solid #9f7255; outline-offset: 3px; }
+.memory-photo-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; max-height: 240px; overflow-y: auto; padding: 4px; margin-top: 8px; }
+.memory-photo-grid button { overflow: hidden; border: 2px solid transparent; border-radius: 7px; background: #fffcf7; text-align: left; }
+.memory-photo-grid button[aria-pressed='true'] { border-color: #9f7255; }
+.memory-photo-grid img { width: 100%; aspect-ratio: 1; object-fit: cover; }
+.memory-photo-grid span { display: block; overflow: hidden; padding: 5px; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.memory-photo-grid small { display: block; margin-top: 2px; color: #87796c; font-size: 9px; }
+
+.diary-photo-sheet {
+  max-width: min(430px, calc(100vw - 32px));
+  max-height: 92dvh;
+  background: #faf7f1;
+  color: #38291f;
+}
+.diary-export-preview { overflow: hidden; border-radius: 3px; box-shadow: 0 6px 24px rgb(71 49 26 / 8%); }
+.diary-export-preview img { display: block; width: 100%; height: auto; }
+.diary-export-placeholder { display: grid; min-height: 250px; place-items: center; padding: 24px; color: #87796c; font-size: 12px; text-align: center; }
+.diary-photo-sheet button:disabled { opacity: .45; }
+.diary-photo-sheet button:focus-visible { outline: 2px solid #9f7255; outline-offset: 3px; }
 
 /* iOS-style action sheets for diary management actions. */
 .ios-action-overlay {
@@ -1993,3 +2023,12 @@ button:focus-visible {
 .daycount--inline .daycount__unit {
   font-size: 0.65rem;
 }
+
+/* The document stays anchored while WKWebView focuses an input. Internal lists scroll. */
+html, body { overflow: hidden; overscroll-behavior: none; }
+@media (max-width: 429px) {
+  .app-shell { position: fixed; inset: 0; height: var(--visible-height, 100%); min-height: 0; }
+  .app-frame { min-height: 0; }
+}
+.keyboard-open .page-scroll--locked { padding-bottom: 8px; }
+.polaroid-popup .leaflet-popup-scrolled { border: 0; overscroll-behavior: contain; }

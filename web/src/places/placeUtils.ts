@@ -56,8 +56,7 @@ export function placeFromNominatim(raw: {
     a.road ||
     undefined
   const displayName =
-    raw.display_name?.trim() ||
-    [poi, district, city, region, a.country].filter(Boolean).join(' · ') ||
+    compactDisplayName(poi, district, city, region, raw.display_name) ||
     `${lat.toFixed(4)}, ${lng.toFixed(4)}`
 
   return {
@@ -84,6 +83,36 @@ export function manualPlace(displayName: string): Place {
     provider: 'manual',
     city: displayName.trim(),
   }
+}
+
+/**
+ * Build a compact 3-level display name: "POI · 区 · 市".
+ * Nominatim's raw display_name is a full mailing address (house numbers,
+ * postcode like "100193") — too specific for a diary card.
+ * NOTE: keep in sync with functions/api/places/reverse.ts and search.ts.
+ */
+function compactDisplayName(
+  poi?: string,
+  district?: string,
+  city?: string,
+  region?: string,
+  raw?: string,
+): string {
+  const seen = new Set<string>()
+  const parts = [poi, district, city].filter((p): p is string => {
+    if (!p || seen.has(p)) return false
+    seen.add(p)
+    return true
+  })
+  if (parts.length) return parts.join(' · ')
+  if (region) return region
+  // Last resort: strip postcodes / house numbers from the raw display_name.
+  return String(raw || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s && !/^\d{4,6}$/.test(s))
+    .slice(0, 3)
+    .join(' · ')
 }
 
 /** Known demo seed coordinates for map demos without geocoding. */

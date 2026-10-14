@@ -1,3 +1,4 @@
+import { companionStartDate } from '../archive/archiveUtils'
 import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
@@ -88,6 +89,7 @@ export function GrowthPage() {
 
   const toyIndex = toys.findIndex((t) => t.id === currentToy?.id)
   const days = currentToy ? companionDays(currentToy) : 0
+  const encounterDate = currentToy ? companionStartDate(currentToy) : undefined
 
   const items = useMemo(() => {
     const list: TimelineItem[] = entries.map((entry) => ({
@@ -97,7 +99,7 @@ export function GrowthPage() {
       entry,
     }))
 
-    for (const m of buildMilestones(entries, days, currentToy?.birthDate)) {
+    for (const m of buildMilestones(entries, days, encounterDate)) {
       list.push({
         kind: 'milestone',
         id: m.id,
@@ -117,7 +119,7 @@ export function GrowthPage() {
       if (a.kind !== b.kind) return a.kind === 'milestone' ? -1 : 1
       return 0
     })
-  }, [entries, days, currentToy?.birthDate])
+  }, [entries, days, encounterDate])
 
   function setTab(next: GrowthTab) {
     if (next === 'timeline') {

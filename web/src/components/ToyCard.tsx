@@ -7,7 +7,7 @@ import {
   Quote,
   Sparkles,
 } from 'lucide-react'
-import { companionDays, toySignature } from '../archive/archiveUtils'
+import { companionDays, companionStartDate, toySignature } from '../archive/archiveUtils'
 import { uniqueCities } from '../places/placeUtils'
 import type { Entry, Place, Toy } from '../types'
 
@@ -111,7 +111,7 @@ export function ToyCard({
 
             <p className="mt-3 flex items-center gap-1.5 text-[10px] text-ink-muted">
               <CalendarDays className="h-3.5 w-3.5 shrink-0 text-matcha-deep" />
-              出生日期 {toy.birthDate.replaceAll('-', '.')}
+              相遇日期 {companionStartDate(toy).replaceAll('-', '.')}
             </p>
             <p className="mt-2 flex items-start gap-1.5 rounded-xl bg-cream px-2 py-1.5 text-[10px] leading-4 text-ink-soft ring-1 ring-line/35">
               <Quote className="mt-0.5 h-3 w-3 shrink-0 text-terra-deep" />

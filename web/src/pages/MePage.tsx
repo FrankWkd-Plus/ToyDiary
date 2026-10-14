@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Link, useNavigate } from 'react-router-dom'
 import {
@@ -15,63 +15,21 @@ import {
   X,
 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
-import { api } from '../api/client'
 import { companionDayStatus, toyAvatar } from '../archive/archiveUtils'
 import { seedPlaceForLabel, uniqueCities } from '../places/placeUtils'
-import type { Entry } from '../types'
 import { deleteAllPersistedDiaryPhotos } from '../media/photoStorage'
-
-const COLLECTION_TOY_KEY = 'toydairy.me.collectionToyId'
 
 export function MePage() {
   const navigate = useNavigate()
-  const { toys, showToast } = useApp()
+  const { toys, currentToy, entries, setCurrentToyId, showToast } = useApp()
   const [collectionPickerOpen, setCollectionPickerOpen] = useState(false)
   const [resetting, setResetting] = useState(false)
-  const [collectionToyId, setCollectionToyId] = useState(() => {
-    try {
-      return localStorage.getItem(COLLECTION_TOY_KEY) || ''
-    } catch {
-      return ''
-    }
-  })
-  const [collectionEntries, setCollectionEntries] = useState<Entry[]>([])
-  const collectionToy =
-    toys.find((toy) => toy.id === collectionToyId) || toys[0] || null
-
-  useEffect(() => {
-    if (!toys.length) {
-      setCollectionToyId('')
-      setCollectionEntries([])
-      return
-    }
-    if (toys.some((toy) => toy.id === collectionToyId)) return
-    setCollectionToyId(toys[0].id)
-    try {
-      localStorage.setItem(COLLECTION_TOY_KEY, toys[0].id)
-    } catch {
-      /* local selection can safely fall back to this session */
-    }
-  }, [collectionToyId, toys])
-
-  useEffect(() => {
-    if (!collectionToy) {
-      setCollectionEntries([])
-      return
-    }
-    let cancelled = false
-    void api.listEntries(collectionToy.id).then((list) => {
-      if (!cancelled) setCollectionEntries(list)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [collectionToy])
+  const collectionToy = currentToy
 
   const currentEntries = useMemo(
     () =>
-      collectionEntries.filter((entry) => entry.toyId === collectionToy?.id),
-    [collectionEntries, collectionToy?.id],
+      entries.filter((entry) => entry.toyId === collectionToy?.id),
+    [entries, collectionToy?.id],
   )
   const companion = collectionToy ? companionDayStatus(collectionToy) : null
   const travelCount = currentEntries.filter(
@@ -86,15 +44,6 @@ export function MePage() {
   const collectionToyIndex = toys.findIndex(
     (toy) => toy.id === collectionToy?.id,
   )
-
-  function selectCollectionToy(id: string) {
-    setCollectionToyId(id)
-    try {
-      localStorage.setItem(COLLECTION_TOY_KEY, id)
-    } catch {
-      /* local selection can safely fall back to this session */
-    }
-  }
 
   /** Wipe all Toy Diary records and native photo files, then start empty. */
   async function onFactoryReset() {
@@ -416,7 +365,7 @@ export function MePage() {
                     查看谁的收藏
                   </h2>
                   <p className="mt-0.5 text-[10px] text-ink-muted">
-                    只切换本页收藏，不影响其他功能
+                    档案、共同收藏和成长会同步切换
                   </p>
                 </div>
                 <button
@@ -437,7 +386,7 @@ export function MePage() {
                       key={toy.id}
                       type="button"
                       onClick={() => {
-                        selectCollectionToy(toy.id)
+                        setCurrentToyId(toy.id)
                         setCollectionPickerOpen(false)
                         showToast(`正在查看${toy.name}的共同收藏`)
                       }}

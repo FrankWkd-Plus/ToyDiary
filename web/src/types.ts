@@ -21,6 +21,8 @@ export interface Toy {
   id: string
   name: string
   birthDate: string
+  /** First day together. Legacy records fall back to birthDate. */
+  encounterDate?: string
   birthPlace: string
   role: string
   traits: string[]
@@ -39,6 +41,8 @@ export interface Toy {
 export interface CreateToyInput {
   name: string
   birthDate: string
+  /** First day together. Legacy records fall back to birthDate. */
+  encounterDate?: string
   birthPlace: string
   role: string
   traits: string[]

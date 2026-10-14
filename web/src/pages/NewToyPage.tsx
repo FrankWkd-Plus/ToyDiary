@@ -1,3 +1,4 @@
+import { localDate } from '../utils/localDate'
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Heart, LoaderCircle, Sparkles, Wand2 } from 'lucide-react'
@@ -53,8 +54,9 @@ export function NewToyPage() {
   )
   const [name, setName] = useState(() => editingToy?.name || '')
   const [birthDate, setBirthDate] = useState(() =>
-    editingToy?.birthDate || new Date().toISOString().slice(0, 10),
+    editingToy?.birthDate || localDate(),
   )
+  const [encounterDate, setEncounterDate] = useState(() => editingToy?.encounterDate || editingToy?.birthDate || localDate())
   const [birthPlace, setBirthPlace] = useState(
     () => editingToy?.birthPlace || '',
   )
@@ -136,6 +138,10 @@ export function NewToyPage() {
       showToast('请先为玩偶选择一张照片')
       return
     }
+    if (!birthDate || !encounterDate) {
+      showToast('请填写出生日期和相遇日期')
+      return
+    }
     if (!name.trim() || !birthPlace.trim()) {
       showToast('请填写名称和出生地')
       return
@@ -157,6 +163,7 @@ export function NewToyPage() {
       const payload = {
         name: name.trim(),
         birthDate,
+        encounterDate,
         birthPlace: birthPlace.trim(),
         role,
         traits,
@@ -244,6 +251,12 @@ export function NewToyPage() {
             onChange={(e) => setName(e.target.value)}
             maxLength={20}
           />
+        </Field>
+
+        <Field label="相遇日期">
+          <input type="date" required className="input !rounded-2xl" value={encounterDate}
+            onChange={(e) => setEncounterDate(e.target.value)} />
+          <span className="mt-1 block text-[10px] text-ink-muted">陪伴天数从这一天开始计算</span>
         </Field>
 
         <Field label="出生日期">

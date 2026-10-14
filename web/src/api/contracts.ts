@@ -118,6 +118,7 @@ export interface ToyRow {
   id: string
   name: string
   birth_date: string
+  encounter_date?: string | null
   birth_place: string
   role: string
   /** JSON string[] */
@@ -156,6 +157,7 @@ export interface EntryRow {
 export const DOMAIN_TO_DB = {
   toy: {
     birthDate: 'birth_date',
+    encounterDate: 'encounter_date',
     birthPlace: 'birth_place',
     avatarUrl: 'avatar_url',
     createdAt: 'created_at',
@@ -190,6 +192,7 @@ export function toyToRow(toy: Toy): ToyRow {
     id: toy.id,
     name: toy.name,
     birth_date: toy.birthDate,
+    encounter_date: toy.encounterDate ?? null,
     birth_place: toy.birthPlace,
     role: toy.role,
     traits: JSON.stringify(toy.traits ?? []),
@@ -213,6 +216,7 @@ export function rowToToy(row: ToyRow): Toy {
     id: row.id,
     name: row.name,
     birthDate: row.birth_date,
+    encounterDate: row.encounter_date ?? undefined,
     birthPlace: row.birth_place,
     role: row.role,
     traits,

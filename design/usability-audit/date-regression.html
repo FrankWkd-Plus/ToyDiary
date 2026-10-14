@@ -1,0 +1,20 @@
+<!doctype html><meta charset="utf-8"><button id="seed">创建独立浏览器测试玩偶</button><pre id="result"></pre>
+<script type="module">
+import { api } from '/src/api/client.ts';
+import { companionDays, companionDayStatus, toyPerspectiveNarration } from '/src/archive/archiveUtils.ts';
+import { localDate } from '/src/utils/localDate.ts';
+import { toyToRow, rowToToy } from '/src/api/contracts.ts';
+import { buildGrowthExport, parseGrowthImport } from '/src/share/growthJson.ts';
+const toy = {id:'qa',name:'回归测试玩偶',birthDate:'1990-01-01',encounterDate:localDate(),birthPlace:'测试',traits:['好奇'],role:'伙伴',createdAt:new Date().toISOString(),avatarUrl:'/toy-cards/profile.jpg'};
+const checks = [];
+function check(name, condition) { checks.push(`${condition ? 'PASS' : 'FAIL'} ${name}`); if (!condition) throw Error(name) }
+check('生日不影响相遇首日，今天相遇显示1天', companionDays(toy) === 1);
+check('旧档案继续使用原日期', companionDays({...toy, encounterDate:undefined, birthDate:localDate()}) === 1);
+check('未来相遇不出现负陪伴天数', companionDayStatus({...toy,encounterDate:'2099-01-01'}).isFuture);
+check('本地凌晨日期不被UTC截成前一天', localDate(new Date(2026,9,14,0,1)) === '2026-10-14');
+check('数据库往返保留相遇日期', rowToToy(toyToRow(toy)).encounterDate === toy.encounterDate);
+check('备份往返保留相遇日期', parseGrowthImport(buildGrowthExport({toys:[toy],entries:[],currentToyId:toy.id})).toys[0].encounterDate === toy.encounterDate);
+check('回忆摘录跳过日期地点标题', toyPerspectiveNarration({aiDiary:'2026年10月14日，蓝色海湾。\n\n我记得海风吹过你的头发。'}) === '我记得海风吹过你的头发。');
+document.querySelector('#result').textContent = checks.join('\n');
+document.querySelector('#seed').onclick = async () => { const t = await api.createToy(toy); api.setCurrentToyId(t.id); location.href='/compose' };
+</script>
