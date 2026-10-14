@@ -1,0 +1,260 @@
+name: iOS IPA (unsigned, manual)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 手动触发，产物是【未签名】的 IPA，下载后用 SideStore / AltStore / Sideloadly
+# 在本地用你自己的 Apple ID 重签安装。
+#
+# 刻意不加 push / PR / schedule 触发 —— 只在你点 Run workflow 时跑。
+#
+# 为什么是 unsigned：CI 里没有你的开发者证书和私钥。免费 Apple ID 的签名
+# 只能在本地做（SideStore 就是干这个的），所以 CI 只负责「编译 + 打包」。
+# ─────────────────────────────────────────────────────────────────────────────
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag。留空则自动生成 ios-v<版本>-b<运行号>'
+        required: false
+        default: ''
+        type: string
+      api_base:
+        description: '接口基地址（Pages Functions 所在域名）'
+        required: false
+        default: 'https://toydiary.pages.dev'
+        type: string
+      prerelease:
+        description: '在 Release 上标记为 pre-release'
+        required: false
+        default: true
+        type: boolean
+
+# 创建 Release 需要写权限
+permissions:
+  contents: write
+
+# 同一个 ref 上不并发跑两个构建，避免抢同一个 tag
+concurrency:
+  group: ios-ipa-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  ipa:
+    name: Build unsigned IPA
+    runs-on: macos-15
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 无法在本地预演 xcodebuild（开发机是 Linux），所以先把工具链版本打进日志，
+      # 万一 SPM 或编译报错，一眼能看出是不是 Xcode 版本不对。
+      - name: 诊断 · 工具链版本
+        run: |
+          echo "runner : $RUNNER_OS / $RUNNER_ARCH"
+          echo "xcode  :"
+          xcodebuild -version
+          echo "swift  :"
+          swift --version
+          echo "可用 Xcode："
+          ls -d /Applications/Xcode*.app 2>/dev/null || echo "  (none)"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'          # @capacitor/cli 要求 >=22.0.0
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      # Capacitor 的 WKWebView origin 是 capacitor://localhost，相对路径 /api/* 会打到
+      # 本地空壳。所以必须把 4 个接口指向线上绝对地址。
+      #
+      # 不用 .env.ios：那个文件同时被根 .gitignore（**/.env.*）和 scripts/pre-push.sh:65
+      # 的拦截正则挡住，提交不了。Vite 的 loadEnv 会把 process.env 里 VITE_ 前缀的变量
+      # 合进 import.meta.env，效果等价。
+      - name: 解析接口地址
+        env:
+          API_BASE_INPUT: ${{ inputs.api_base }}
+        run: |
+          set -euo pipefail
+          BASE="${API_BASE_INPUT%/}"          # 去掉尾部斜杠，避免拼出 //api/...
+          {
+            echo "VITE_AI_ANALYZE_ENDPOINT=${BASE}/api/analyze-entry"
+            echo "VITE_AI_CHAT_ENDPOINT=${BASE}/api/chat"
+            echo "VITE_PLACES_SEARCH_ENDPOINT=${BASE}/api/places/search"
+            echo "VITE_PLACES_REVERSE_ENDPOINT=${BASE}/api/places/reverse"
+          } >> "$GITHUB_ENV"
+          echo "接口基地址：${BASE}"
+
+      - name: 安装依赖
+        working-directory: web
+        run: npm ci
+
+      - name: 构建前端（--mode ios）
+        working-directory: web
+        run: npm run build:ios
+
+      # 生成 App/App/public/ 和 capacitor.config.json —— 这两个被 web/ios/.gitignore
+      # 忽略，必须在 CI 里现生成。
+      - name: cap sync ios
+        working-directory: web
+        run: npx cap sync ios
+
+      # 单独跑一次 SPM 解析，把「依赖拉不下来」和「代码编译不过」两类错误分开
+      - name: 解析 SPM 依赖
+        working-directory: web
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project ios/App/App.xcodeproj \
+            -scheme App
+
+      # 完全不签名。DEVELOPMENT_TEAM 置空是为了抵消 pbxproj 里写死的 X5T88NPQA2。
+      # CURRENT_PROJECT_VERSION 用运行号，这样每次构建在 SideStore 里能区分开。
+      - name: Archive（unsigned）
+        working-directory: web
+        run: |
+          set -euo pipefail
+          xcodebuild archive \
+            -project ios/App/App.xcodeproj \
+            -scheme App \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_ENTITLEMENTS="" \
+            DEVELOPMENT_TEAM="" \
+            CURRENT_PROJECT_VERSION="${{ github.run_number }}"
+
+      - name: 打包成 IPA
+        run: |
+          set -euo pipefail
+          APP="$RUNNER_TEMP/App.xcarchive/Products/Applications/App.app"
+          if [ ! -d "$APP" ]; then
+            echo "::error::archive 里没有找到 $APP"
+            ls -R "$RUNNER_TEMP/App.xcarchive/Products" || true
+            exit 1
+          fi
+
+          # runner 是全新环境，$RUNNER_TEMP 本来就是空的，不需要先删除任何东西
+          mkdir -p "$RUNNER_TEMP/Payload"
+          cp -R "$APP" "$RUNNER_TEMP/Payload/App.app"
+
+          cd "$RUNNER_TEMP"
+          # ditto 是 macOS 原生打包工具，比 zip 更可靠地保留资源分叉
+          ditto -c -k --sequesterRsrc --keepParent Payload ToyDiary-unsigned.ipa
+          ls -lh ToyDiary-unsigned.ipa
+
+      - name: 校验 IPA
+        id: verify
+        env:
+          API_BASE_DISPLAY: ${{ inputs.api_base }}
+        run: |
+          set -euo pipefail
+          IPA="$RUNNER_TEMP/ToyDiary-unsigned.ipa"
+
+          echo "── 归档内容（前 15 项）──"
+          unzip -l "$IPA" | head -15
+
+          unzip -l "$IPA" | grep -q 'Payload/App\.app/Info\.plist' \
+            || { echo "::error::IPA 里缺少 Payload/App.app/Info.plist"; exit 1; }
+          unzip -l "$IPA" | grep -q 'Payload/App\.app/App$' \
+            || echo "::warning::没看到可执行文件 Payload/App.app/App，请人工确认"
+
+          PLIST="$RUNNER_TEMP/Payload/App.app/Info.plist"
+          read_plist() { /usr/libexec/PlistBuddy -c "Print :$1" "$PLIST" 2>/dev/null || echo "?"; }
+
+          BUNDLE_ID="$(read_plist CFBundleIdentifier)"
+          VERSION="$(read_plist CFBundleShortVersionString)"
+          BUILD="$(read_plist CFBundleVersion)"
+          MIN_OS="$(read_plist MinimumOSVersion)"
+
+          {
+            echo "### 构建产物信息"
+            echo ""
+            echo "| 项 | 值 |"
+            echo "|----|-----|"
+            echo "| Bundle ID | \`${BUNDLE_ID}\` |"
+            echo "| 版本 | \`${VERSION}\` (build \`${BUILD}\`) |"
+            echo "| 最低 iOS | \`${MIN_OS}\` |"
+            echo "| 接口基地址 | \`${API_BASE_DISPLAY}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          cat "$GITHUB_STEP_SUMMARY"
+
+          {
+            echo "version=${VERSION}"
+            echo "build=${BUILD}"
+          } >> "$GITHUB_OUTPUT"
+
+          # 必须在 IPA 所在目录里用【文件名】生成，这样校验文件里记的是相对路径。
+          # 否则会写进 runner 的绝对路径，用户下载后 shasum -c 找不到文件。
+          cd "$RUNNER_TEMP"
+          shasum -a 256 ToyDiary-unsigned.ipa > ToyDiary-unsigned.ipa.sha256
+          cat ToyDiary-unsigned.ipa.sha256
+
+      - name: 计算 tag
+        id: meta
+        env:
+          TAG_INPUT: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ -n "${TAG_INPUT}" ]; then
+            TAG="${TAG_INPUT}"
+          else
+            TAG="ios-v${{ steps.verify.outputs.version }}-b${{ github.run_number }}"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "Release tag：${TAG}"
+
+      - name: 上传 workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ToyDiary-unsigned-ipa-b${{ github.run_number }}
+          path: |
+            ${{ runner.temp }}/ToyDiary-unsigned.ipa
+            ${{ runner.temp }}/ToyDiary-unsigned.ipa.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: 发布到 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: Toy Diary iOS · v${{ steps.verify.outputs.version }} (build ${{ steps.verify.outputs.build }})
+          prerelease: ${{ inputs.prerelease }}
+          files: |
+            ${{ runner.temp }}/ToyDiary-unsigned.ipa
+            ${{ runner.temp }}/ToyDiary-unsigned.ipa.sha256
+          body: |
+            ## Toy Diary iOS · 未签名 IPA
+
+            这个包**没有签名**，不能直接安装。需要用 SideStore / AltStore / Sideloadly
+            在本地用你自己的 Apple ID 重签后再装。
+
+            | 项 | 值 |
+            |----|-----|
+            | Bundle ID | `com.toydiary.app` |
+            | 版本 | `${{ steps.verify.outputs.version }}` (build `${{ steps.verify.outputs.build }}`) |
+            | 最低 iOS | 15.0（原生抠图需 iOS 17+） |
+            | 接口基地址 | `${{ inputs.api_base }}` |
+            | 构建记录 | [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |
+
+            ### 安装（SideStore）
+
+            1. 下载 `ToyDiary-unsigned.ipa`，用同目录的 `.sha256` 核对完整性。
+            2. 在 SideStore 里从本地文件安装该 IPA。
+            3. 免费 Apple ID 签的包 **7 天过期**，到期在 SideStore 里刷新即可续期。
+
+            ### 已知限制
+
+            - 未签名，无法直接安装，也不能上传 TestFlight / App Store。
+            - AI 记录、玩偶对话、地点搜索、地图反查**需要联网**；离线时走本地兜底文案。
+            - 仅 iPhone（`TARGETED_DEVICE_FAMILY = 1`），装到 iPad 上是放大兼容模式。
+
+            ### 自行核对
+
+            ```bash
+            shasum -a 256 -c ToyDiary-unsigned.ipa.sha256
+            ```
