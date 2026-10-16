@@ -6,14 +6,26 @@ name: iOS IPA (unsigned, manual)
 #
 # 刻意不加 push / PR / schedule 触发 —— 只在你点 Run workflow 时跑。
 #
+# 两个通道，都是正式 Release（不是 pre-release）：
+#   dev    → tag  ios-dev-v<版本>-b<运行号>，每次构建独立 tag，不抢 Latest 徽章
+#   stable → tag  ios-v<版本>，Latest 徽章给它；同版本重发要显式传一个更高的 tag
+#
 # 为什么是 unsigned：CI 里没有你的开发者证书和私钥。免费 Apple ID 的签名
 # 只能在本地做（SideStore 就是干这个的），所以 CI 只负责「编译 + 打包」。
 # ─────────────────────────────────────────────────────────────────────────────
 on:
   workflow_dispatch:
     inputs:
+      channel:
+        description: '发布通道：dev = 开发版（自测用）／stable = 正式版（抢 Latest 徽章）'
+        required: true
+        default: dev
+        type: choice
+        options:
+          - dev
+          - stable
       tag:
-        description: 'Release tag。留空则自动生成 ios-v<版本>-b<运行号>'
+        description: 'Release tag。留空则按通道自动生成'
         required: false
         default: ''
         type: string
@@ -22,11 +34,6 @@ on:
         required: false
         default: 'https://toydiary.pages.dev'
         type: string
-      prerelease:
-        description: '在 Release 上标记为 pre-release'
-        required: false
-        default: true
-        type: boolean
 
 # 创建 Release 需要写权限
 permissions:
@@ -198,20 +205,31 @@ jobs:
         id: meta
         env:
           TAG_INPUT: ${{ inputs.tag }}
+          CHANNEL: ${{ inputs.channel }}
+          VERSION: ${{ steps.verify.outputs.version }}
+          BUILD: ${{ steps.verify.outputs.build }}
         run: |
           set -euo pipefail
-          if [ -n "${TAG_INPUT}" ]; then
-            TAG="${TAG_INPUT}"
+          if [ "${CHANNEL}" = "stable" ]; then
+            DEFAULT_TAG="ios-v${VERSION}"
+            DEFAULT_NAME="Toy Diary iOS · v${VERSION}"
+            BANNER="> **正式版（stable）** —— Latest 徽章指向这个 Release。"
           else
-            TAG="ios-v${{ steps.verify.outputs.version }}-b${{ github.run_number }}"
+            DEFAULT_TAG="ios-dev-v${VERSION}-b${{ github.run_number }}"
+            DEFAULT_NAME="Toy Diary iOS DEV · v${VERSION} (build ${BUILD})"
+            BANNER="> **开发版（dev）** —— 可能不稳定，仅供自测。想装正式版请到 stable 通道的 Release 下载。"
           fi
+          # 手动传 tag 时它最高优先，两个通道都适用。
+          TAG="${TAG_INPUT:-$DEFAULT_TAG}"
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
-          echo "Release tag：${TAG}"
+          echo "name=${DEFAULT_NAME}" >> "$GITHUB_OUTPUT"
+          echo "banner=${BANNER}" >> "$GITHUB_OUTPUT"
+          echo "Release tag：${TAG}（通道：${CHANNEL}）"
 
       - name: 上传 workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ToyDiary-unsigned-ipa-b${{ github.run_number }}
+          name: ToyDiary-unsigned-ipa-${{ inputs.channel }}-b${{ github.run_number }}
           path: |
             ${{ runner.temp }}/ToyDiary-unsigned.ipa
             ${{ runner.temp }}/ToyDiary-unsigned.ipa.sha256
@@ -222,19 +240,25 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.meta.outputs.tag }}
-          name: Toy Diary iOS · v${{ steps.verify.outputs.version }} (build ${{ steps.verify.outputs.build }})
-          prerelease: ${{ inputs.prerelease }}
+          name: ${{ steps.meta.outputs.name }}
+          # 两个通道都是正式 Release。但 GitHub 会把「最近一个非 pre-release」
+          # 标成 Latest，所以 dev 必须显式退出竞争，Latest 始终留给 stable。
+          prerelease: false
+          make_latest: ${{ inputs.channel == 'stable' }}
           files: |
             ${{ runner.temp }}/ToyDiary-unsigned.ipa
             ${{ runner.temp }}/ToyDiary-unsigned.ipa.sha256
           body: |
             ## Toy Diary iOS · 未签名 IPA
 
+            ${{ steps.meta.outputs.banner }}
+
             这个包**没有签名**，不能直接安装。需要用 SideStore / AltStore / Sideloadly
             在本地用你自己的 Apple ID 重签后再装。
 
             | 项 | 值 |
             |----|-----|
+            | 通道 | `${{ inputs.channel }}` |
             | Bundle ID | `com.toydiary.app` |
             | 版本 | `${{ steps.verify.outputs.version }}` (build `${{ steps.verify.outputs.build }}`) |
             | 最低 iOS | 15.0（原生抠图需 iOS 17+） |
@@ -252,6 +276,8 @@ jobs:
             - 未签名，无法直接安装，也不能上传 TestFlight / App Store。
             - AI 记录、玩偶对话、地点搜索、地图反查**需要联网**；离线时走本地兜底文案。
             - 仅 iPhone（`TARGETED_DEVICE_FAMILY = 1`），装到 iPad 上是放大兼容模式。
+            - stable 的 tag 是 `ios-v<版本>`，**同版本重发会因 tag 已存在而失败**；
+              请显式传一个更高的 tag（例如 `ios-v1.2.1`）。
 
             ### 自行核对
 

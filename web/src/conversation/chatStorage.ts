@@ -7,6 +7,8 @@ export interface ChatMessage {
   kind: ChatMessageKind
   text?: string
   imageUrl?: string
+  /** Relative Library path used to re-resolve and remove a native chat photo. */
+  localImagePath?: string
   entryId?: string
   createdAt: string
 }
@@ -23,12 +25,19 @@ export function loadChats(): Record<string, ChatMessage[]> {
   }
 }
 
+/**
+ * Returns false when the write was rejected. Callers must surface that: this
+ * used to swallow `QuotaExceededError`, so an oversized chat photo looked sent
+ * and was simply gone on the next launch.
+ */
 export function saveChats(chats: Record<string, ChatMessage[]>) {
-  if (typeof window === 'undefined') return
+  if (typeof window === 'undefined') return true
   try {
     window.localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(chats))
-  } catch {
-    // A large uploaded photo may exceed localStorage. The current session still works.
+    return true
+  } catch (error) {
+    console.error('[chatStorage] localStorage save failed', error)
+    return false
   }
 }
 

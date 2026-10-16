@@ -1,4 +1,5 @@
 import type { Worker } from 'tesseract.js'
+import { isNativeIosClient, recognizeTextNative } from './recognizeImageTextNative'
 
 interface OcrProgress {
   progress: number
@@ -34,6 +35,13 @@ export async function recognizeImageText(
   image: File | string,
   onProgress?: (progress: OcrProgress) => void,
 ) {
+  // Inside the native shell, recognise on-device instead: the tesseract path
+  // below pulls its worker, wasm core and both language models from a CDN at
+  // runtime, so it can never work offline under the capacitor:// scheme.
+  if (isNativeIosClient()) {
+    return recognizeTextNative(image)
+  }
+
   progressListener = onProgress || null
   try {
     const worker = await getWorker()

@@ -18,6 +18,7 @@ import { PageHeader } from '../components/PageHeader'
 import { useApp } from '../context/AppContext'
 import { useLocale } from '../i18n'
 import { api } from '../api/client'
+import { isNativeApp } from '../media/photoStorage'
 import {
   buildFullBackup,
   fullBackupFilename,
@@ -144,34 +145,38 @@ export function ProfileSettingsPage() {
           </Field>
         </section>
 
-        <section className="card-paper space-y-2 p-4">
-          <div className="flex items-center gap-2 text-sm font-medium text-ink">
-            <Link2 className="h-4 w-4 text-matcha-deep" />
-            Injective 链上确权
-          </div>
-          <p className="text-[11px] text-ink-muted">
-            演示：为当前玩偶生成专属确权 SBT，并将最新一条记录的哈希提交上链存证。
-          </p>
-          <button
-            type="button"
-            disabled={sbtBusy}
-            onClick={() => void onMintOwnershipSbt()}
-            className="flex min-h-11 w-full items-center justify-center rounded-2xl bg-matcha px-4 text-sm font-medium text-white active:bg-matcha-deep disabled:opacity-60"
-          >
-            {sbtBusy ? '确权中…' : '发起链上确权'}
-          </button>
-          {sbtResult && (
-            <a
-              href={sbtResult.explorerUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center gap-1.5 text-[11px] text-matcha-deep underline"
+        {/* The mint call posts to a relative `/api/*` path and the explorer link
+            opens a new tab, neither of which works under the capacitor:// shell. */}
+        {!isNativeApp() && (
+          <section className="card-paper space-y-2 p-4">
+            <div className="flex items-center gap-2 text-sm font-medium text-ink">
+              <Link2 className="h-4 w-4 text-matcha-deep" />
+              Injective 链上确权
+            </div>
+            <p className="text-[11px] text-ink-muted">
+              演示：为当前玩偶生成专属确权 SBT，并将最新一条记录的哈希提交上链存证。
+            </p>
+            <button
+              type="button"
+              disabled={sbtBusy}
+              onClick={() => void onMintOwnershipSbt()}
+              className="flex min-h-11 w-full items-center justify-center rounded-2xl bg-matcha px-4 text-sm font-medium text-white active:bg-matcha-deep disabled:opacity-60"
             >
-              交易 {sbtResult.hash.slice(0, 10)}…{sbtResult.hash.slice(-8)}
-              <ExternalLink className="h-3 w-3" />
-            </a>
-          )}
-        </section>
+              {sbtBusy ? '确权中…' : '发起链上确权'}
+            </button>
+            {sbtResult && (
+              <a
+                href={sbtResult.explorerUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-1.5 text-[11px] text-matcha-deep underline"
+              >
+                交易 {sbtResult.hash.slice(0, 10)}…{sbtResult.hash.slice(-8)}
+                <ExternalLink className="h-3 w-3" />
+              </a>
+            )}
+          </section>
+        )}
 
         <p className="px-1 text-center text-[11px] text-ink-muted">
           账号：{session.account || '已登录'} · 本地演示会话

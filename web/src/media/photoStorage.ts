@@ -1,5 +1,6 @@
 import { Capacitor } from '@capacitor/core'
 import { Directory, Filesystem } from '@capacitor/filesystem'
+import { blobToDataUrl } from '../image/createStickerAvatar'
 import type { Entry } from '../types'
 
 /**
@@ -8,6 +9,12 @@ import type { Entry } from '../types'
  */
 const PHOTO_ROOT = 'ToyDiary/photos'
 const AVATAR_ROOT = 'ToyDiary/avatars'
+/**
+ * Chat photos are stored like diary photos — a single 8 MB upload becomes a
+ * ~10.7 MB data URL, which is past the ~5 MB WebView localStorage quota, so
+ * keeping them inline meant the message vanished on the next launch.
+ */
+const CHAT_ROOT = 'ToyDiary/chat'
 const LOCAL_MEDIA_PREFIX = 'toydiary-media://'
 
 export function isNativeApp() {
@@ -21,7 +28,8 @@ function extensionFor(file?: File, sourceUri?: string) {
   return extension && /^[a-z0-9]{2,5}$/.test(extension) ? extension : 'jpg'
 }
 
-function fileToBase64(file: File) {
+/** Bare base64 for `Filesystem.writeFile`, which rejects a data URL prefix. */
+export function fileToBase64(file: Blob) {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = () => {
@@ -69,6 +77,10 @@ function relativePhotoPath(value?: string) {
 
 function relativeAvatarPath(value?: string) {
   return relativeOwnedPath(value, AVATAR_ROOT)
+}
+
+function relativeChatPath(value?: string) {
+  return relativeOwnedPath(value, CHAT_ROOT)
 }
 
 function relativeOwnedPath(value: string | undefined, root: string) {
@@ -173,6 +185,94 @@ export async function deletePersistedToyAvatar(pathOrUri?: string) {
 }
 
 /**
+ * Chat photos follow the same rule as diary photos: the file lives in the app
+ * container and the message carries only a stable reference. Keeping the base64
+ * data URL inline pushed a single 8 MB upload past the WebView localStorage
+ * quota, and the failed write was swallowed — the image vanished on relaunch.
+ */
+export async function persistChatImage(file: File) {
+  if (!isNativeApp()) {
+    return { url: await blobToDataUrl(file), nativePath: undefined }
+  }
+
+  const path = `${CHAT_ROOT}/${Date.now()}-${Math.random()
+    .toString(36)
+    .slice(2, 9)}.${extensionFor(file)}`
+  await Filesystem.writeFile({
+    path,
+    data: await fileToBase64(file),
+    directory: Directory.Library,
+    recursive: true,
+  })
+  return { url: localDiaryPhotoReference(path), nativePath: path }
+}
+
+/** Finds the durable relative path in either new or legacy chat records. */
+export function getRelativeChatImagePath(
+  imageUrl?: string,
+  localImagePath?: string,
+) {
+  return relativeChatPath(localImagePath) || relativeChatPath(imageUrl)
+}
+
+/**
+ * A chat bubble points at either an uploaded chat photo or — for the shared
+ * memory card — a diary photo, so both roots have to be tried. Chat rendering
+ * has no hydration pass, unlike entries, so this resolves at render time.
+ */
+export async function resolveChatBubbleImageUrl(
+  imageUrl?: string,
+  localImagePath?: string,
+) {
+  if (!isNativeApp()) return imageUrl
+  const path =
+    relativeChatPath(localImagePath) ||
+    relativePhotoPath(localImagePath) ||
+    relativeChatPath(imageUrl) ||
+    relativePhotoPath(imageUrl)
+  if (!path) return imageUrl
+  try {
+    await Filesystem.stat({ path, directory: Directory.Library })
+    const uri = await Filesystem.getUri({ path, directory: Directory.Library })
+    return Capacitor.convertFileSrc(uri.uri)
+  } catch {
+    return imageUrl
+  }
+}
+
+export async function deletePersistedChatImage(pathOrUri?: string) {
+  if (!pathOrUri || !isNativeApp()) return
+  const path = relativeChatPath(pathOrUri)
+  if (!path) return
+  try {
+    await Filesystem.deleteFile({ path, directory: Directory.Library })
+  } catch {
+    // The photo may already be gone; deleting the message must still succeed.
+  }
+}
+
+/** Reads the chat photos referenced by a backup's conversation snapshot. */
+export async function exportChatImages(paths: string[]) {
+  if (!isNativeApp()) return [] as DiaryPhotoBackupFile[]
+  const owned = [
+    ...new Set(paths.filter((path) => Boolean(relativeChatPath(path)))),
+  ]
+  const images: DiaryPhotoBackupFile[] = []
+  for (const path of owned) {
+    try {
+      const result = await Filesystem.readFile({
+        path,
+        directory: Directory.Library,
+      })
+      if (typeof result.data === 'string') images.push({ path, data: result.data })
+    } catch {
+      // One unreadable chat photo must not make the rest of the backup unusable.
+    }
+  }
+  return images
+}
+
+/**
  * Returns a stable Capacitor-served URL on iOS/Android. Browser builds retain
  * their current preview URL; durable browser media will be added with the
  * future IndexedDB web-storage layer.
@@ -226,7 +326,7 @@ export async function deletePersistedDiaryPhoto(pathOrUri?: string) {
 /** Remove every diary photo owned by Toy Diary during a factory reset. */
 export async function deleteAllPersistedDiaryPhotos() {
   if (!isNativeApp()) return
-  for (const root of [PHOTO_ROOT, AVATAR_ROOT]) {
+  for (const root of [PHOTO_ROOT, AVATAR_ROOT, CHAT_ROOT]) {
     try {
       await Filesystem.stat({ path: root, directory: Directory.Library })
       await Filesystem.rmdir({
@@ -267,7 +367,9 @@ export async function importDiaryPhotos(photos: DiaryPhotoBackupFile[]) {
   if (!isNativeApp() || !photos.length) return
   for (const photo of photos) {
     if (
-      (!relativePhotoPath(photo.path) && !relativeAvatarPath(photo.path)) ||
+      (!relativePhotoPath(photo.path) &&
+        !relativeAvatarPath(photo.path) &&
+        !relativeChatPath(photo.path)) ||
       typeof photo.data !== 'string'
     ) continue
     await Filesystem.writeFile({

@@ -31,6 +31,7 @@ import {
 import {
   getToyVitality,
 } from '../archive/toyVitality'
+import { ChatImage } from '../components/ChatImage'
 import {
   loadChats,
   saveChats,
@@ -38,6 +39,11 @@ import {
 } from '../conversation/chatStorage'
 import { useApp } from '../context/AppContext'
 import { useLocale } from '../i18n'
+import {
+  deletePersistedChatImage,
+  localDiaryPhotoReference,
+  persistChatImage,
+} from '../media/photoStorage'
 import type { Entry, Toy } from '../types'
 
 type QuickTopic = '说说今天' | '回忆我们的故事'
@@ -78,15 +84,6 @@ function getFeaturedMemory(entries: Entry[]) {
   )
 }
 
-function fileToDataUrl(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(String(reader.result))
-    reader.onerror = () => reject(new Error('图片读取失败'))
-    reader.readAsDataURL(file)
-  })
-}
-
 export function ConversationPage() {
   const { locale } = useLocale()
   const {
@@ -104,6 +101,7 @@ export function ConversationPage() {
     () => window.localStorage.getItem('toydairy.quietMode') === 'true',
   )
   const [pendingImage, setPendingImage] = useState<string>()
+  const [pendingImagePath, setPendingImagePath] = useState<string>()
   const [replying, setReplying] = useState(false)
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
@@ -111,6 +109,10 @@ export function ConversationPage() {
   const endRef = useRef<HTMLDivElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
+  /** Set from inside a state updater, drained by the effect below — a toast
+   *  cannot be raised from there, and swallowing the failure is what made a
+   *  dropped message look like it had been sent. */
+  const chatStorageFullRef = useRef(false)
 
   const currentToyIndex = toys.findIndex((toy) => toy.id === currentToy?.id)
   const avatar = toyAvatar(currentToy, currentToyIndex)
@@ -158,13 +160,19 @@ export function ConversationPage() {
     endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
   }, [messages.length, replying, pendingImage])
 
+  useEffect(() => {
+    if (!chatStorageFullRef.current) return
+    chatStorageFullRef.current = false
+    showToast('本机存储已满，这条聊天记录可能没有保存')
+  })
+
   function appendMessages(toyId: string, nextMessages: ChatMessage[]) {
     setMessagesByToy((current) => {
       const next = {
         ...current,
         [toyId]: [...(current[toyId] ?? []), ...nextMessages],
       }
-      saveChats(next)
+      if (!saveChats(next)) chatStorageFullRef.current = true
       return next
     })
   }
@@ -233,7 +241,12 @@ export function ConversationPage() {
             role: 'toy',
             kind: 'memory',
             text: latestMemory.title || '我们的共同记忆',
-            imageUrl: latestMemory.imageUrl,
+            // The hydrated value is a container URL, which breaks when iOS moves
+            // the app container — store the durable reference instead.
+            imageUrl: latestMemory.localImagePath
+              ? localDiaryPhotoReference(latestMemory.localImagePath)
+              : latestMemory.imageUrl,
+            localImagePath: latestMemory.localImagePath,
             entryId: latestMemory.id,
             createdAt: new Date().toISOString(),
           }
@@ -263,6 +276,7 @@ export function ConversationPage() {
         role: 'user',
         kind: 'image',
         imageUrl: pendingImage,
+        localImagePath: pendingImagePath,
         text: text || '想把这一刻给你看看',
         createdAt: new Date().toISOString(),
       })
@@ -280,6 +294,7 @@ export function ConversationPage() {
     appendMessages(currentToy.id, userMessages)
     setDraft('')
     setPendingImage(undefined)
+    setPendingImagePath(undefined)
     void sendToyReply(pendingImage ? `${text || '想把这一刻给你看看'}（附照片）` : text, {
       includeMemory: /旅行|回忆|记得|以前|去过/.test(text),
       priorMessages,
@@ -316,11 +331,25 @@ export function ConversationPage() {
       return
     }
     try {
-      setPendingImage(await fileToDataUrl(file))
+      // Persist while the File is still in hand: the message then carries only
+      // a small reference, so it fits the localStorage budget and survives the
+      // next launch instead of being dropped, as an inline data URL was.
+      const persisted = await persistChatImage(file)
+      // Re-picking replaces the last pick; nothing points at that file any more.
+      void deletePersistedChatImage(pendingImagePath)
+      setPendingImage(persisted.url)
+      setPendingImagePath(persisted.nativePath)
       setDraft('想把这一刻给你看看')
     } catch {
       showToast('图片读取失败，请重新选择')
     }
+  }
+
+  /** Dropping the pick leaves an unreferenced file, so it goes with it. */
+  function discardPendingImage() {
+    void deletePersistedChatImage(pendingImagePath)
+    setPendingImage(undefined)
+    setPendingImagePath(undefined)
   }
 
   function toggleQuietMode() {
@@ -358,6 +387,7 @@ export function ConversationPage() {
       return
     }
     const remove = new Set(selectedIds)
+    const removed = messages.filter((m) => remove.has(m.id))
     setMessagesByToy((current) => {
       const list = (current[currentToy.id] ?? []).filter((m) => !remove.has(m.id))
       const nextList =
@@ -366,6 +396,11 @@ export function ConversationPage() {
       saveChats(next)
       return next
     })
+    // Only chat photos are owned by the message; a memory card points at a diary
+    // photo, which `relativeChatPath` refuses, so the diary entry keeps its image.
+    for (const message of removed) {
+      void deletePersistedChatImage(message.localImagePath)
+    }
     exitSelectMode()
     showToast(`已删除 ${selectedIds.length} 条消息`)
   }
@@ -373,6 +408,7 @@ export function ConversationPage() {
   function clearAllConversation() {
     if (!currentToy) return
     const opening = createOpeningMessage(currentToy, entries)
+    const cleared = messages
     setMessagesByToy((current) => {
       const next = {
         ...current,
@@ -381,8 +417,12 @@ export function ConversationPage() {
       saveChats(next)
       return next
     })
+    for (const message of cleared) {
+      void deletePersistedChatImage(message.localImagePath)
+    }
     setDraft('')
     setPendingImage(undefined)
+    setPendingImagePath(undefined)
     setReplying(false)
     exitSelectMode()
     showToast('已清空全部聊天记录')
@@ -646,8 +686,9 @@ export function ConversationPage() {
 
         {pendingImage && (
           <div className="mb-2 flex items-center gap-2 rounded-2xl bg-mist-soft p-2">
-            <img
+            <ChatImage
               src={pendingImage}
+              localPath={pendingImagePath}
               alt="待发送图片"
               className="h-12 w-12 rounded-xl object-cover"
             />
@@ -656,7 +697,7 @@ export function ConversationPage() {
             </span>
             <button
               type="button"
-              onClick={() => setPendingImage(undefined)}
+              onClick={discardPendingImage}
               className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-ink-muted"
               aria-label="移除待发送图片"
             >
@@ -878,13 +919,12 @@ function MessageBubble({
           to={`/entries/${message.entryId}`}
           className="w-[76%] overflow-hidden rounded-[1.15rem] rounded-bl-md bg-white shadow-[var(--shadow-warm)] ring-1 ring-line/50 active:scale-[0.99]"
         >
-          {message.imageUrl && (
-            <img
-              src={message.imageUrl}
-              alt={message.text || '共同回忆'}
-              className="h-32 w-full object-cover"
-            />
-          )}
+          <ChatImage
+            src={message.imageUrl}
+            localPath={message.localImagePath}
+            alt={message.text || '共同回忆'}
+            className="h-32 w-full object-cover"
+          />
           <div className="p-3">
             <span className="flex items-center gap-1 text-[9px] font-medium text-terra-deep">
               <Sparkles className="h-3 w-3" />
@@ -917,9 +957,10 @@ function MessageBubble({
             : 'rounded-[1.15rem] rounded-bl-md bg-white px-3.5 py-2.5 text-ink-soft ring-1 ring-line/50'
         }`}
       >
-        {message.kind === 'image' && message.imageUrl && (
-          <img
+        {message.kind === 'image' && (
+          <ChatImage
             src={message.imageUrl}
+            localPath={message.localImagePath}
             alt="对话图片"
             className="-mx-3.5 -mt-2.5 mb-2.5 max-h-52 w-[calc(100%+1.75rem)] object-cover"
           />

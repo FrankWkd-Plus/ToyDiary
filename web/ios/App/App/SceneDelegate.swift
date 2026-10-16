@@ -9,7 +9,8 @@ public class ToySubjectPlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "ToySubjectPlugin"
     public let jsName = "ToySubject"
     public let pluginMethods: [CAPPluginMethod] = [
-        CAPPluginMethod(name: "removeBackground", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "removeBackground", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "recognizeText", returnType: CAPPluginReturnPromise)
     ]
 
     @objc func removeBackground(_ call: CAPPluginCall) {
@@ -59,8 +60,43 @@ public class ToySubjectPlugin: CAPPlugin, CAPBridgedPlugin {
         }
     }
 
-    /// Camera images can be 12–48 MP. Vision only needs a bounded, correctly
-    /// oriented source for a 512 px avatar, so avoid decoding the full photo.
+    /// On-device OCR. The WebView path used tesseract.js, which fetched its
+    /// worker, wasm core and (20 MB) Chinese model from a CDN at runtime, so
+    /// "recognise text in a photo" could never work offline. Vision needs no
+    /// bundled model and no network. Unlike the cutout above this is iOS 14+,
+    /// which the 15.0 deployment target already covers.
+    @objc func recognizeText(_ call: CAPPluginCall) {
+        guard let dataUrl = call.getString("dataUrl"),
+              let comma = dataUrl.firstIndex(of: ","),
+              let imageData = Data(base64Encoded: String(dataUrl[dataUrl.index(after: comma)...])),
+              let cgImage = downsampledCGImage(imageData) else {
+            call.reject("无法读取照片", "INVALID_IMAGE")
+            return
+        }
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            do {
+                let request = VNRecognizeTextRequest()
+                request.recognitionLevel = .accurate
+                request.usesLanguageCorrection = true
+                request.recognitionLanguages = ["zh-Hans", "en-US"]
+
+                let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+                try handler.perform([request])
+
+                let lines = (request.results ?? []).compactMap {
+                    $0.topCandidates(1).first?.string
+                }
+                call.resolve(["text": lines.joined(separator: "\n")])
+            } catch {
+                call.reject(error.localizedDescription, "RECOGNIZE_FAILED", error)
+            }
+        }
+    }
+
+    /// Camera images can be 12–48 MP. Both the cutout and the OCR above only need
+    /// a bounded, correctly oriented source — 2048 px keeps small print legible
+    /// while avoiding a full decode of the original photo.
     private func downsampledCGImage(_ data: Data) -> CGImage? {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil) else {
             return nil

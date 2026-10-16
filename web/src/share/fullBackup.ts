@@ -1,8 +1,10 @@
 import { localDate } from '../utils/localDate'
 import type { Entry, Toy } from '../types'
 import {
+  exportChatImages,
   exportDiaryPhotos,
   exportToyAvatars,
+  getRelativeChatImagePath,
   getRelativeDiaryPhotoPath,
   getRelativeToyAvatarPath,
   importDiaryPhotos,
@@ -10,14 +12,18 @@ import {
   localToyAvatarReference,
   type DiaryPhotoBackupFile,
 } from '../media/photoStorage'
+import { CHAT_STORAGE_KEY, type ChatMessage } from '../conversation/chatStorage'
 import { buildGrowthExport, parseGrowthImport, type GrowthExportPayload } from './growthJson'
 
 export const FULL_BACKUP_FORMAT = 'toydairy.backup' as const
-export const FULL_BACKUP_VERSION = 3 as const
+/** v4 adds `media.chatImages`; v3 backups still restore. */
+export const FULL_BACKUP_VERSION = 4 as const
+
+const SUPPORTED_BACKUP_VERSIONS: number[] = [1, 2, 3, FULL_BACKUP_VERSION]
 
 const BACKUP_LOCAL_STORAGE_KEYS = [
   'toydiary.user.prefs',
-  'toydiary.conversations.v1',
+  CHAT_STORAGE_KEY,
   'toydiary.theme',
   'toydiary.locale',
   'toydiary.daycount.style',
@@ -34,6 +40,11 @@ export interface FullBackupPayload {
   media: {
     photos: DiaryPhotoBackupFile[]
     avatars: DiaryPhotoBackupFile[]
+    /**
+     * Chat photos are files now, not inline data URLs, so the conversation
+     * snapshot alone no longer carries them. Added in version 4.
+     */
+    chatImages: DiaryPhotoBackupFile[]
   }
   appState: { localStorage: Record<string, string> }
 }
@@ -74,6 +85,29 @@ function stableToys(toys: Toy[]) {
   })
 }
 
+/**
+ * The chat photos named by the conversation snapshot. The records already store
+ * the durable `toydiary-media://` reference, so only the files behind them have
+ * to be collected here.
+ */
+function chatImagePaths(snapshot: Record<string, string>) {
+  const raw = snapshot[CHAT_STORAGE_KEY]
+  if (!raw) return [] as string[]
+  try {
+    const chats = JSON.parse(raw) as Record<string, ChatMessage[]>
+    return Object.values(chats)
+      .filter(Array.isArray)
+      .flat()
+      .map((message) =>
+        getRelativeChatImagePath(message?.imageUrl, message?.localImagePath),
+      )
+      .filter((path): path is string => Boolean(path))
+  } catch {
+    // A malformed conversation record must not cost the user the rest of the backup.
+    return [] as string[]
+  }
+}
+
 export async function buildFullBackup(input: {
   toys: Toy[]
   entries: Entry[]
@@ -81,6 +115,7 @@ export async function buildFullBackup(input: {
 }): Promise<FullBackupPayload> {
   const normalizedEntries = stableEntries(input.entries)
   const normalizedToys = stableToys(input.toys)
+  const appState = { localStorage: captureLocalAppState() }
   return {
     format: FULL_BACKUP_FORMAT,
     version: FULL_BACKUP_VERSION,
@@ -93,9 +128,25 @@ export async function buildFullBackup(input: {
     media: {
       photos: await exportDiaryPhotos(normalizedEntries),
       avatars: await exportToyAvatars(normalizedToys),
+      chatImages: await exportChatImages(chatImagePaths(appState.localStorage)),
     },
-    appState: { localStorage: captureLocalAppState() },
+    appState,
   }
+}
+
+/** Shared shape check for the three media lists, including absent ones. */
+function readMediaFiles(value: unknown): DiaryPhotoBackupFile[] {
+  return Array.isArray(value)
+    ? value.filter(
+        (file): file is DiaryPhotoBackupFile =>
+          Boolean(
+            file &&
+              typeof file === 'object' &&
+              typeof (file as DiaryPhotoBackupFile).path === 'string' &&
+              typeof (file as DiaryPhotoBackupFile).data === 'string',
+          ),
+      )
+    : []
 }
 
 export function parseFullBackup(raw: unknown): {
@@ -115,31 +166,13 @@ export function parseFullBackup(raw: unknown): {
       legacy: true,
     }
   }
-  if ((version !== 1 && version !== 2 && version !== FULL_BACKUP_VERSION) || !data.growth) {
+  if (!SUPPORTED_BACKUP_VERSIONS.includes(version) || !data.growth) {
     throw new Error('不支持的备份版本')
   }
-  const photos = Array.isArray(data.media?.photos)
-    ? data.media.photos.filter(
-        (photo): photo is DiaryPhotoBackupFile =>
-          Boolean(
-            photo &&
-              typeof photo === 'object' &&
-              typeof (photo as DiaryPhotoBackupFile).path === 'string' &&
-              typeof (photo as DiaryPhotoBackupFile).data === 'string',
-          ),
-      )
-    : []
-  const avatars = Array.isArray(data.media?.avatars)
-    ? data.media.avatars.filter(
-        (photo): photo is DiaryPhotoBackupFile =>
-          Boolean(
-            photo &&
-              typeof photo === 'object' &&
-              typeof (photo as DiaryPhotoBackupFile).path === 'string' &&
-              typeof (photo as DiaryPhotoBackupFile).data === 'string',
-          ),
-      )
-    : []
+  const photos = readMediaFiles(data.media?.photos)
+  const avatars = readMediaFiles(data.media?.avatars)
+  // Absent in version 1-3 backups, where chat photos were still inline data URLs.
+  const chatImages = readMediaFiles(data.media?.chatImages)
   const rawLocalStorage =
     data.appState && typeof data.appState === 'object'
       ? data.appState.localStorage
@@ -153,7 +186,7 @@ export function parseFullBackup(raw: unknown): {
   }
   return {
     growth: parseGrowthImport(data.growth),
-    photos: [...photos, ...avatars],
+    photos: [...photos, ...avatars, ...chatImages],
     localStorage: localStorageSnapshot,
     legacy: version === 1 || version === 2,
   }

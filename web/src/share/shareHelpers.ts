@@ -1,5 +1,10 @@
 /** Browser share / download helpers for demo PNG + JSON exports. */
 
+import { Capacitor } from '@capacitor/core'
+import { Directory, Filesystem } from '@capacitor/filesystem'
+import { Share } from '@capacitor/share'
+import { fileToBase64 } from '../media/photoStorage'
+
 export function isMobileClient() {
   if (typeof navigator === 'undefined') return false
   const ua = navigator.userAgent || ''
@@ -36,6 +41,42 @@ export async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
 }
 
 /**
+ * Native apps get the real system share sheet: the file is written into the app
+ * container first and handed over as a `file://` URL. Without this the iOS
+ * WebView took the mobile Web Share branch below, found no `navigator.share`,
+ * fell through to `<a download>` — which is a no-op there — and still reported
+ * `'downloaded'`, so every export silently "succeeded" without saving anything.
+ */
+async function shareNativeFile(opts: {
+  blob: Blob
+  filename: string
+  title: string
+  text?: string
+}): Promise<'shared'> {
+  const path = `ToyDiary/share/${opts.filename}`
+  await Filesystem.writeFile({
+    path,
+    data: await fileToBase64(opts.blob),
+    directory: Directory.Cache,
+    recursive: true,
+  })
+  const { uri } = await Filesystem.getUri({
+    path,
+    directory: Directory.Cache,
+  })
+  try {
+    await Share.share({ files: [uri], title: opts.title, text: opts.text })
+  } catch (error) {
+    throw new Error(
+      error instanceof Error && error.message
+        ? `分享失败：${error.message}`
+        : '分享失败，请重试',
+    )
+  }
+  return 'shared'
+}
+
+/**
  * Mobile: open system share sheet so the user can save to Photos.
  * Desktop: always download the file (never try "save to library").
  */
@@ -45,6 +86,12 @@ export async function shareOrDownloadFile(opts: {
   title: string
   text?: string
 }): Promise<'shared' | 'downloaded'> {
+  // Inside the native shell the Web Share API and `<a download>` are both
+  // unavailable, so this has to be decided before either fallback.
+  if (Capacitor.isNativePlatform()) {
+    return shareNativeFile(opts)
+  }
+
   // Desktop path first — never open share sheet / photo-library UX on PC
   if (!isMobileClient()) {
     downloadBlob(opts.blob, opts.filename)
