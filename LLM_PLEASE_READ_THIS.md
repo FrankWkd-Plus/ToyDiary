@@ -48,6 +48,8 @@ iOS 分支「能编译、能打包」。上一轮清点出的 4 个 **浏览器�
   存储逻辑脚本。**渲染层未验证**：横幅实际占位、`--safe-top` 归零后的页面间距、导览的滑动 / 圆点 /
   键盘 / 焦点行为，都只看过代码。本机的 headless Chrome 在沙箱里无法 `socket()`，起不来。
   待验证清单见下文「演示模式与新手导览」小节的验收步骤。
+- **新 App 图标 / 启动图没有在 Xcode 模拟器或真机上看过**：脚本生成后只在本机缩放到
+  60 / 180 / 1024 px 肉眼检查过，iOS 的圆角裁切、启动图的 aspect-fill 裁切都未验证。
 
 所以：**第一次跑 CI 大概率要迭代**。日志第一步就是工具链版本，先看那个。
 
@@ -263,6 +265,21 @@ npx cap sync ios           # 重新生成 App/App/public 和 SPM 的 Package.swi
 | `VITE_PLACES_REVERSE_ENDPOINT` | `web/src/places/placeService.ts:20` |
 
 Pages Functions 那边 CORS 已经是 `Access-Control-Allow-Origin: *`，跨域没问题。
+
+---
+
+## App 图标 / 启动图
+
+- 生成脚本：`scripts/generate-app-icon.py`（Python 3 + Pillow + numpy，**不参与 CI**）
+- 设计：沿用 `web/src/components/LoadingBear.tsx` 的小熊（同一套颜色 / 比例）+ 一本打开的日记，
+  放在磨砂「液态玻璃」圆角面板里；面板外是暖色极光渐变、高光、气泡与投影
+- 输出（都是 **sRGB、无 alpha**，App Store 要求）：
+  - `web/ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png`（1024×1024）
+  - `web/ios/App/App/Assets.xcassets/Splash.imageset/splash-2732x2732{,-1,-2}.png`（2732×2732）
+- 改设计后重跑一次脚本即可；**不要**手工改 PNG，改脚本里的坐标/颜色
+- 目前只有浅色一套图标。iOS 18/26 的深色 / 着色（tinted）图标**没有单独提供**，系统会自动派生；
+  如果以后要做，给 `Contents.json` 加 `appearances` 并各生成一张
+- 真机 / 模拟器上图标与启动图的最终裁切**未验证**（Linux 无 Xcode）
 
 ---
 
