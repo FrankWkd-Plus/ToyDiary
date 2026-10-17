@@ -1,137 +1,120 @@
 /**
- * Nominatim search proxy — POST/GET /api/places/search?q=
- * Avoids browser CORS and lets us attach a proper User-Agent.
+ * Place search proxy — GET/POST /api/places/search?q=&limit=&lang=
+ *
+ * Nominatim is the primary upstream (best Chinese labels) with Photon as a
+ * keyless fallback. Successful lookups are cached in the Cloudflare edge
+ * cache, so repeated searches do not hit upstream again.
  */
 
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
+import { json, preflight } from '../../_shared/http'
+import type { PagesContext } from '../../_shared/types'
+import {
+  getEdgeCache,
+  normalizeLang,
+  placeCacheKey,
+  readCachedJson,
+  searchPlacesUpstream,
+  writeCachedJson,
+  SEARCH_CACHE_SECONDS,
+  type Place,
+} from '../../_shared/places'
+
+type Env = Record<string, unknown>
+
+type SearchBody = {
+  q?: unknown
+  limit?: unknown
+  lang?: unknown
 }
 
-export const onRequestOptions: PagesFunction = async () =>
-  new Response(null, { status: 204, headers: CORS })
+type CachedSearch = {
+  places: Place[]
+  provider?: string
+}
 
-export const onRequestGet: PagesFunction = async (context) => {
+export async function onRequestOptions(): Promise<Response> {
+  return preflight()
+}
+
+export async function onRequestGet(
+  context: PagesContext<Env>,
+): Promise<Response> {
   const url = new URL(context.request.url)
-  const q = url.searchParams.get('q')?.trim() || ''
-  const limit = Math.min(Number(url.searchParams.get('limit') || 8), 12)
-  const lang = (url.searchParams.get('lang') || 'zh').toLowerCase()
-  const acceptLanguage = lang.startsWith('en')
-    ? 'en,en-US;q=0.9,zh;q=0.3'
-    : 'zh-CN,zh;q=0.9,en;q=0.4'
+  const q = (url.searchParams.get('q') ?? '').trim()
+  const limit = clampLimit(url.searchParams.get('limit'))
+  const lang = normalizeLang(url.searchParams.get('lang'))
+
   if (!q) {
     return json({ places: [], error: 'q is required' }, 400)
   }
+  if (q.length > 200) {
+    return json({ places: [], error: 'q is too long' }, 400)
+  }
 
-  try {
-    const upstream = await fetch(
-      `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=${limit}&q=${encodeURIComponent(q)}`,
-      {
-        headers: {
-          Accept: 'application/json',
-          'Accept-Language': acceptLanguage,
-          'User-Agent': 'ToyDairy/1.0 (Cloudflare Pages; hackathon demo)',
-        },
-      },
-    )
-    if (!upstream.ok) {
-      const detail = await upstream.text().catch(() => '')
-      return json(
-        { places: [], error: `Nominatim HTTP ${upstream.status}`, detail: detail.slice(0, 400) },
-        502,
-      )
-    }
-    const rows = (await upstream.json()) as Array<Record<string, unknown>>
-    const places = rows.map(mapNominatim).filter(Boolean)
-    return json({ places })
-  } catch (err) {
+  const cache = getEdgeCache()
+  const cacheKey = placeCacheKey(url.origin, '/api/places/search', {
+    q: q.toLowerCase(),
+    limit: String(limit),
+    lang,
+  })
+
+  const cached = await readCachedJson<CachedSearch>(cache, cacheKey)
+  if (cached?.places?.length) {
     return json(
-      {
-        places: [],
-        error: 'Failed to reach Nominatim',
-        detail: err instanceof Error ? err.message : String(err),
-      },
-      502,
+      { places: cached.places, provider: cached.provider, cached: true },
+      200,
+      { 'Cache-Control': `public, max-age=${SEARCH_CACHE_SECONDS}` },
     )
   }
+
+  const result = await searchPlacesUpstream(q, limit, lang)
+
+  if (result.places.length) {
+    return writeCachedJson(
+      cache,
+      cacheKey,
+      { places: result.places, provider: result.provider },
+      SEARCH_CACHE_SECONDS,
+      context.waitUntil,
+    )
+  }
+
+  return json(
+    {
+      places: [],
+      error: 'Place search failed',
+      detail: result.failures.join(' | '),
+    },
+    502,
+  )
 }
 
-export const onRequestPost: PagesFunction = async (context) => {
-  let body: { q?: string; limit?: number } = {}
+export async function onRequestPost(
+  context: PagesContext<Env>,
+): Promise<Response> {
+  let body: SearchBody
   try {
-    body = (await context.request.json()) as { q?: string; limit?: number }
+    body = (await context.request.json()) as SearchBody
   } catch {
     return json({ places: [], error: 'Invalid JSON' }, 400)
   }
+
   const url = new URL(context.request.url)
-  url.searchParams.set('q', body.q || '')
-  url.searchParams.set('limit', String(body.limit || 8))
-  return onRequestGet({ ...context, request: new Request(url, context.request) })
-}
+  if (body.q != null) url.searchParams.set('q', String(body.q))
+  if (body.limit != null) url.searchParams.set('limit', String(body.limit))
+  if (body.lang != null) url.searchParams.set('lang', String(body.lang))
 
-function mapNominatim(row: Record<string, unknown>) {
-  const lat = Number(row.lat)
-  const lng = Number(row.lon)
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null
-  const a = (row.address || {}) as Record<string, string>
-  const city =
-    a.city || a.town || a.village || a.municipality || a.county || undefined
-  const region = a.state || a.province || a.region || undefined
-  const district =
-    a.suburb || a.district || a.city_district || a.neighbourhood || undefined
-  const poi =
-    a.tourism || a.attraction || a.amenity || a.building || a.road || undefined
-  return {
-    country: a.country,
-    region,
-    city,
-    district,
-    poi,
-    displayName: compactDisplayName(poi, district, city, region, row.display_name),
-    lat,
-    lng,
-    providerPlaceId: row.place_id != null ? String(row.place_id) : undefined,
-    provider: 'nominatim' as const,
-  }
-}
-
-/**
- * Build a compact 3-level display name: "POI · 区 · 市".
- * Nominatim's raw display_name is a full mailing address (house numbers,
- * postcode like "100193") — too specific for a diary card.
- * NOTE: keep in sync with reverse.ts compactDisplayName and
- * web/src/places/placeUtils.ts placeFromNominatim.
- */
-function compactDisplayName(
-  poi?: string,
-  district?: string,
-  city?: string,
-  region?: string,
-  raw?: unknown,
-): string {
-  const seen = new Set<string>()
-  const parts = [poi, district, city].filter((p): p is string => {
-    if (!p || seen.has(p)) return false
-    seen.add(p)
-    return true
+  return onRequestGet({
+    ...context,
+    request: new Request(url, {
+      method: 'GET',
+      headers: context.request.headers,
+    }),
   })
-  if (parts.length) return parts.join(' · ')
-  if (region) return region
-  return String(raw || '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter((s) => s && !/^\d{4,6}$/.test(s))
-    .slice(0, 3)
-    .join(' · ')
 }
 
-function json(data: unknown, status = 200) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: {
-      'Content-Type': 'application/json; charset=utf-8',
-      ...CORS,
-    },
-  })
+function clampLimit(raw: string | null): number {
+  const value = Number(raw ?? 8)
+  if (!Number.isFinite(value)) return 8
+  return Math.max(1, Math.min(12, Math.trunc(value)))
 }

@@ -170,10 +170,13 @@ ToyDairy/
 │   ├── public/               # 静态资源、_redirects、演示图
 │   ├── functions/            # Cloudflare Pages Functions（服务端）
 │   │   ├── _shared/
-│   │   │   └── aiProvider.ts # OpenAI / Anthropic 适配
+│   │   │   ├── http.ts       # CORS / JSON 响应
+│   │   │   ├── workersAi.ts  # Workers AI 调用 + 模型降级
+│   │   │   └── places.ts     # Nominatim / Photon + 边缘缓存
 │   │   └── api/
 │   │       ├── chat.ts                 # POST /api/chat
 │   │       ├── analyze-entry.ts        # POST /api/analyze-entry
+│   │       ├── health.ts               # GET  /api/health
 │   │       └── places/
 │   │           ├── search.ts           # 地点搜索
 │   │           └── reverse.ts          # 逆地理
@@ -272,7 +275,7 @@ npx wrangler pages deploy ./dist \
   --commit-dirty=true
 ```
 
-AI 密钥在 Dashboard → **toydiary** → Settings → Environment variables（`OPENAI_API_KEY` 等，Encrypt）。  
+AI 走 **Cloudflare Workers AI**（`web/wrangler.jsonc` 里的 `"ai": { "binding": "AI" }`），无需 API Key，也不依赖任何外部网关或云服务器。可选在 Dashboard → **toydiary** → Settings → Environment variables 设置 `AI_MODEL` 覆盖默认模型；部署后访问 `https://toydiary.pages.dev/api/health` 可确认当前 binding 与模型。旧的 `OPENAI_*` / `AI_PROVIDER` 变量已不再读取，可以删除。  
 
 **链上演示发布前检查**：把 `web/src/chain/injectiveSbt.ts` 中的零地址和占位 ABI 替换为 Injective EVM Testnet 上真实部署的 SBT 合约，准备测试网 INJ，并实测 MetaMask 切链、交易提交及 Blockscout 链接。该配置不需要 Cloudflare Secret，严禁把私钥或助记词写入前端/环境变量。
 

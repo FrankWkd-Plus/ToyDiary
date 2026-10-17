@@ -5,15 +5,15 @@
   "compatibility_flags": ["nodejs_compat"],
   "pages_build_output_dir": "./dist",
 
-  // Provisioned for future Workers API (currently SPA is mock-first).
-  // Production Pages project: toydiary (https://toydiary.pages.dev)
+  // Cloudflare Pages project: toydiary (https://toydiary.pages.dev)
   // Production branch: main · preview deploys: non-main branches
   //
-  // AI env (Dashboard → Pages → toydiary → Settings → Environment variables):
-  //   OPENAI_API_KEY  — required secret (Encrypt; also used for Anthropic)
-  //   OPENAI_BASE_URL — plain text; OpenAI or Anthropic-compatible base
-  //   OPENAI_MODEL    — plain text; e.g. gpt-4o-mini or claude-3-5-haiku-latest
-  //   AI_PROVIDER     — optional: openai | anthropic | auto (default auto)
+  // /api/chat and /api/analyze-entry run on Workers AI through the `AI`
+  // binding — no external API key, gateway or cloud server is required.
+  // AI_MODEL is optional; pin another Workers AI model id here if desired.
+  "ai": {
+    "binding": "AI"
+  },
   "kv_namespaces": [
     {
       "binding": "TOYDAIRY_KV",
@@ -35,6 +35,7 @@
   ],
   "vars": {
     "APP_NAME": "Toy Dairy",
-    "ENVIRONMENT": "production"
+    "ENVIRONMENT": "production",
+    "AI_MODEL": "@cf/qwen/qwen3-30b-a3b-fp8"
   }
 }

@@ -229,7 +229,7 @@ function pickErrorSummary(parsed: Record<string, unknown>): string | undefined {
 }
 
 /**
- * Ask the toy to reply. Tries Pages Function `/api/chat` (OPENAI_* secrets),
+ * Ask the toy to reply. Tries the Pages Function `/api/chat` (Workers AI),
  * falls back to local persona templates. On remote failure, includes apiError
  * with the HTTP status and response body so the UI can surface it.
  */

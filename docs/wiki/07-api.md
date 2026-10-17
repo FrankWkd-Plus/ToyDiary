@@ -52,17 +52,19 @@ CORS：`Access-Control-Allow-Origin: *`（演示向）
 | `OPTIONS` | `/api/analyze-entry` | CORS |
 | `GET`/`POST` | `/api/places/search` | 地点搜索 |
 | `GET` | `/api/places/reverse` | 逆地理 `lat` + `lon`/`lng` |
+| `GET` | `/api/health` | binding / 模型自检 |
 
-### 环境变量（仅 Dashboard / `.dev.vars`，禁止 `VITE_*`）
+### 环境变量（可选）
+
+AI 通过 `wrangler.jsonc` 的 `"ai": { "binding": "AI" }` 调用 Workers AI，
+**不需要任何 Key**。
 
 | 变量 | 必填 | 说明 |
 |------|------|------|
-| `OPENAI_API_KEY` | 是* | 上游 Key |
-| `OPENAI_BASE_URL` | 否 | 须含 `/v1` |
-| `OPENAI_MODEL` | 否 | 模型 id |
-| `AI_PROVIDER` | 否 | `openai` \| `anthropic` \| `auto` |
+| `AI_MODEL` | 否 | 覆盖首个模型 id（默认 `@cf/qwen/qwen3-30b-a3b-fp8`） |
+| `ENVIRONMENT` | 否 | `/api/health` 回显 |
 
-\* 地点接口不需要 AI Key。
+旧的 `OPENAI_*` / `AI_PROVIDER` 已不再读取。
 
 ---
 
@@ -70,9 +72,9 @@ CORS：`Access-Control-Allow-Origin: *`（演示向）
 
 **Body：** `message` · `toy?` · `history?` · `memories?` · `quietMode?`  
 
-**200：** `{ reply, source, auth }`  
+**200：** `{ reply, source, auth: { provider: "workers-ai", binding, model } }`  
 
-**错误：** `400` 体问题 · `500` 无 Key · `502` 上游失败（常带 `auth` 元数据、`keyHint` 非完整 key）
+**错误：** `400` 体问题 · `503` 未配置 `AI` binding · `502` 所有候选模型失败（常带 `triedModels`/`detail`）
 
 前端：`web/src/ai/chatToyReply.ts`；失败本地人格 + 错误气泡。  
 落库：对话历史 → `toydairy.conversations.v1`（非 D1 主表）。
