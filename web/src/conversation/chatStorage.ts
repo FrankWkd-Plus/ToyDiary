@@ -1,3 +1,5 @@
+import { demoScopedKey } from '../demo/demoMode'
+
 export type ChatRole = 'user' | 'toy' | 'system'
 export type ChatMessageKind = 'text' | 'image' | 'memory' | 'error'
 
@@ -15,10 +17,15 @@ export interface ChatMessage {
 
 export const CHAT_STORAGE_KEY = 'toydairy.conversations.v1'
 
+/** Resolved per call so demo mode can swap in the `.demo` namespace. */
+function activeChatKey() {
+  return demoScopedKey(CHAT_STORAGE_KEY)
+}
+
 export function loadChats(): Record<string, ChatMessage[]> {
   if (typeof window === 'undefined') return {}
   try {
-    const raw = window.localStorage.getItem(CHAT_STORAGE_KEY)
+    const raw = window.localStorage.getItem(activeChatKey())
     return raw ? (JSON.parse(raw) as Record<string, ChatMessage[]>) : {}
   } catch {
     return {}
@@ -33,7 +40,7 @@ export function loadChats(): Record<string, ChatMessage[]> {
 export function saveChats(chats: Record<string, ChatMessage[]>) {
   if (typeof window === 'undefined') return true
   try {
-    window.localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(chats))
+    window.localStorage.setItem(activeChatKey(), JSON.stringify(chats))
     return true
   } catch (error) {
     console.error('[chatStorage] localStorage save failed', error)

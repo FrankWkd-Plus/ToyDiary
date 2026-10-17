@@ -2032,3 +2032,108 @@ html, body { overflow: hidden; overscroll-behavior: none; }
 }
 .keyboard-open .page-scroll--locked { padding-bottom: 8px; }
 .polaroid-popup .leaflet-popup-scrolled { border: 0; overscroll-behavior: contain; }
+
+/* ── Demo mode ─────────────────────────────────────────────────────────────
+ * The banner owns the top safe area, so everything that consumes --safe-top
+ * ( `.page-scroll`, MePage's negative margin, the legal pages) resolves to 0
+ * and sits directly below it. No page needs a demo-specific branch.
+ */
+.app-frame.demo-active { --safe-top: 0px; }
+
+.demo-banner {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  /* Raw expression, not var(--safe-top): this var is zeroed above. */
+  padding: max(50px, env(safe-area-inset-top, 0px)) 12px 7px;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-line) 70%, transparent);
+  background: color-mix(in srgb, var(--color-mustard-soft) 80%, white);
+  color: var(--color-terra-deep);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-decoration: none;
+}
+
+/* ── First-run tour ────────────────────────────────────────────────────────
+ * Portaled to <body> (like the other sheets) so no scroll container clips it.
+ * Above toasts (z-70) and sheets (z-80).
+ */
+.onboarding-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  justify-content: center;
+  background: var(--shell-bg);
+  overscroll-behavior: none;
+}
+
+.onboarding-frame {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 390px;
+  height: 100%;
+  background:
+    radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--color-mint) 35%, transparent), transparent 55%),
+    #fff;
+}
+
+@media (min-width: 430px) {
+  .onboarding-frame {
+    height: calc(100vh - 40px);
+    margin-top: 20px;
+    border-radius: 32px;
+    box-shadow:
+      0 0 0 1px rgb(74 67 60 / 0.06),
+      0 20px 50px rgb(74 67 60 / 0.12);
+  }
+}
+
+.onboarding-track {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x;
+  scrollbar-width: none;
+}
+
+.onboarding-track::-webkit-scrollbar {
+  display: none;
+}
+
+.onboarding-slide {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 100%;
+  height: 100%;
+  scroll-snap-align: center;
+  scroll-snap-stop: always;
+  padding: 0 30px 8px;
+  text-align: center;
+}
+
+.onboarding-photo {
+  width: 100%;
+  max-width: 300px;
+  aspect-ratio: 4 / 5;
+  max-height: 42vh;
+  object-fit: cover;
+  border-radius: 26px;
+  box-shadow: 0 12px 32px rgb(74 67 60 / 0.16);
+}
+
+.onboarding-footer {
+  flex-shrink: 0;
+  padding: 8px 24px calc(18px + var(--safe-bottom));
+}

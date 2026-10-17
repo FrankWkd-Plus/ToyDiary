@@ -35,6 +35,7 @@ import {
   type CreateCommunityPostInput,
 } from './communityStore'
 import { mockStore } from './mockStore'
+import { resetDemoChats } from '../demo/demoSeed'
 import {
   getRelativeDiaryPhotoPath,
   getRelativeToyAvatarPath,
@@ -278,8 +279,10 @@ export const api = {
 
   resetDemo: () => {
     assertLocalForDemo('resetDemo')
-    localRepo.resetDemo()
+    const result = localRepo.resetDemo()
     communityStore.reset()
+    resetDemoChats()
+    return result
   },
 
   importGrowth: (payload: {

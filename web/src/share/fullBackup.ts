@@ -13,6 +13,7 @@ import {
   type DiaryPhotoBackupFile,
 } from '../media/photoStorage'
 import { CHAT_STORAGE_KEY, type ChatMessage } from '../conversation/chatStorage'
+import { isDemoMode } from '../demo/demoMode'
 import { buildGrowthExport, parseGrowthImport, type GrowthExportPayload } from './growthJson'
 
 export const FULL_BACKUP_FORMAT = 'toydairy.backup' as const
@@ -113,6 +114,12 @@ export async function buildFullBackup(input: {
   entries: Entry[]
   currentToyId: string | null
 }): Promise<FullBackupPayload> {
+  // The diary rows would come from the demo namespace while `appState` reads
+  // the real keys — a mixed archive that is wrong for both. Backups only run
+  // in real mode; the demo space is discarded on exit anyway.
+  if (isDemoMode()) {
+    throw new Error('演示模式下无法导出完整备份，请先关闭演示模式')
+  }
   const normalizedEntries = stableEntries(input.entries)
   const normalizedToys = stableToys(input.toys)
   const appState = { localStorage: captureLocalAppState() }
@@ -198,6 +205,11 @@ export async function restoreFullBackupMedia(photos: DiaryPhotoBackupFile[]) {
 
 export function restoreFullBackupAppState(snapshot: Record<string, string>) {
   if (typeof window === 'undefined') return
+  // Restoring real keys while the app shows demo data would silently mix the
+  // two namespaces; require exiting demo mode first.
+  if (isDemoMode()) {
+    throw new Error('演示模式下无法恢复完整备份，请先关闭演示模式')
+  }
   for (const key of BACKUP_LOCAL_STORAGE_KEYS) {
     try {
       if (Object.prototype.hasOwnProperty.call(snapshot, key)) {

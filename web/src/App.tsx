@@ -6,6 +6,7 @@ import { AppProvider } from './context/AppContext'
 import { AppLayout } from './layout/AppLayout'
 import { ComposePage } from './pages/ComposePage'
 import { ConversationPage } from './pages/ConversationPage'
+import { DemoModePage } from './pages/DemoModePage'
 import { EntryDetailPage } from './pages/EntryDetailPage'
 import { GrowthPage } from './pages/GrowthPage'
 import { MePage } from './pages/MePage'
@@ -104,6 +105,7 @@ export default function App() {
                   <Route path="days" element={<DayCountStudioPage />} />
                   <Route path="me/theme" element={<ThemePickerPage />} />
                   <Route path="me/preferences" element={<PreferencesPage />} />
+                  <Route path="me/demo" element={<DemoModePage />} />
                   <Route path="me/notify" element={<NotifySoundPage />} />
                   <Route path="me/data" element={<DataBackupPage />} />
                   <Route path="*" element={<Navigate to="/archive" replace />} />

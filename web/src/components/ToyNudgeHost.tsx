@@ -10,6 +10,7 @@ import { getToyVitality } from '../archive/toyVitality'
 import { useAuth } from '../auth/AuthContext'
 import { useApp } from '../context/AppContext'
 import { localDate } from '../utils/localDate'
+import { demoScopedKey } from '../demo/demoMode'
 import type { UserPrefs } from '../auth/authStorage'
 
 const LAST_NUDGE_KEY = 'toydairy.nudge.lastAt'
@@ -217,7 +218,7 @@ export function ToyNudgeHost() {
 
   const quiet = (() => {
     try {
-      return window.localStorage.getItem('toydairy.quietMode') === 'true'
+      return window.localStorage.getItem(demoScopedKey('toydairy.quietMode')) === 'true'
     } catch {
       return false
     }

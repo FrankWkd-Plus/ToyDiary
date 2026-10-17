@@ -13,6 +13,7 @@ import { api } from '../api/client'
 import { PlacePicker } from '../components/PlacePicker'
 import { PageHeader } from '../components/PageHeader'
 import { useApp } from '../context/AppContext'
+import { demoScopedKey } from '../demo/demoMode'
 import { useLocale } from '../i18n'
 import {
   deletePersistedDiaryPhoto,
@@ -58,7 +59,9 @@ function ComposeForm() {
   const { currentToy, toys, setCurrentToyId, refreshEntries, showToast } =
     useApp()
   const editingEntry = routeState?.editEntry
-  const draftKey = `toydiary.draft.v1.${editingEntry ? `entry.${editingEntry.id}` : `toy.${currentToy?.id || 'none'}`}`
+  const draftKey = demoScopedKey(
+    `toydiary.draft.v1.${editingEntry ? `entry.${editingEntry.id}` : `toy.${currentToy?.id || 'none'}`}`,
+  )
   const [restoredDraft] = useState(() => readDraft(draftKey))
   const textMode = routeState?.mode === 'text' && !editingEntry
   const [draftSaved, setDraftSaved] = useState(Boolean(restoredDraft.userNote || restoredDraft.aiDiary))

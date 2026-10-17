@@ -18,12 +18,16 @@ import { useApp } from '../context/AppContext'
 import { companionDayStatus, toyAvatar } from '../archive/archiveUtils'
 import { seedPlaceForLabel, uniqueCities } from '../places/placeUtils'
 import { deleteAllPersistedDiaryPhotos } from '../media/photoStorage'
+import { isDemoMode } from '../demo/demoMode'
 
 export function MePage() {
   const navigate = useNavigate()
   const { toys, currentToy, entries, setCurrentToyId, showToast } = useApp()
   const [collectionPickerOpen, setCollectionPickerOpen] = useState(false)
   const [resetting, setResetting] = useState(false)
+  // Factory reset walks every `toydairy.*` key, which includes the real
+  // database — never let it run while demo mode is on.
+  const demoActive = isDemoMode()
   const collectionToy = currentToy
 
   const currentEntries = useMemo(
@@ -47,6 +51,10 @@ export function MePage() {
 
   /** Wipe all Toy Diary records and native photo files, then start empty. */
   async function onFactoryReset() {
+    if (demoActive) {
+      showToast('演示模式下不能删除全部数据，请先关闭演示模式')
+      return
+    }
     if (
       !window.confirm(
         '将永久删除本机中的全部玩偶、日志、照片、对话和偏好设置。删除后无法恢复，建议先导出完整备份。继续？',
@@ -329,7 +337,7 @@ export function MePage() {
         <button
           type="button"
           onClick={() => void onFactoryReset()}
-          disabled={resetting}
+          disabled={resetting || demoActive}
           className="flex w-full items-center justify-center gap-2 rounded-full border border-line/80 bg-white py-3 text-sm font-medium text-ink-soft transition-transform active:scale-[0.99] disabled:opacity-50"
         >
           <Trash2 className="h-4 w-4 text-rose-deep" />

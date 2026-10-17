@@ -29,6 +29,11 @@ iOS 分支「能编译、能打包」。上一轮清点出的 4 个 **浏览器�
   `CapacitorShare`（3 个插件：camera / filesystem / share）
 - 4 个接口的环境变量注入**确实生效** —— 构建产物里能 grep 到绝对地址，无残留相对路径
 - 共享 scheme 的 target UUID 与 `project.pbxproj` 一致
+- 演示模式 / 新手导览这一轮：`typecheck`、`lint`（零新增警告）、`build:ios` 再次全通过
+- 演示模式的**存储隔离逻辑**用 Node 脚本（假 `localStorage` + rolldown 打包真实模块）跑通：
+  开演示 → `.demo` 键播种（**2 只玩偶 + 9 条日记**，不是 17）、真实键逐字节不变；演示中改数据只落
+  `.demo`；关闭后 `.demo` 键全部消失、真实键不变；再开 → 回到种子；`resetDemo` 在真实模式确实落盘；
+  导览 flag 进出演示都保留、`requestOnboarding()` 事件能触发
 
 ### 未验证（别当成已知事实）
 
@@ -39,6 +44,10 @@ iOS 分支「能编译、能打包」。上一轮清点出的 4 个 **浏览器�
 - IPA 能否在真机上安装、装完能否正常启动 —— 全部待验证
 - **本轮 4 个修复的真机行为全部未验证**：分享面板是否真弹出、OCR 是否真离线可用、
   对话图片重开 App 后是否还在、备份恢复后对话图是否完好
+- **演示模式 / 新手导览没有做过真实浏览器或真机走查**：只跑了类型检查、lint、构建，以及上面的
+  存储逻辑脚本。**渲染层未验证**：横幅实际占位、`--safe-top` 归零后的页面间距、导览的滑动 / 圆点 /
+  键盘 / 焦点行为，都只看过代码。本机的 headless Chrome 在沙箱里无法 `socket()`，起不来。
+  待验证清单见下文「演示模式与新手导览」小节的验收步骤。
 
 所以：**第一次跑 CI 大概率要迭代**。日志第一步就是工具链版本，先看那个。
 
@@ -134,11 +143,53 @@ provider，也没有 wallet 深链处理，所以 `requestAccount()` 必然抛�
 
 ---
 
+## 演示模式与新手导览（本轮新增）
+
+### 演示模式
+
+- 入口：我的 → 偏好设置 → 演示模式（`/me/demo`）
+- 开启时把**业务数据**切到独立的 `.demo` 命名空间：`toydairy.mock.v3.demo`（玩偶 + 日记）、
+  `toydairy.conversations.v1.demo`、`toydairy.community.v1.demo`、`toydairy.quietMode.demo`、
+  `toydiary.draft.v1.*.demo`。主题 / 语言 / 用户偏好 / 登录态**共用**，演示时看到的就是你自己设的外观。
+- **每次开启都重新播种**（`seed()` 的 2 只玩偶 + 9 条日记 + 2 段示例对话；`seed()` 里原有 5 只玩偶，
+  `applyDemoUpdates()` 会过滤掉 `REMOVED_DEMO_TOY_IDS` 的 3 只及其日记），**关闭即清空**演示空间。
+- 顶部常驻横幅（`.demo-banner`）标识当前状态；点它回到设置页。
+- 开关会 `location.reload()`：所有 provider 都在启动时按命名空间建立状态。
+- 演示模式下**禁用**「删除全部本地数据」「完整备份导出/导入」—— 它们作用在真实键上，会串台。
+- 顺手修掉的 bug：`mockStore.resetDemo()` / `communityStore.reset()` 原先 `removeItem` 后
+  `return seed()`，**从不 `save()`**，种子被丢弃（fresh install 是空库）。现在会真正落盘。
+
+**已知边界**：原生媒体目录（`ToyDiary/photos|chat|avatars`）**没有隔离**。种子只用打包好的
+`/toy-cards/*.jpg`，正常演示不写原生文件；若在演示中拍照，文件会落在共用目录、成为孤儿文件
+（真实库不会引用），工厂重置会清。这是本轮刻意不动 `photoStorage.ts` 原生链路的取舍。
+
+**验收步骤**（浏览器 devtools 即可，重点看第 2 条）：
+
+1. 全新状态 → 偏好设置开演示 → `toydairy.mock.v3.demo` 出现且 `toydairy.mock.v3` 不变
+2. **有真实数据时**开演示 → 改玩偶 / 写日记 / 发对话 → 关闭 → 真实记录一条不少
+3. 关掉再开 → 演示数据回到初始种子（每次重来）
+4. 演示中点「重置演示数据」→ 玩偶、日记、对话都回到种子
+5. 演示模式下「删除全部本地数据」不可用；「数据备份」两个按钮置灰
+6. 删掉 `toydairy.onboarding.seen` → 刷新 → 导览在启动动画后出现 → 滑完写回 flag → 设置里能重看
+7. 横幅在 `/archive`、`/growth`、`/me`、`/conversation`、`/toys/new` 都在；「我的」页渐变头紧贴横幅
+
+### 新手导览
+
+- `web/src/components/OnboardingTour.tsx`：portal 到 body、`scroll-snap` 四页、圆点 + 跳过，
+  素材用 `web/public/toy-cards/*.jpg`。
+- 首次启动（`!loading` 且没看过）自动出现；设置 → 偏好设置 → 新手导览可重看（事件重放，不新增路由）。
+- flag 是 `toydairy.onboarding.seen`，**不进** `BACKUP_LOCAL_STORAGE_KEYS`（否则会被恢复逻辑误删）。
+
+---
+
 ## 仍未修复 / 已知遗留
 
 | 项 | 位置 | 说明 |
 |----|------|------|
 | `communityStore` 同样静默吞配额 | `web/src/api/communityStore.ts` | 它存的是 `Capacitor.convertFileSrc` URL 而非 base64，不占配额，属另一类问题 |
+| **完整备份漏了偏好设置** | `web/src/share/fullBackup.ts:25-34` | `BACKUP_LOCAL_STORAGE_KEYS` 8 条里 6 条前缀写反（`toydiary.` → 实际是 `toydairy.`），主题/语言/偏好**目前根本没被备份**。修它会改变旧备份的恢复行为，单独一轮处理 |
+| 工厂重置不清 `toydiary.*` | `web/src/pages/MePage.tsx:78` | 只遍历 `toydairy.*`，`toydiary.draft.*` / `toydiary.growth.perspective` 会残留 |
+| 孤儿页面 | `web/src/pages/SettingsPage.tsx`、`MeSubpages` 的 `ProfileSettingsPage` | 无路由、无引用；前者里的「重置演示数据」按钮走不到（本轮改由 `/me/demo` 承担） |
 | Unsplash 演示图 | `web/src/api/mockStore.ts`、`web/src/community/communityData.ts` | 离线时裂图，纯演示数据 |
 | Google Fonts | `web/index.html` | 离线回落系统字体，不破版 |
 | OSM 地图瓦片 | `web/src/pages/TravelMapPage.tsx` | 离线底图空白，已有提示条 + 重试 |

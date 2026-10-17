@@ -1,17 +1,23 @@
 import { useEffect, useRef, useState } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import { BottomNav } from '../components/BottomNav'
+import { DemoModeBanner } from '../components/DemoModeBanner'
 import { LoadingBear } from '../components/LoadingBear'
+import { OnboardingTour } from '../components/OnboardingTour'
 import { ToyNudgeHost } from '../components/ToyNudgeHost'
 import { useApp } from '../context/AppContext'
+import { isDemoMode } from '../demo/demoMode'
 import { useLocale } from '../i18n'
+import { ONBOARDING_EVENT, hasSeenOnboarding } from '../onboarding/onboarding'
 
 export function AppLayout() {
   const { loading } = useApp()
   const { t } = useLocale()
   const { pathname, search } = useLocation()
   const [keyboardOpen, setKeyboardOpen] = useState(false)
+  const [tourOpen, setTourOpen] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const demoActive = isDemoMode()
   const lockPageScroll =
     pathname.startsWith('/conversation') ||
     (pathname === '/growth' &&
@@ -22,6 +28,21 @@ export function AppLayout() {
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: 0 })
   }, [pathname])
+
+  // First launch: wait for the splash, then show the tour. Re-running on route
+  // change means it can never appear in the middle of a transition.
+  useEffect(() => {
+    if (loading || hasSeenOnboarding()) return
+    const id = window.setTimeout(() => setTourOpen(true), 500)
+    return () => window.clearTimeout(id)
+  }, [loading, pathname])
+
+  // Settings → 「新手导览」 replays the same overlay.
+  useEffect(() => {
+    const open = () => setTourOpen(true)
+    window.addEventListener(ONBOARDING_EVENT, open)
+    return () => window.removeEventListener(ONBOARDING_EVENT, open)
+  }, [])
 
   useEffect(() => {
     const viewport = window.visualViewport
@@ -48,7 +69,7 @@ export function AppLayout() {
 
   return (
     <div className={`app-shell${keyboardOpen ? ' keyboard-open' : ''}`}>
-      <div className="app-frame">
+      <div className={`app-frame${demoActive ? ' demo-active' : ''}`}>
         {loading ? (
           <div className="loading-screen">
             <div className="loading-screen__glow" aria-hidden="true" />
@@ -74,6 +95,7 @@ export function AppLayout() {
           </div>
         ) : (
           <>
+            {demoActive && <DemoModeBanner />}
             <div
               ref={scrollRef}
               className={`page-scroll${lockPageScroll ? ' page-scroll--locked' : ''}`}
@@ -82,6 +104,10 @@ export function AppLayout() {
             </div>
             {!hideChrome && !keyboardOpen && <BottomNav />}
             {!hideChrome && <ToyNudgeHost />}
+            <OnboardingTour
+              open={tourOpen}
+              onClose={() => setTourOpen(false)}
+            />
           </>
         )}
       </div>

@@ -18,7 +18,9 @@ import { PageHeader } from '../components/PageHeader'
 import { useApp } from '../context/AppContext'
 import { useLocale } from '../i18n'
 import { api } from '../api/client'
+import { isDemoMode } from '../demo/demoMode'
 import { isNativeApp } from '../media/photoStorage'
+import { requestOnboarding } from '../onboarding/onboarding'
 import {
   buildFullBackup,
   fullBackupFilename,
@@ -277,6 +279,24 @@ export function PreferencesPage() {
             hint="卡片配色 · 字体与背景"
           />
           <PreferenceLink
+            to="/me/demo"
+            label="演示模式"
+            hint="示例数据 · 与真实记录完全隔离"
+          />
+          <button
+            type="button"
+            onClick={requestOnboarding}
+            className="flex min-h-14 w-full items-center gap-3 border-b border-line/70 px-4 py-3.5 text-left active:bg-cream"
+          >
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm text-ink">新手导览</span>
+              <span className="mt-0.5 block text-[11px] text-ink-muted">
+                重看开屏滑动介绍
+              </span>
+            </span>
+            <ChevronRight className="h-4 w-4 shrink-0 text-ink-muted" />
+          </button>
+          <PreferenceLink
             to="/me/data"
             label="本地数据与备份"
             hint="完整备份 · 导入恢复"
@@ -438,6 +458,8 @@ export function DataBackupPage() {
   } = useApp()
   const fileRef = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
+  // Backups only ever operate on the real namespace.
+  const demoActive = isDemoMode()
 
   async function onExportBackup() {
     setBusy(true)
@@ -515,7 +537,7 @@ export function DataBackupPage() {
         <section className="card-paper overflow-hidden">
           <button
             type="button"
-            disabled={busy}
+            disabled={busy || demoActive}
             onClick={() => void onExportBackup()}
             className="flex min-h-14 w-full items-center gap-3 border-b border-line/70 px-4 py-3.5 text-left active:bg-cream disabled:opacity-50"
           >
@@ -532,7 +554,7 @@ export function DataBackupPage() {
           </button>
           <button
             type="button"
-            disabled={busy}
+            disabled={busy || demoActive}
             onClick={onPickImport}
             className="flex min-h-14 w-full items-center gap-3 px-4 py-3.5 text-left active:bg-cream disabled:opacity-50"
           >
@@ -559,6 +581,11 @@ export function DataBackupPage() {
         <p className="px-1 text-[11px] leading-relaxed text-ink-muted">
           完整备份适合换机、误删或卸载前保存。照片会写入备份文件，文件体积会随照片数量增加。
         </p>
+        {demoActive && (
+          <p className="px-1 text-[11px] leading-relaxed text-terra-deep">
+            演示模式下不提供完整备份（备份只针对真实记录）。请先到「偏好设置 → 演示模式」关闭演示模式。
+          </p>
+        )}
       </div>
     </>
   )
@@ -859,7 +886,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   )
 }
 
-function ToggleRow({
+export function ToggleRow({
   icon,
   label,
   desc,

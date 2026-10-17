@@ -23,10 +23,16 @@ import { DEMO_DB_STORAGE_KEY } from './contracts'
 import { zodiacFromDate as zodiacFromDateShared } from '../archive/zodiac'
 import { seedPlaceForLabel } from '../places/placeUtils'
 import { uniqueCities } from '../places/placeUtils'
+import { demoScopedKey } from '../demo/demoMode'
 
 /** @deprecated use DEMO_DB_STORAGE_KEY from contracts — same value */
 export const LOCAL_DB_KEY = DEMO_DB_STORAGE_KEY
 const STORAGE_KEY = DEMO_DB_STORAGE_KEY
+
+/** Resolved per call so demo mode can swap in the `.demo` namespace. */
+function activeStorageKey() {
+  return demoScopedKey(STORAGE_KEY)
+}
 
 function uid(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36).slice(-4)}`
@@ -596,7 +602,7 @@ function emptyStore(): StoreData {
 
 function load(): StoreData {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = localStorage.getItem(activeStorageKey())
     if (!raw) {
       const empty = emptyStore()
       save(empty)
@@ -613,7 +619,7 @@ function load(): StoreData {
 
 function save(data: StoreData) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+    localStorage.setItem(activeStorageKey(), JSON.stringify(data))
   } catch (err) {
     // QuotaExceeded — common when avatar/entry images are large data URLs
     console.error('[mockStore] localStorage save failed', err)
@@ -829,8 +835,11 @@ export const mockStore: ToyDairyRepository = {
   },
 
   resetDemo() {
-    localStorage.removeItem(STORAGE_KEY)
-    return seed()
+    // Persist the seed: `load()` writes an empty store when the key is missing,
+    // so returning the seed without saving used to discard it entirely.
+    const data = seed()
+    save(data)
+    return data
   },
 
   /** Replace toys/entries from a growth JSON import (demo backup restore). */

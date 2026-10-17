@@ -7,6 +7,7 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
+import { demoScopedKey } from '../demo/demoMode'
 import {
   BellOff,
   Camera,
@@ -98,7 +99,7 @@ export function ConversationPage() {
   const [draft, setDraft] = useState('')
   const [toyPickerOpen, setToyPickerOpen] = useState(false)
   const [quietMode, setQuietMode] = useState(
-    () => window.localStorage.getItem('toydairy.quietMode') === 'true',
+    () => window.localStorage.getItem(demoScopedKey('toydairy.quietMode')) === 'true',
   )
   const [pendingImage, setPendingImage] = useState<string>()
   const [pendingImagePath, setPendingImagePath] = useState<string>()
@@ -355,7 +356,7 @@ export function ConversationPage() {
   function toggleQuietMode() {
     const next = !quietMode
     setQuietMode(next)
-    window.localStorage.setItem('toydairy.quietMode', String(next))
+    window.localStorage.setItem(demoScopedKey('toydairy.quietMode'), String(next))
     showToast(next ? '已开启安静模式，不再主动提醒' : '已恢复温柔提醒')
   }
 
