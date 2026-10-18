@@ -95,7 +95,7 @@ export function LoginPage() {
   return (
     <div className="relative flex min-h-[100dvh] flex-col bg-gradient-to-b from-[var(--header-from)] via-white to-[var(--color-cream)] px-5 pb-8 pt-4 sm:px-8">
       <div className="mx-auto flex w-full max-w-[420px] items-center justify-between">
-        <span className="font-display text-lg text-ink">Toy Dairy</span>
+        <span className="font-display text-lg text-ink">Toy Diary</span>
         <button
           type="button"
           onClick={onGuest}

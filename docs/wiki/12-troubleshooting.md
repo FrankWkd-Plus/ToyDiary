@@ -8,14 +8,13 @@
 
 | 现象 | 排查 |
 |------|------|
-| `baseUrl` 仍是 `api.openai.com` | Production 未设 `OPENAI_BASE_URL` 或未重新部署 |
-| 401 invalid_api_key | Key 与 base 不匹配（中转 key 打到了官方） |
-| 返回 HTML（门户页） | `OPENAI_BASE_URL` 缺 `/v1` |
-| Invalid AI provider response | 协议错；设 `AI_PROVIDER` |
+| `/api/health` 显示 `ai.binding: false` | `wrangler.jsonc` 的 `ai` binding 未部署；重新部署 |
+| `Workers AI request failed` | 所有候选模型都失败；看 `detail` / `triedModels`，可用 `AI_MODEL` 换模型 |
+| 回复里出现推理内容 | 不应发生（`<think>` 会被剥离）；若出现请记录模型 id |
 | 对话有错误气泡但仍有回复 | **预期**：展示 API 错误 + 本地模板兜底 |
 | 日记总是模板腔 | Function 失败或未部署；看 Network `/api/analyze-entry` |
 
-`auth.keyHint` 仅前后缀 + 长度，不会泄露完整 Key。
+新版 Function 不再持有任何 Key，也没有 `keyHint`。
 
 ---
 

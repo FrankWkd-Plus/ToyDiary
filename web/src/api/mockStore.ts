@@ -23,10 +23,16 @@ import { DEMO_DB_STORAGE_KEY } from './contracts'
 import { zodiacFromDate as zodiacFromDateShared } from '../archive/zodiac'
 import { seedPlaceForLabel } from '../places/placeUtils'
 import { uniqueCities } from '../places/placeUtils'
+import { demoScopedKey } from '../demo/demoMode'
 
 /** @deprecated use DEMO_DB_STORAGE_KEY from contracts — same value */
 export const LOCAL_DB_KEY = DEMO_DB_STORAGE_KEY
 const STORAGE_KEY = DEMO_DB_STORAGE_KEY
+
+/** Resolved per call so demo mode can swap in the `.demo` namespace. */
+function activeStorageKey() {
+  return demoScopedKey(STORAGE_KEY)
+}
 
 function uid(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36).slice(-4)}`
@@ -590,30 +596,35 @@ function seed(): StoreData {
   return applyDemoUpdates({ toys, entries, currentToyId: lunaId })
 }
 
+function emptyStore(): StoreData {
+  return { toys: [], entries: [], currentToyId: null }
+}
+
 function load(): StoreData {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = localStorage.getItem(activeStorageKey())
     if (!raw) {
-      const s = seed()
-      save(s)
-      return s
+      const empty = emptyStore()
+      save(empty)
+      return empty
     }
     return applyDemoUpdates(JSON.parse(raw) as StoreData)
-  } catch {
-    const s = seed()
-    save(s)
-    return s
+  } catch (error) {
+    // Never overwrite malformed user data: the original value may still be
+    // recoverable through support or a future migration.
+    console.error('[mockStore] local database could not be read', error)
+    return emptyStore()
   }
 }
 
 function save(data: StoreData) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+    localStorage.setItem(activeStorageKey(), JSON.stringify(data))
   } catch (err) {
     // QuotaExceeded — common when avatar/entry images are large data URLs
     console.error('[mockStore] localStorage save failed', err)
     throw new Error(
-      '本机存储已满，无法保存。请到「我的 → 数据」清理或导出后重置演示数据。',
+      '本机存储已满，无法保存。请先到「我的 → 偏好设置 → 本地数据与备份」导出备份，再清理不需要的内容。',
     )
   }
 }
@@ -638,10 +649,12 @@ export const mockStore: ToyDairyRepository = {
       id: uid('toy'),
       name: input.name,
       birthDate: input.birthDate,
+      encounterDate: input.encounterDate || input.birthDate,
       birthPlace: input.birthPlace,
       role: input.role,
       traits: input.traits,
       avatarUrl: input.avatarUrl,
+      localAvatarPath: input.localAvatarPath,
       ...profile,
       createdAt: new Date().toISOString(),
     }
@@ -734,6 +747,7 @@ export const mockStore: ToyDairyRepository = {
       title: e.title,
       mood: e.mood,
       imageUrl: e.imageUrl,
+      localImagePath: e.localImagePath,
       aiDiary: e.aiDiary,
       userNote: e.userNote,
       place: e.place as Place,
@@ -776,7 +790,19 @@ export const mockStore: ToyDairyRepository = {
     patch: Partial<
       Pick<
         Entry,
-        'aiDiary' | 'title' | 'mood' | 'tags' | 'imageAnalysis' | 'userNote'
+        | 'toyId'
+        | 'type'
+        | 'date'
+        | 'location'
+        | 'place'
+        | 'aiDiary'
+        | 'title'
+        | 'mood'
+        | 'tags'
+        | 'imageAnalysis'
+        | 'userNote'
+        | 'imageUrl'
+        | 'localImagePath'
       >
     >,
   ): Promise<Entry> {
@@ -787,6 +813,15 @@ export const mockStore: ToyDairyRepository = {
     Object.assign(entry, patch)
     save(data)
     return { ...entry }
+  },
+
+  async deleteEntry(id: string): Promise<void> {
+    await delay(20)
+    const data = load()
+    const index = data.entries.findIndex((entry) => entry.id === id)
+    if (index < 0) throw new Error('记录不存在')
+    data.entries.splice(index, 1)
+    save(data)
   },
 
   getCurrentToyId(): string | null {
@@ -800,8 +835,11 @@ export const mockStore: ToyDairyRepository = {
   },
 
   resetDemo() {
-    localStorage.removeItem(STORAGE_KEY)
-    return seed()
+    // Persist the seed: `load()` writes an empty store when the key is missing,
+    // so returning the seed without saving used to discard it entirely.
+    const data = seed()
+    save(data)
+    return data
   },
 
   /** Replace toys/entries from a growth JSON import (demo backup restore). */

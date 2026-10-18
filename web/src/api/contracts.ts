@@ -52,6 +52,7 @@ export const REST_PATHS = {
   createEntry: 'POST /toys/:toyId/entries',
   getEntry: 'GET /entries/:id',
   updateEntry: 'PATCH /entries/:id',
+  deleteEntry: 'DELETE /entries/:id',
   regenerateEntry: 'POST /entries/:id/regenerate',
   travelMap: 'GET /toys/:toyId/travel-map',
 } as const
@@ -80,10 +81,23 @@ export interface ToyDairyRepository {
     patch: Partial<
       Pick<
         Entry,
-        'aiDiary' | 'title' | 'mood' | 'tags' | 'imageAnalysis' | 'userNote'
+        | 'toyId'
+        | 'type'
+        | 'date'
+        | 'location'
+        | 'place'
+        | 'aiDiary'
+        | 'title'
+        | 'mood'
+        | 'tags'
+        | 'imageAnalysis'
+        | 'userNote'
+        | 'imageUrl'
+        | 'localImagePath'
       >
     >,
   ): Promise<Entry>
+  deleteEntry(id: string): Promise<void>
   regenerateEntry(id: string): Promise<Entry>
   getTravelMap(toyId: string): Promise<TravelMapResponse>
 
@@ -104,6 +118,7 @@ export interface ToyRow {
   id: string
   name: string
   birth_date: string
+  encounter_date?: string | null
   birth_place: string
   role: string
   /** JSON string[] */
@@ -126,7 +141,7 @@ export interface EntryRow {
   /** JSON Place */
   place: string | null
   title: string | null
-  /** 我的视角 */
+  /** 用户写下的记录文字 */
   user_note: string | null
   mood: string | null
   image_url: string | null
@@ -142,6 +157,7 @@ export interface EntryRow {
 export const DOMAIN_TO_DB = {
   toy: {
     birthDate: 'birth_date',
+    encounterDate: 'encounter_date',
     birthPlace: 'birth_place',
     avatarUrl: 'avatar_url',
     createdAt: 'created_at',
@@ -176,6 +192,7 @@ export function toyToRow(toy: Toy): ToyRow {
     id: toy.id,
     name: toy.name,
     birth_date: toy.birthDate,
+    encounter_date: toy.encounterDate ?? null,
     birth_place: toy.birthPlace,
     role: toy.role,
     traits: JSON.stringify(toy.traits ?? []),
@@ -199,6 +216,7 @@ export function rowToToy(row: ToyRow): Toy {
     id: row.id,
     name: row.name,
     birthDate: row.birth_date,
+    encounterDate: row.encounter_date ?? undefined,
     birthPlace: row.birth_place,
     role: row.role,
     traits,

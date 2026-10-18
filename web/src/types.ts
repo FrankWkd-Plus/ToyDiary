@@ -21,6 +21,8 @@ export interface Toy {
   id: string
   name: string
   birthDate: string
+  /** First day together. Legacy records fall back to birthDate. */
+  encounterDate?: string
   birthPlace: string
   role: string
   traits: string[]
@@ -31,12 +33,16 @@ export interface Toy {
   bio?: string
   monologue?: string
   avatarUrl?: string
+  /** Relative Library path used to re-resolve the native sticker avatar. */
+  localAvatarPath?: string
   createdAt: string
 }
 
 export interface CreateToyInput {
   name: string
   birthDate: string
+  /** First day together. Legacy records fall back to birthDate. */
+  encounterDate?: string
   birthPlace: string
   role: string
   traits: string[]
@@ -44,6 +50,7 @@ export interface CreateToyInput {
   bio?: string
   monologue?: string
   avatarUrl?: string
+  localAvatarPath?: string
   zodiac?: string
 }
 
@@ -60,6 +67,8 @@ export interface Entry {
   userNote?: string
   mood?: string
   imageUrl?: string
+  /** Relative Library path used to re-resolve and remove a native diary photo. */
+  localImagePath?: string
   aiDiary?: string
   tags?: string[]
   imageAnalysis?: string
@@ -76,6 +85,7 @@ export interface CreateEntryInput {
   mood?: string
   /** local object URL or data URL for mock */
   imageUrl?: string
+  localImagePath?: string
   aiDiary?: string
   tags?: string[]
   imageAnalysis?: string
@@ -88,6 +98,7 @@ export interface TravelMapPoint {
   title?: string
   mood?: string
   imageUrl?: string
+  localImagePath?: string
   aiDiary?: string
   userNote?: string
   place: Place

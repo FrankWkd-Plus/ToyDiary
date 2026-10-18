@@ -1,28 +1,75 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import { BottomNav } from '../components/BottomNav'
+import { DemoModeBanner } from '../components/DemoModeBanner'
 import { LoadingBear } from '../components/LoadingBear'
+import { OnboardingTour } from '../components/OnboardingTour'
 import { ToyNudgeHost } from '../components/ToyNudgeHost'
 import { useApp } from '../context/AppContext'
+import { isDemoMode } from '../demo/demoMode'
 import { useLocale } from '../i18n'
+import { ONBOARDING_EVENT, hasSeenOnboarding } from '../onboarding/onboarding'
 
 export function AppLayout() {
   const { loading } = useApp()
   const { t } = useLocale()
   const { pathname, search } = useLocation()
+  const [keyboardOpen, setKeyboardOpen] = useState(false)
+  const [tourOpen, setTourOpen] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const demoActive = isDemoMode()
   const lockPageScroll =
     pathname.startsWith('/conversation') ||
     (pathname === '/growth' &&
       new URLSearchParams(search).get('tab') === 'map')
+  const hideChrome =
+    pathname === '/toys/new' || /^\/toys\/[^/]+\/edit$/.test(pathname)
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: 0 })
   }, [pathname])
 
+  // First launch: wait for the splash, then show the tour. Re-running on route
+  // change means it can never appear in the middle of a transition.
+  useEffect(() => {
+    if (loading || hasSeenOnboarding()) return
+    const id = window.setTimeout(() => setTourOpen(true), 500)
+    return () => window.clearTimeout(id)
+  }, [loading, pathname])
+
+  // Settings → 「新手导览」 replays the same overlay.
+  useEffect(() => {
+    const open = () => setTourOpen(true)
+    window.addEventListener(ONBOARDING_EVENT, open)
+    return () => window.removeEventListener(ONBOARDING_EVENT, open)
+  }, [])
+
+  useEffect(() => {
+    const viewport = window.visualViewport
+    const update = () => {
+      const typing = document.activeElement?.matches('input, textarea, [contenteditable="true"]')
+      const reduced = Boolean(viewport && window.innerHeight - viewport.height > 70)
+      setKeyboardOpen(Boolean(typing && (reduced || window.innerWidth < 430)))
+      if (viewport) document.documentElement.style.setProperty('--visible-height', `${viewport.height}px`)
+      if (typing && lockPageScroll) window.scrollTo(0, 0)
+    }
+    viewport?.addEventListener('resize', update)
+    viewport?.addEventListener('scroll', update)
+    document.addEventListener('focusin', update)
+    document.addEventListener('focusout', update)
+    update()
+    return () => {
+      viewport?.removeEventListener('resize', update)
+      viewport?.removeEventListener('scroll', update)
+      document.removeEventListener('focusin', update)
+      document.removeEventListener('focusout', update)
+      document.documentElement.style.removeProperty('--visible-height')
+    }
+  }, [lockPageScroll])
+
   return (
-    <div className="app-shell">
-      <div className="app-frame">
+    <div className={`app-shell${keyboardOpen ? ' keyboard-open' : ''}`}>
+      <div className={`app-frame${demoActive ? ' demo-active' : ''}`}>
         {loading ? (
           <div className="loading-screen">
             <div className="loading-screen__glow" aria-hidden="true" />
@@ -36,7 +83,7 @@ export function AppLayout() {
             </div>
             <div className="loading-screen__copy">
               <p className="font-display text-xl tracking-wide text-ink">
-                Toy Dairy
+                Toy Diary
               </p>
               <p className="mt-1.5 text-sm text-ink-muted">{t('app.opening')}</p>
               <div className="loading-dots" aria-hidden="true">
@@ -48,14 +95,19 @@ export function AppLayout() {
           </div>
         ) : (
           <>
+            {demoActive && <DemoModeBanner />}
             <div
               ref={scrollRef}
               className={`page-scroll${lockPageScroll ? ' page-scroll--locked' : ''}`}
             >
               <Outlet />
             </div>
-            <BottomNav />
-            <ToyNudgeHost />
+            {!hideChrome && !keyboardOpen && <BottomNav />}
+            {!hideChrome && <ToyNudgeHost />}
+            <OnboardingTour
+              open={tourOpen}
+              onClose={() => setTourOpen(false)}
+            />
           </>
         )}
       </div>

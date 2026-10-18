@@ -1,7 +1,4 @@
-/**
- * Lightweight client-side auth for demo / hackathon.
- * REPLACE_WITH_BACKEND: real OTP + session tokens.
- */
+/** Local-only app state. The session shape remains for compatibility with older data. */
 
 export type AuthMode = 'guest' | 'user'
 
@@ -18,13 +15,10 @@ export interface AuthSession {
 const AUTH_KEY = 'toydairy.auth.session'
 const PREFS_KEY = 'toydairy.user.prefs'
 
-/** Demo default: app always starts as a logged-in user (no login screen). */
+/** Internal local session: no account, login or personal identifier is required. */
 export const DEFAULT_USER_SESSION: AuthSession = {
   mode: 'user',
-  account: '13800000000',
-  accountType: 'phone',
-  name: '演示用户',
-  loggedInAt: '2026-01-01T00:00:00.000Z',
+  name: '本机用户',
 }
 
 export type UserPrefs = {
@@ -46,7 +40,7 @@ const DEFAULT_PREFS: UserPrefs = {
   memorySound: true,
   phone: '',
   wechat: '',
-  deviceLabel: '本机 · Safari / Chrome',
+  deviceLabel: '本机',
   toyReminders: true,
   nudgeMiss: true,
   nudgeTravel: true,

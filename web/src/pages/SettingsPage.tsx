@@ -140,7 +140,7 @@ export function SettingsPage() {
         </section>
 
         <p className="px-1 text-center text-[11px] text-ink-muted">
-          Toy Dairy · 配色保存在 localStorage
+          Toy Diary · 配色保存在 localStorage
         </p>
       </div>
     </>

@@ -1,4 +1,4 @@
-# Toy Dairy · Web（前端）
+# Toy Diary · Web（前端）
 
 React + TypeScript + Vite + Tailwind。业务数据默认 **localStorage**（`PERSISTENCE = 'localStorage'`，REST/D1 接口契约保留）；智能记录可走 Cloudflare Pages Function（密钥不在前端）。
 
@@ -36,15 +36,20 @@ npm run dev
 | `VITE_AI_ANALYZE_ENDPOINT` | AI 接口，默认 `/api/analyze-entry` |
 | `VITE_API_BASE` | 将来真 REST（仅 `PERSISTENCE = 'remote'` 时） |
 
-**不要**把 OpenAI 等厂商 API Key 写进 `VITE_*`。
+**不要**把厂商 API Key 写进 `VITE_*`。
 
-密钥在 **Cloudflare Pages → Settings → Environment variables**：
+AI 走 **Cloudflare Workers AI**：`wrangler.jsonc` 里声明了 `"ai": { "binding": "AI" }`，
+无需 API Key，也没有外部网关或云服务器依赖。可选变量（Pages → Settings → Environment
+variables）：
 
-- `OPENAI_API_KEY`（Secret，必填）
-- `OPENAI_BASE_URL`（可选）
-- `OPENAI_MODEL`（可选）
+- `AI_MODEL`（可选，默认 `@cf/qwen/qwen3-30b-a3b-fp8`；另有自动降级模型）
+- `ENVIRONMENT`（可选，`/api/health` 会回显）
 
-服务端实现：[`functions/api/analyze-entry.ts`](./functions/api/analyze-entry.ts)。
+部署后打开 `https://toydiary.pages.dev/api/health` 可确认 binding 与当前模型。
+
+服务端实现：[`functions/api/chat.ts`](./functions/api/chat.ts)、
+[`functions/api/analyze-entry.ts`](./functions/api/analyze-entry.ts)、
+[`functions/api/places/`](./functions/api/places/)。
 
 ## 部署（摘要）
 
@@ -54,7 +59,7 @@ npm ci && npm run build
 npx wrangler pages deploy ./dist --project-name=toydairy --branch=main --commit-dirty=true
 ```
 
-改完 Dashboard 机密后必须 **重新部署**。完整步骤见根 [`readme.md`](../readme.md#部署流程cloudflare-pages)。
+改完 Dashboard 变量或 `wrangler.jsonc` 的 binding 后必须 **重新部署**。完整步骤见根 [`readme.md`](../readme.md#部署流程cloudflare-pages)。
 
 ## 脚本
 
@@ -75,7 +80,11 @@ src/
   pages/
   types.ts
 functions/
-  api/analyze-entry.ts   # Pages Function（持有 OPENAI_* 机密）
+  _shared/               # http / workersAi / places 公共模块
+  api/chat.ts            # 玩偶对话（Workers AI）
+  api/analyze-entry.ts   # 日记分析（Workers AI）
+  api/health.ts          # binding / 模型自检
+  api/places/            # 地点搜索 / 反查（边缘缓存）
 public/
   _redirects             # SPA + /api 例外
 ```

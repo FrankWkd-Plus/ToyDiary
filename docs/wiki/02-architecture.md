@@ -34,7 +34,7 @@
 
 | 原则 | 说明 |
 |------|------|
-| **密钥只在 Functions** | `OPENAI_*` 永不进 `VITE_*` |
+| **AI 全在 Cloudflare** | Functions 直接用 Workers AI `AI` binding；无密钥、无外部网关、无额外服务器 |
 | **数据库契约一等公民** | 表结构 / REST / `ToyDairyRepository` 写在 `contracts.ts` + migration + [Wiki 13](./13-database.md) |
 | **演示 = local 实现** | `PERSISTENCE = 'localStorage'`；不删接口、不假装没库 |
 | **重模块懒加载** | Leaflet、抠图 ONNX 不进冷启动主包 |
@@ -62,8 +62,8 @@
 | 层 | 选型 |
 |----|------|
 | 运行时 | Cloudflare Pages Functions（`web/functions`） |
-| AI 适配 | `functions/_shared/aiProvider.ts` |
-| 地理 | Nominatim 服务端代理 |
+| AI | Cloudflare Workers AI（`AI` binding，`functions/_shared/workersAi.ts`） |
+| 地理 | Nominatim 代理 → Photon 回退，`caches.default` 边缘缓存 |
 | 配置 | `web/wrangler.jsonc` |
 | 未来存储 | **D1 / KV / R2** bindings 已声明；schema + Repository 契约齐全；演示走 local 实现 |
 
@@ -74,10 +74,11 @@
 ```
 web/
 ├── functions/
-│   ├── _shared/aiProvider.ts
+│   ├── _shared/{http,workersAi,places}.ts
 │   └── api/
 │       ├── chat.ts
 │       ├── analyze-entry.ts
+│       ├── health.ts
 │       └── places/{search,reverse}.ts
 ├── public/                 # 静态图、_redirects、toy-cards
 ├── migrations/0001_init.sql

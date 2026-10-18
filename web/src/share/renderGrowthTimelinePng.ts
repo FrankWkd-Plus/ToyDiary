@@ -9,9 +9,8 @@ export async function renderGrowthTimelinePng(opts: {
   toys: Toy[]
   entries: Entry[]
   currentToy: Toy | null
-  ownerName?: string
 }): Promise<Blob> {
-  const { toys, entries, currentToy, ownerName = '主人' } = opts
+  const { toys, entries, currentToy } = opts
   const toy = currentToy || toys[0]
   const toyEntries = (toy
     ? entries.filter((e) => e.toyId === toy.id)
@@ -81,13 +80,13 @@ export async function renderGrowthTimelinePng(opts: {
   ctx.font = '500 26px "Noto Sans SC", sans-serif'
   const days = toy ? companionDays(toy) : 0
   ctx.fillText(
-    `${ownerName} · 陪伴 ${days} 天 · ${toyEntries.length} 条高光`,
+    `陪伴 ${days} 天 · ${toyEntries.length} 条共同记录`,
     260,
     186,
   )
   ctx.fillStyle = '#9a8758'
   ctx.font = '500 22px "Noto Sans SC", sans-serif'
-  ctx.fillText('Toy Dairy · 把陪伴写进时间里', 260, 226)
+  ctx.fillText('Toy Diary · 把陪伴写进时间里', 260, 226)
 
   // Timeline spine
   const spineX = 150

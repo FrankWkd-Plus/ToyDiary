@@ -14,12 +14,19 @@ import {
   type CommunitySave,
   type CommunityToy,
 } from '../community/communityData'
+import { demoScopedKey } from '../demo/demoMode'
 
 /**
  * Community feed mock — also localStorage for demo.
  * Product entry redirects to /conversation; code kept for completeness.
  */
-const STORAGE_KEY = 'toydairy.community.v1'
+export const COMMUNITY_STORAGE_KEY = 'toydairy.community.v1'
+const STORAGE_KEY = COMMUNITY_STORAGE_KEY
+
+/** Resolved per call so demo mode can swap in the `.demo` namespace. */
+function activeStorageKey() {
+  return demoScopedKey(STORAGE_KEY)
+}
 
 export interface CommunitySnapshot {
   posts: CommunityPost[]
@@ -67,7 +74,7 @@ function seed(): CommunitySnapshot {
 
 function load(): CommunitySnapshot {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = localStorage.getItem(activeStorageKey())
     if (!raw) {
       const s = seed()
       save(s)
@@ -96,7 +103,7 @@ function load(): CommunitySnapshot {
 
 function save(data: CommunitySnapshot) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+    localStorage.setItem(activeStorageKey(), JSON.stringify(data))
   } catch (err) {
     console.error('[communityStore] localStorage save failed', err)
     throw new Error('本机存储已满，社区数据无法保存')
@@ -377,8 +384,10 @@ export const communityStore = {
   },
 
   reset() {
-    localStorage.removeItem(STORAGE_KEY)
-    return seed()
+    // Same fix as mockStore.resetDemo: persist instead of discarding the seed.
+    const data = seed()
+    save(data)
+    return data
   },
 }
 

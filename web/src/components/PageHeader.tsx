@@ -9,6 +9,7 @@ export function PageHeader({
   back,
   right,
   soft,
+  bare,
 }: {
   title: string
   subtitle?: string
@@ -16,17 +17,34 @@ export function PageHeader({
   right?: ReactNode
   /** soft gradient header band */
   soft?: boolean
+  /** transparent header for collection sub-pages that sit on the app canvas */
+  bare?: boolean
 }) {
   const nav = useNavigate()
   const { t } = useLocale()
   return (
     <header
-      className={`sticky top-0 z-10 flex items-center gap-2.5 px-3.5 py-3.5 ${
-        soft
+      className={`page-header z-10 flex items-center gap-2.5 px-3.5 ${
+        bare
+          ? 'bg-transparent'
+          : soft
           ? 'header-band pattern-soft'
           : 'border-b border-line/50 bg-paper/90 backdrop-blur-xl'
       }`}
     >
+      {/*
+       * NOTE: vertical padding is intentionally NOT set via Tailwind here.
+       * `.page-header` in index.css owns padding-top / padding-bottom
+       * and also sets `position: relative; z-index: 10`. Adding a `py-*`
+       * utility here would race with that CSS rule (same specificity,
+       * load-order dependent) and cause the header to randomly clip under
+       * the Dynamic Island.
+       *
+       * NOTE: this header is intentionally NOT `sticky`. A sticky header
+       * floats over the first card on any scroll and visually clips its
+       * rounded top. Detail pages are short and the title scrolling away
+       * is the lesser evil.
+       */}
       {back !== undefined && back !== false && (
         <button
           type="button"

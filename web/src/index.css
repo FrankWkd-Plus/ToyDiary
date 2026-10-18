@@ -1,12 +1,12 @@
 @import 'tailwindcss';
 
 /**
- * Toy Dairy — soft kawaii scrapbook UI
+ * Toy Diary — soft kawaii scrapbook UI
  * Fonts: Noto Sans SC + ZCOOL XiaoWei
  * Feature styles (archive / community / OCR / growth) live below.
  */
 @theme {
-  --font-sans: 'Noto Sans SC', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Noto Sans SC', ui-sans-serif, system-ui, sans-serif;
   --font-display: 'ZCOOL XiaoWei', 'Noto Sans SC', serif;
 
   /* Defaults = 抹茶绿; runtime overrides via data-theme / applyTheme() */
@@ -55,6 +55,20 @@
   --shadow-elevated: 0 12px 32px rgb(74 67 60 / 0.1), 0 4px 12px rgb(74 67 60 / 0.06);
   --shadow-glow: 0 8px 24px color-mix(in srgb, var(--color-matcha) 28%, transparent);
   --radius-card: 1.35rem;
+}
+
+/*
+ * iOS safe-area fallbacks.
+ *
+ * Capacitor's WKWebView *should* expose env(safe-area-inset-top) when the
+ * viewport meta has viewport-fit=cover, but real builds sometimes report 0
+ * on iPhone simulators / devices until the web content finishes layout. To
+ * guarantee the header is never clipped by the Dynamic Island, we keep a
+ * 50 px hard floor while still respecting larger insets on future devices.
+ */
+:root {
+  --safe-top: max(50px, env(safe-area-inset-top, 0px));
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 * {
@@ -138,7 +152,17 @@ body {
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
-  padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+  /*
+   * Capacitor uses viewport-fit=cover on iPhone, so the WebView extends
+   * underneath the Dynamic Island. Keep every page's first interactive
+   * element below the system status area while retaining a clean white
+   * canvas behind it.
+   *
+   * --safe-top has a 50 px floor so even if env() reports 0 the header
+   * is never clipped; larger real insets are still honored.
+   */
+  padding-top: var(--safe-top);
+  padding-bottom: calc(88px + var(--safe-bottom));
   scrollbar-width: none;
   animation: page-in 0.18s ease-out;
 }
@@ -381,7 +405,53 @@ textarea.input {
   );
   border-bottom: 1px solid color-mix(in srgb, var(--color-line) 70%, transparent);
   backdrop-filter: blur(12px);
-  padding-bottom: 0.5rem;
+  /*
+   * No padding here on purpose: this is unlayered CSS, which BEATS Tailwind
+   * utilities in v4. A padding-bottom here silently hijacked MePage's pb-5
+   * and TimelinePage's py-3.5 (bottom inset shrank 20px -> 8px). Each call
+   * site owns its own padding: MePage pb-5, PageHeader via .page-header.
+   */
+}
+
+/*
+ * Detail-page header band.
+ *
+ * NOT sticky on purpose: a sticky header always floats over the first card
+ * as soon as the user scrolls even one pixel, clipping the card's rounded
+ * top and the user's first tap target. Detail pages (Preferences, Legal,
+ * Me sub-pages) are short and never need a persistent title. This header
+ * scrolls away with the content.
+ *
+ * Vertical padding is owned here (PageHeader.tsx must not add `py-*`).
+ *
+ * IMPORTANT: do NOT pull this header up with a negative margin-top. The
+ * parent `.page-scroll` already reserves `padding-top: env(safe-area-inset-top)`,
+ * so the header starts exactly below the Dynamic Island. Pulling it up made
+ * the title render inside the safe-area and get clipped.
+ */
+.page-header {
+  position: relative;
+  z-index: 10;
+  padding-top: 0.875rem;
+  padding-bottom: 0.875rem;
+}
+
+/*
+ * Privacy and terms intentionally live outside AppLayout so they do not show
+ * the app bottom navigation. They therefore do not inherit page-scroll's
+ * safe-area padding and must reserve the status-bar area themselves.
+ */
+.legal-standalone .page-header {
+  padding-top: calc(0.875rem + var(--safe-top));
+}
+
+.legal-standalone {
+  min-height: 100dvh;
+  padding-bottom: var(--safe-bottom);
+  background:
+    radial-gradient(circle at 10% 4%, color-mix(in srgb, var(--color-mint) 24%, transparent), transparent 34%),
+    radial-gradient(circle at 96% 12%, color-mix(in srgb, var(--color-mustard-soft) 58%, transparent), transparent 32%),
+    #ffffff;
 }
 
 /* Growth page: a scrollable, single-column journey timeline. */
@@ -481,29 +551,25 @@ textarea.input {
   position: relative;
   display: grid;
   place-items: center;
-  aspect-ratio: 16 / 10;
   overflow: hidden;
-  background: linear-gradient(135deg, var(--color-mist-soft), var(--color-mustard-soft));
-}
-
-.growth-entry-image::before {
-  content: '🧸';
-  position: absolute;
-  font-size: 2.25rem;
-  filter: grayscale(0.15);
-  opacity: 0.62;
+  padding: 12px 12px 0;
+  background: #faf7f1;
 }
 
 .growth-entry-image--only {
-  aspect-ratio: 4 / 3;
+  padding-bottom: 12px;
 }
 
 .growth-entry-image img {
   position: relative;
   z-index: 1;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 420px;
+  border-radius: 6px;
+  object-fit: contain;
   object-position: center;
 }
 
@@ -1506,21 +1572,6 @@ button:focus-visible {
   box-shadow: var(--shadow-warm-sm);
 }
 
-.memory-share-preview {
-  border: 1px solid var(--color-line);
-  border-radius: 1.25rem;
-  background: linear-gradient(145deg, var(--color-mustard-soft), var(--color-mist-soft));
-  padding: 0.75rem;
-  text-align: center;
-}
-
-.memory-share-preview img {
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  border-radius: 0.9rem;
-  object-fit: cover;
-}
-
 /* Centered export / share sheet — portaled to body, above bottom-nav */
 .export-sheet-overlay {
   position: fixed;
@@ -1552,6 +1603,145 @@ button:focus-visible {
   padding: 1rem;
   box-shadow: 0 24px 60px rgb(0 0 0 / 0.28);
   -webkit-overflow-scrolling: touch;
+}
+
+/* The keepsake uses its own quiet paper palette, independent of the app theme. */
+.memory-editorial-sheet {
+  max-width: min(430px, calc(100vw - 32px));
+  max-height: 92dvh;
+  background: #faf7f1;
+  color: #38291f;
+  padding: 18px;
+}
+
+.memory-editorial-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.memory-editorial-header h2 { font-family: 'Songti SC', 'ZCOOL XiaoWei', Georgia, serif; font-size: 23px; }
+.memory-editorial-header p { margin-top: 4px; font-size: 11px; color: #87796c; }
+.memory-editorial-close { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 36px; height: 36px; border-radius: 50%; }
+.memory-editorial-preview { position: relative; overflow: hidden; aspect-ratio: 3 / 4; background: #fffcf7; border-radius: 3px; box-shadow: 0 6px 24px rgb(71 49 26 / 8%); }
+.memory-editorial-preview img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.memory-editorial-placeholder { display: grid; place-items: center; height: 100%; font-size: 12px; color: #87796c; }
+.memory-editorial-updating { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); padding: 5px 10px; border-radius: 12px; background: #fffaf0ed; color: #87796c; font-size: 10px; }
+.memory-editorial-hint { margin-top: 14px; font-size: 11px; color: #87796c; }
+.memory-editorial-selection { display: grid; grid-template-columns: repeat(3, 1fr) 1.15fr; gap: 9px; margin-top: 8px; }
+.memory-moment-slot { position: relative; display: grid; place-items: center; aspect-ratio: 1; overflow: hidden; border: 1px solid #e4dbcf; border-radius: 7px; background: #f1ece4; color: #a48268; }
+.memory-moment-slot img { width: 100%; height: 100%; object-fit: cover; }
+.memory-moment-slot > span { position: absolute; top: 0; left: 0; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 0 0 5px 0; background: #9f7255; color: white; font-size: 10px; }
+.memory-shuffle-button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; border: 1px solid #e4dbcf; border-radius: 7px; font-size: 10px; }
+.memory-editorial-tools { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 14px; color: #87796c; font-size: 10px; }
+.memory-editorial-tools button { display: inline-flex; align-items: center; gap: 4px; min-height: 32px; color: #80593f; }
+.memory-editorial-actions { position: sticky; bottom: -18px; display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin: 10px -2px -2px; padding: 10px 2px 2px; background: #faf7f1; }
+.memory-editorial-actions button { display: flex; align-items: center; justify-content: center; gap: 7px; min-height: 43px; border: 1px solid #aa836b; border-radius: 999px; font-size: 12px; }
+.memory-editorial-actions button:last-child { border-color: #9f7255; background: #9f7255; color: #fffcf7; }
+.memory-editorial-sheet button:disabled { opacity: .45; }
+.memory-editorial-sheet button:focus-visible { outline: 2px solid #9f7255; outline-offset: 3px; }
+.memory-photo-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; max-height: 240px; overflow-y: auto; padding: 4px; margin-top: 8px; }
+.memory-photo-grid button { overflow: hidden; border: 2px solid transparent; border-radius: 7px; background: #fffcf7; text-align: left; }
+.memory-photo-grid button[aria-pressed='true'] { border-color: #9f7255; }
+.memory-photo-grid img { width: 100%; aspect-ratio: 1; object-fit: cover; }
+.memory-photo-grid span { display: block; overflow: hidden; padding: 5px; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.memory-photo-grid small { display: block; margin-top: 2px; color: #87796c; font-size: 9px; }
+
+.diary-photo-sheet {
+  max-width: min(430px, calc(100vw - 32px));
+  max-height: 92dvh;
+  background: #faf7f1;
+  color: #38291f;
+}
+.diary-export-preview { overflow: hidden; border-radius: 3px; box-shadow: 0 6px 24px rgb(71 49 26 / 8%); }
+.diary-export-preview img { display: block; width: 100%; height: auto; }
+.diary-export-placeholder { display: grid; min-height: 250px; place-items: center; padding: 24px; color: #87796c; font-size: 12px; text-align: center; }
+.diary-photo-sheet button:disabled { opacity: .45; }
+.diary-photo-sheet button:focus-visible { outline: 2px solid #9f7255; outline-offset: 3px; }
+
+/* iOS-style action sheets for diary management actions. */
+.ios-action-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 16px;
+  padding-top: max(16px, env(safe-area-inset-top, 0px));
+  padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
+  background: rgb(30 26 22 / 0.32);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  overscroll-behavior: none;
+}
+
+.ios-action-sheet {
+  width: min(100%, 390px);
+  animation: ios-sheet-in 180ms ease-out;
+}
+
+.ios-action-group,
+.ios-action-cancel {
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 0.78);
+  border-radius: 1.35rem;
+  background: rgb(255 255 255 / 0.95);
+  box-shadow: 0 12px 32px rgb(68 50 29 / 0.15);
+}
+
+.ios-action-row,
+.ios-action-cancel {
+  display: flex;
+  min-height: 3.55rem;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  padding: 0.75rem 1rem;
+  color: var(--color-ink);
+  font-size: 0.98rem;
+  font-weight: 600;
+}
+
+.ios-action-row + .ios-action-row {
+  border-top: 1px solid var(--color-line);
+}
+
+.ios-action-row:active,
+.ios-action-cancel:active {
+  background: var(--color-cream);
+}
+
+.ios-action-danger {
+  color: #c64e49;
+}
+
+.ios-action-cancel {
+  margin-top: 0.7rem;
+}
+
+.ios-confirm-card {
+  width: min(100%, 350px);
+  margin-bottom: max(18dvh, 72px);
+  border-radius: 1.55rem;
+  background: #fff;
+  padding: 1.35rem;
+  box-shadow: 0 24px 60px rgb(0 0 0 / 0.25);
+  animation: ios-sheet-in 180ms ease-out;
+}
+
+.ios-confirm-delete {
+  min-height: 3rem;
+  border-radius: 0.9rem;
+  background: #c64e49;
+  color: white;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.ios-confirm-delete:disabled {
+  opacity: 0.55;
+}
+
+@keyframes ios-sheet-in {
+  from { transform: translateY(14px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
 }
 
 /* Camera OCR */
@@ -1832,4 +2022,118 @@ button:focus-visible {
 
 .daycount--inline .daycount__unit {
   font-size: 0.65rem;
+}
+
+/* The document stays anchored while WKWebView focuses an input. Internal lists scroll. */
+html, body { overflow: hidden; overscroll-behavior: none; }
+@media (max-width: 429px) {
+  .app-shell { position: fixed; inset: 0; height: var(--visible-height, 100%); min-height: 0; }
+  .app-frame { min-height: 0; }
+}
+.keyboard-open .page-scroll--locked { padding-bottom: 8px; }
+.polaroid-popup .leaflet-popup-scrolled { border: 0; overscroll-behavior: contain; }
+
+/* ── Demo mode ─────────────────────────────────────────────────────────────
+ * The banner owns the top safe area, so everything that consumes --safe-top
+ * ( `.page-scroll`, MePage's negative margin, the legal pages) resolves to 0
+ * and sits directly below it. No page needs a demo-specific branch.
+ */
+.app-frame.demo-active { --safe-top: 0px; }
+
+.demo-banner {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  /* Raw expression, not var(--safe-top): this var is zeroed above. */
+  padding: max(50px, env(safe-area-inset-top, 0px)) 12px 7px;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-line) 70%, transparent);
+  background: color-mix(in srgb, var(--color-mustard-soft) 80%, white);
+  color: var(--color-terra-deep);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-decoration: none;
+}
+
+/* ── First-run tour ────────────────────────────────────────────────────────
+ * Portaled to <body> (like the other sheets) so no scroll container clips it.
+ * Above toasts (z-70) and sheets (z-80).
+ */
+.onboarding-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  justify-content: center;
+  background: var(--shell-bg);
+  overscroll-behavior: none;
+}
+
+.onboarding-frame {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 390px;
+  height: 100%;
+  background:
+    radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--color-mint) 35%, transparent), transparent 55%),
+    #fff;
+}
+
+@media (min-width: 430px) {
+  .onboarding-frame {
+    height: calc(100vh - 40px);
+    margin-top: 20px;
+    border-radius: 32px;
+    box-shadow:
+      0 0 0 1px rgb(74 67 60 / 0.06),
+      0 20px 50px rgb(74 67 60 / 0.12);
+  }
+}
+
+.onboarding-track {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x;
+  scrollbar-width: none;
+}
+
+.onboarding-track::-webkit-scrollbar {
+  display: none;
+}
+
+.onboarding-slide {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 100%;
+  height: 100%;
+  scroll-snap-align: center;
+  scroll-snap-stop: always;
+  padding: 0 30px 8px;
+  text-align: center;
+}
+
+.onboarding-photo {
+  width: 100%;
+  max-width: 300px;
+  aspect-ratio: 4 / 5;
+  max-height: 42vh;
+  object-fit: cover;
+  border-radius: 26px;
+  box-shadow: 0 12px 32px rgb(74 67 60 / 0.16);
+}
+
+.onboarding-footer {
+  flex-shrink: 0;
+  padding: 8px 24px calc(18px + var(--safe-bottom));
 }

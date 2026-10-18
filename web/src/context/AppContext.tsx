@@ -132,13 +132,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return
       }
       const list = await api.listEntries(id)
-      setEntries(list)
+      // Native photo hydration can finish after the user has selected another toy.
+      if (api.getCurrentToyId() === id) setEntries(list)
     },
     [currentToyId],
   )
 
   const setCurrentToyId = useCallback((id: string) => {
+    const changed = api.getCurrentToyId() !== id
     api.setCurrentToyId(id)
+    if (changed) setEntries([])
     setCurrentToyIdState(id)
   }, [])
 

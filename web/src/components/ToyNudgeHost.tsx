@@ -2,13 +2,15 @@
  * In-app proactive toy nudges (demo stand-in for push).
  * Granular prefs: miss / diary / travel / night + frequency.
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { MessageCircle, X } from 'lucide-react'
 import { toyAvatar } from '../archive/archiveUtils'
 import { getToyVitality } from '../archive/toyVitality'
 import { useAuth } from '../auth/AuthContext'
 import { useApp } from '../context/AppContext'
+import { localDate } from '../utils/localDate'
+import { demoScopedKey } from '../demo/demoMode'
 import type { UserPrefs } from '../auth/authStorage'
 
 const LAST_NUDGE_KEY = 'toydairy.nudge.lastAt'
@@ -21,6 +23,8 @@ interface NudgePayload {
   text: string
   cta: string
   to: string
+  toyId?: string
+  avatar?: string
 }
 
 function loadLastAt() {
@@ -160,10 +164,12 @@ function buildNudgePool(
 
 export function ToyNudgeHost() {
   const navigate = useNavigate()
-  const { pathname } = useLocation()
+  const { pathname, search } = useLocation()
   const { currentToy, toys, entries } = useApp()
   const { prefs } = useAuth()
   const [nudge, setNudge] = useState<NudgePayload | null>(null)
+  const [busy, setBusy] = useState(false)
+  const lastInteraction = useRef(Date.now())
   const [dismissedId, setDismissedId] = useState<string | null>(null)
 
   const toy = currentToy ?? toys[0]
@@ -171,20 +177,57 @@ export function ToyNudgeHost() {
   const avatar = toy ? toyAvatar(toy, toyIndex >= 0 ? toyIndex : 0) : ''
   const suppressOnRoute =
     pathname.startsWith('/conversation') ||
-    pathname.startsWith('/toys/')
+    pathname.startsWith('/toys/') ||
+    pathname.startsWith('/compose') ||
+    pathname.startsWith('/entries') ||
+    pathname.startsWith('/memories') ||
+    pathname.startsWith('/me/') ||
+    (pathname === '/growth' && search.includes('tab=map'))
 
-  const quiet = useMemo(() => {
+  // Observe overlays and input focus, including sheets opened from the bottom nav.
+  useEffect(() => {
+    const check = () => {
+      const focused = document.activeElement?.matches('input, textarea, select, [contenteditable="true"]')
+      setBusy(Boolean(focused || document.querySelector('[role="dialog"], [aria-modal="true"]')))
+    }
+    const interact = () => { lastInteraction.current = Date.now(); check() }
+    const observer = new MutationObserver(check)
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['role', 'aria-modal'] })
+    document.addEventListener('focusin', interact)
+    document.addEventListener('focusout', interact)
+    document.addEventListener('pointerdown', interact, true)
+    document.addEventListener('keydown', interact, true)
+    document.addEventListener('scroll', interact, true)
+    check()
+    return () => {
+      observer.disconnect()
+      document.removeEventListener('focusin', interact)
+      document.removeEventListener('focusout', interact)
+      document.removeEventListener('pointerdown', interact, true)
+      document.removeEventListener('keydown', interact, true)
+      document.removeEventListener('scroll', interact, true)
+    }
+  }, [])
+
+  useEffect(() => { setNudge(null); lastInteraction.current = Date.now() }, [toy?.id, pathname, busy])
+  useEffect(() => {
+    if (!nudge) return
+    const timer = window.setTimeout(() => setNudge(null), 12_000)
+    return () => window.clearTimeout(timer)
+  }, [nudge])
+
+  const quiet = (() => {
     try {
-      return window.localStorage.getItem('toydairy.quietMode') === 'true'
+      return window.localStorage.getItem(demoScopedKey('toydairy.quietMode')) === 'true'
     } catch {
       return false
     }
-  }, [nudge])
+  })()
 
   const timing = frequencyMs(prefs.nudgeFrequency ?? 'normal')
 
   useEffect(() => {
-    if (!toy || !prefs.toyReminders || quiet || suppressOnRoute) return
+    if (!toy || !prefs.toyReminders || quiet || suppressOnRoute || busy) return
 
     let cancelled = false
     let intervalId = 0
@@ -193,7 +236,7 @@ export function ToyNudgeHost() {
       if (cancelled) return
       const now = Date.now()
       const last = loadLastAt()
-      if (now - last < timing.minGap) return
+      if (document.visibilityState !== 'visible' || now - lastInteraction.current < 20_000 || now - last < timing.minGap) return
 
       const vitality = getToyVitality(toy, entries)
       const hour = new Date().getHours()
@@ -212,14 +255,14 @@ export function ToyNudgeHost() {
         hour,
         hasTravel,
         locationHint,
-      )
+      ).filter((item) => item.kind !== 'diary' || !entries.some((entry) => entry.toyId === toy.id && entry.date === localDate()))
       if (!pool.length) return
 
       let pick = pool[Math.floor(Math.random() * pool.length)]
       if (pick.id === dismissedId) {
         pick = pool.find((p) => p.id !== dismissedId) ?? pick
       }
-      setNudge({ ...pick, id: `${pick.id}_${now}` })
+      setNudge({ ...pick, toyId: toy.id, avatar })
       saveLastAt(now)
     }
 
@@ -240,6 +283,8 @@ export function ToyNudgeHost() {
     prefs,
     entries,
     quiet,
+    busy,
+    avatar,
     dismissedId,
     suppressOnRoute,
     timing.first,
@@ -247,12 +292,13 @@ export function ToyNudgeHost() {
     timing.minGap,
   ])
 
-  if (!nudge || !toy || !prefs.toyReminders || suppressOnRoute) return null
+  if (!nudge || !toy || nudge.toyId !== toy.id || !prefs.toyReminders || quiet || busy || suppressOnRoute) return null
 
   const activeNudge = nudge
 
   function dismiss() {
-    setDismissedId(activeNudge.kind)
+    setDismissedId(activeNudge.id)
+    saveLastAt(Date.now() + 10 * 60_000)
     setNudge(null)
   }
 
@@ -271,7 +317,7 @@ export function ToyNudgeHost() {
       <div className="pointer-events-auto w-full animate-[fadeUp_0.35s_ease]">
         <div className="flex items-start gap-3 rounded-[1.35rem] border border-line/60 bg-paper/95 p-3 shadow-[var(--shadow-warm)] backdrop-blur-md">
           <img
-            src={avatar}
+            src={activeNudge.avatar}
             alt=""
             className="mt-0.5 h-11 w-11 shrink-0 rounded-2xl object-cover ring-1 ring-line/50"
           />

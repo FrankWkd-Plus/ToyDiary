@@ -1,17 +1,16 @@
 import type { Entry, Toy } from '../types'
+import { diaryExcerpt } from '../share/memoryShareContent'
 
-const FALLBACK_PHOTOS = [
-  '/toy-cards/highlight-1.jpg',
-  '/toy-cards/highlight-2.jpg',
-  '/toy-cards/highlight-3.jpg',
-] as const
+export function companionStartDate(toy: Toy) {
+  return toy.encounterDate || toy.birthDate
+}
 
 export function companionDays(toy: Toy) {
   return companionDayStatus(toy).days
 }
 
 export function companionDayStatus(toy: Toy) {
-  const [year, month, day] = toy.birthDate.split('-').map(Number)
+  const [year, month, day] = companionStartDate(toy).split('-').map(Number)
   const today = new Date()
   const startOrdinal = Date.UTC(year, month - 1, day) / 86400000
   const todayOrdinal =
@@ -51,10 +50,7 @@ export function toySignature(toy: Toy | null | undefined) {
 
 /** Memory-hall card copy — always first-person from the toy's POV. */
 export function toyPerspectiveNarration(entry: Entry): string {
-  const diaryLine = entry.aiDiary
-    ?.split('\n')
-    .map((line) => line.trim())
-    .find(Boolean)
+  const diaryLine = diaryExcerpt({ ...entry, userNote: undefined })
   if (diaryLine) return diaryLine
 
   const place =
@@ -79,7 +75,7 @@ function clipNote(note: string, max = 36) {
 }
 
 export function archivePhotos(entries: Entry[]) {
-  const photos = entries
+  return entries
     .filter((entry) => Boolean(entry.imageUrl))
     .map((entry) => ({
       src: entry.imageUrl as string,
@@ -93,19 +89,4 @@ export function archivePhotos(entries: Entry[]) {
       entryId: entry.id as string | undefined,
     }))
 
-  if (photos.length > 0) return photos
-
-  return FALLBACK_PHOTOS.map((src, index) => ({
-    src,
-    title: ['海风吹过的下午', '把浪花装进口袋', '藏在绿意里的瀑布'][index],
-    // Fallback slides stay in first-person toy voice
-    narration: [
-      '第一次一起出发，蓝色的海很大，但你的手心刚刚好。',
-      '我们把阳光、浪花和想念，都收藏在了这张照片里。',
-      '水声很响，可是被你拿在手里时，我一点也不害怕。',
-    ][index],
-    date: ['2026-07-23', '2026-06-08', '2026-04-03'][index],
-    location: ['蓝色海湾', '阳光海岸', '森林瀑布'][index],
-    entryId: undefined as string | undefined,
-  }))
 }

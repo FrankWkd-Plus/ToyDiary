@@ -1,3 +1,4 @@
+import { companionStartDate } from '../archive/archiveUtils'
 import { useMemo, useRef, useState } from 'react'
 import {
   Check,
@@ -127,7 +128,7 @@ export function DayCountStudioPage() {
         font: style.font,
         title: `和 ${currentToy.name} 相遇`,
       })
-      const filename = `Toy-Dairy-${status.days}-days.jpg`
+      const filename = `Toy-Diary-${status.days}-days.jpg`
       const result = await shareOrDownloadFile({
         blob,
         filename,
@@ -239,7 +240,7 @@ export function DayCountStudioPage() {
           allowExportBg
           sublabel={
             currentToy
-              ? `目标日参照：${currentToy.birthDate} · 已相遇`
+              ? `目标日参照：${companionStartDate(currentToy)} · 已相遇`
               : '已经一起走过的日子'
           }
         />

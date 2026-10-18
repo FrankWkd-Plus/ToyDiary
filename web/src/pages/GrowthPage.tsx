@@ -1,3 +1,4 @@
+import { companionStartDate } from '../archive/archiveUtils'
 import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
@@ -11,6 +12,7 @@ import {
   MapPin,
   MapPinned,
   PartyPopper,
+  PencilLine,
   Sparkles,
 } from 'lucide-react'
 import { companionDays, toyAvatar } from '../archive/archiveUtils'
@@ -23,6 +25,19 @@ const TravelMapView = lazy(() =>
 )
 
 type GrowthTab = 'timeline' | 'map'
+type TimelinePerspective = 'toy' | 'owner'
+
+const PERSPECTIVE_STORAGE_KEY = 'toydiary.growth.perspective'
+
+function loadTimelinePerspective(): TimelinePerspective {
+  try {
+    return window.localStorage.getItem(PERSPECTIVE_STORAGE_KEY) === 'owner'
+      ? 'owner'
+      : 'toy'
+  } catch {
+    return 'toy'
+  }
+}
 
 type TimelineItem =
   | {
@@ -51,6 +66,9 @@ export function GrowthPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { currentToy, entries, toys, setCurrentToyId, showToast } = useApp()
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [perspective, setPerspective] = useState<TimelinePerspective>(
+    loadTimelinePerspective,
+  )
 
   const tab: GrowthTab =
     searchParams.get('tab') === 'map' ? 'map' : 'timeline'
@@ -61,8 +79,17 @@ export function GrowthPage() {
     }
   }, [currentToy?.id, toys, setCurrentToyId])
 
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(PERSPECTIVE_STORAGE_KEY, perspective)
+    } catch {
+      // The selected view can remain session-only if storage is unavailable.
+    }
+  }, [perspective])
+
   const toyIndex = toys.findIndex((t) => t.id === currentToy?.id)
   const days = currentToy ? companionDays(currentToy) : 0
+  const encounterDate = currentToy ? companionStartDate(currentToy) : undefined
 
   const items = useMemo(() => {
     const list: TimelineItem[] = entries.map((entry) => ({
@@ -72,7 +99,7 @@ export function GrowthPage() {
       entry,
     }))
 
-    for (const m of buildMilestones(entries, days, currentToy?.birthDate)) {
+    for (const m of buildMilestones(entries, days, encounterDate)) {
       list.push({
         kind: 'milestone',
         id: m.id,
@@ -92,7 +119,7 @@ export function GrowthPage() {
       if (a.kind !== b.kind) return a.kind === 'milestone' ? -1 : 1
       return 0
     })
-  }, [entries, days, currentToy?.birthDate])
+  }, [entries, days, encounterDate])
 
   function setTab(next: GrowthTab) {
     if (next === 'timeline') {
@@ -204,6 +231,46 @@ export function GrowthPage() {
             地图
           </button>
         </div>
+
+        {tab === 'timeline' && currentToy && (
+          <div className="mb-3 flex items-center justify-between gap-3 px-1">
+            <span className="text-[10px] font-medium tracking-wide text-ink-muted">
+              故事视角
+            </span>
+            <div
+              className="inline-grid grid-cols-2 rounded-full bg-white/80 p-0.5 shadow-[var(--shadow-warm-sm)] ring-1 ring-line/60"
+              role="group"
+              aria-label="切换成长时间线故事视角"
+            >
+              <button
+                type="button"
+                onClick={() => setPerspective('toy')}
+                aria-pressed={perspective === 'toy'}
+                className={`flex min-h-7 items-center justify-center gap-1 rounded-full px-2.5 text-[10px] font-medium transition-colors ${
+                  perspective === 'toy'
+                    ? 'bg-mist-soft text-matcha-deep'
+                    : 'text-ink-muted active:bg-cream'
+                }`}
+              >
+                <Sparkles className="h-3 w-3" />
+                玩偶眼中
+              </button>
+              <button
+                type="button"
+                onClick={() => setPerspective('owner')}
+                aria-pressed={perspective === 'owner'}
+                className={`flex min-h-7 items-center justify-center gap-1 rounded-full px-2.5 text-[10px] font-medium transition-colors ${
+                  perspective === 'owner'
+                    ? 'bg-peach-soft text-rose-deep'
+                    : 'text-ink-muted active:bg-cream'
+                }`}
+              >
+                <PencilLine className="h-3 w-3" />
+                我写的
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {tab === 'timeline' ? (
@@ -285,7 +352,7 @@ export function GrowthPage() {
 
                   const entry = item.entry
                   const location = entry.place?.displayName || entry.location
-                  const text = entry.aiDiary?.trim() || entry.userNote?.trim()
+                  const text = timelinePerspectiveText(entry, perspective)
                   return (
                     <article key={item.id} className="growth-row">
                       <div className="growth-date">
@@ -324,11 +391,25 @@ export function GrowthPage() {
                               {location}
                             </p>
                           )}
-                          {text && (
-                            <p className="mt-2 line-clamp-3 text-[13px] leading-relaxed text-ink-soft">
-                              {text}
-                            </p>
-                          )}
+                          <p
+                            className={`mt-2 inline-flex items-center gap-1 text-[9px] font-semibold tracking-wide ${
+                              perspective === 'toy'
+                                ? 'text-matcha-deep'
+                                : 'text-rose-deep'
+                            }`}
+                          >
+                            {perspective === 'toy' ? (
+                              <Sparkles className="h-3 w-3" />
+                            ) : (
+                              <PencilLine className="h-3 w-3" />
+                            )}
+                            {perspective === 'toy'
+                              ? `${currentToy.name} 记得`
+                              : '你写下'}
+                          </p>
+                          <p className="mt-1 line-clamp-3 text-[13px] leading-relaxed text-ink-soft">
+                            {text}
+                          </p>
                         </div>
                       </Link>
                     </article>
@@ -355,6 +436,22 @@ export function GrowthPage() {
   )
 }
 
+function timelinePerspectiveText(
+  entry: Entry,
+  perspective: TimelinePerspective,
+) {
+  if (perspective === 'toy') {
+    return (
+      entry.aiDiary?.trim() ||
+      '还没有生成玩偶视角，点开日志可以生成。'
+    )
+  }
+  if (entry.userNote?.trim()) return entry.userNote.trim()
+  return entry.imageUrl
+    ? '这一次，你只收藏了一张照片。'
+    : '这一天没有留下文字。'
+}
+
 function buildMilestones(
   entries: Entry[],
   days: number,
@@ -371,16 +468,17 @@ function buildMilestones(
     path?: string
   }[] = []
 
-  const today = formatToday()
-  items.push({
-    id: 'milestone-days',
-    date: today,
-    icon: <CalendarHeart className="h-4 w-4" strokeWidth={1.8} />,
-    tone: 'bg-peach-soft text-rose-deep',
-    title: `陪伴第 ${days} 天`,
-    desc: '每一个普通日子，都算数。',
-    path: '/growth/stats/companion',
-  })
+  if (birthDate && days >= 1) {
+    items.push({
+      id: 'milestone-meet',
+      date: birthDate,
+      icon: <CalendarHeart className="h-4 w-4" strokeWidth={1.8} />,
+      tone: 'bg-peach-soft text-rose-deep',
+      title: '相遇的第一天',
+      desc: '从这一天开始，我们成为了彼此的陪伴。',
+      path: '/growth/stats/companion',
+    })
+  }
 
   const first = [...entries].sort((a, b) => a.date.localeCompare(b.date))[0]
   if (first) {
@@ -413,27 +511,30 @@ function buildMilestones(
     })
   }
 
-  if (days >= 100 && birthDate) {
-    items.push({
-      id: 'milestone-100',
-      date: addDaysIso(birthDate, 99),
-      icon: <PartyPopper className="h-4 w-4" strokeWidth={1.8} />,
-      tone: 'bg-lavender/60 text-matcha-deep',
-      title: '百日纪念',
-      desc: '一百个「今天也在一起」。',
-      path: '/growth/stats/companion',
-    })
+  if (birthDate) {
+    const timeMilestones = [
+      { days: 100, title: '百日纪念', desc: '一百个「今天也在一起」。' },
+      { days: 365, title: '一周年纪念', desc: '四季走了一圈，我们仍然在一起。' },
+      { days: 520, title: '520 天纪念', desc: '把喜欢藏进五百二十个日夜。' },
+      { days: 1000, title: '一千天纪念', desc: '一千个平凡日子，组成了特别的我们。' },
+      { days: 10000, title: '一万天纪念', desc: '走过很长很长的时间，陪伴仍在继续。' },
+    ] as const
+
+    for (const milestone of timeMilestones) {
+      if (days < milestone.days) continue
+      items.push({
+        id: `milestone-${milestone.days}`,
+        date: addDaysIso(birthDate, milestone.days - 1),
+        icon: <PartyPopper className="h-4 w-4" strokeWidth={1.8} />,
+        tone: 'bg-lavender/60 text-matcha-deep',
+        title: milestone.title,
+        desc: milestone.desc,
+        path: '/growth/stats/companion',
+      })
+    }
   }
 
   return items
-}
-
-function formatToday() {
-  const d = new Date()
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
 }
 
 function addDaysIso(iso: string, daysToAdd: number) {

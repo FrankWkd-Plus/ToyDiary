@@ -32,38 +32,44 @@ npx wrangler pages deploy ./dist --project-name=toydiary --branch=feature/foo
 
 `web/public/_redirects` rewrites non-API paths to `/index.html`, and leaves `/api/*` for Functions.
 
-## AI analyze endpoint (Pages Function)
+## AI endpoints (Pages Functions, Workers AI)
 
 | Item | Value |
 |------|--------|
-| Route | `POST /api/analyze-entry` |
-| Source | `web/functions/api/analyze-entry.ts` |
+| Routes | `POST /api/chat` · `POST /api/analyze-entry` · `GET /api/health` |
+| Source | `web/functions/api/{chat,analyze-entry,health}.ts` |
+| Runtime | Cloudflare Workers AI via the `AI` binding in `web/wrangler.jsonc` |
 | Frontend env | `VITE_AI_ANALYZE_ENDPOINT=/api/analyze-entry` (public) |
 
-### Secrets (set only in Cloudflare Dashboard)
+No API key, gateway or external server is involved: the Functions call
+`env.AI.run(...)` directly on Cloudflare's edge. Models are tried in order and
+fall back automatically (`AI_MODEL` → Qwen3 → Llama 3.3 → Llama 3.1).
 
-**Pages → toydiary → Settings → Environment variables → Production**
+### Optional variables (Pages → toydiary → Settings → Environment variables)
 
 | Variable | Type | Required | Meaning |
 |----------|------|----------|---------|
-| `OPENAI_API_KEY` | **Secret / Encrypt** | Yes | Provider API key (also used for Anthropic; name kept for compat) |
-| `OPENAI_BASE_URL` | Text or Secret | No* | API base. OpenAI default `https://api.openai.com/v1`; Anthropic default `https://api.anthropic.com/v1` |
-| `OPENAI_MODEL` | Text | No* | Model id. OpenAI default `gpt-4o-mini`; Anthropic default `claude-3-5-haiku-latest` |
-| `AI_PROVIDER` | Text | No | `openai` \| `anthropic` \| `auto` (default). Auto uses base URL / model name (e.g. `claude-*` → Anthropic Messages API) |
+| `AI_MODEL` | Text | No | Pin the first Workers AI model id. Default `@cf/qwen/qwen3-30b-a3b-fp8` |
+| `ENVIRONMENT` | Text | No | Echoed by `/api/health` |
 
-\* Third-party / Claude gateways: set `OPENAI_BASE_URL` + matching `OPENAI_API_KEY` on **toydiary → Production**. If the model returns Anthropic-shaped JSON (`content: [{type,text}]`) but requests were OpenAI-shaped, set **`AI_PROVIDER=anthropic`** (or use a `claude-*` model id so auto-detect kicks in).
+The legacy `OPENAI_API_KEY` / `OPENAI_BASE_URL` / `OPENAI_MODEL` / `AI_PROVIDER`
+variables are no longer read and can be deleted.
 
-Do **not** put the key in any `VITE_*` variable (Vite embeds those into the browser bundle).
+After changing env vars or the `ai` binding, redeploy so Functions pick them up.
 
-After changing env vars, redeploy or trigger a new production deployment so Functions pick them up.
+Local checks: open `http://localhost:8788/api/health` with
+`npx wrangler pages dev ./dist` (the AI binding is emulated locally).
 
-Local Function secrets (optional): create `web/.dev.vars` (gitignored):
+## Places endpoints (Pages Functions, edge cache)
 
-```
-OPENAI_API_KEY=sk-...
-OPENAI_BASE_URL=https://your-gateway.example/v1
-OPENAI_MODEL=your-model-id
-```
+| Item | Value |
+|------|--------|
+| Routes | `GET/POST /api/places/search` · `GET /api/places/reverse` |
+| Upstream | Nominatim (primary, serialized to 1 req/s) → Photon (keyless fallback) |
+| Cache | `caches.default`: 7 days for search, 30 days for reverse |
+
+No key or server is required; responses carry `Cache-Control` and are stored at
+the Cloudflare edge.
 
 ## Storage (provisioned)
 

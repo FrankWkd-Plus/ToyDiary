@@ -45,27 +45,27 @@ npx wrangler pages deploy ./dist \
 
 ---
 
-## Secrets / 环境变量
+## AI 运行方式 / 环境变量
 
-**Pages → toydiary → Settings → Environment variables → Production**
+AI 不依赖任何 Key 或外部网关：`web/wrangler.jsonc` 声明了
+`"ai": { "binding": "AI" }`，`/api/chat` 与 `/api/analyze-entry` 直接调用
+`env.AI.run(...)`（Cloudflare Workers AI）。模型按 `AI_MODEL` → Qwen3 →
+Llama 3.3 → Llama 3.1 的顺序自动降级。
+
+**Pages → toydiary → Settings → Environment variables → Production**（均可选）：
 
 | Variable | Type | Required | Meaning |
 |----------|------|----------|---------|
-| `OPENAI_API_KEY` | **Secret** | Yes | 上游 Key |
-| `OPENAI_BASE_URL` | Text/Secret | No* | 须含 `/v1` |
-| `OPENAI_MODEL` | Text | No* | 模型 id |
-| `AI_PROVIDER` | Text | No | openai / anthropic / auto |
+| `AI_MODEL` | Text | No | 覆盖首个 Workers AI 模型 id（默认 `@cf/qwen/qwen3-30b-a3b-fp8`） |
+| `ENVIRONMENT` | Text | No | `/api/health` 回显 |
 
-改 env 后必须 **重新部署** 或等 Functions 传播。
+旧的 `OPENAI_API_KEY` / `OPENAI_BASE_URL` / `OPENAI_MODEL` / `AI_PROVIDER`
+已不再读取，可从 Dashboard 删除。
 
-本地 Functions：`web/.dev.vars`（gitignored）：
+改 env 或 `ai` binding 后必须 **重新部署** 或等 Functions 传播。
 
-```
-OPENAI_API_KEY=sk-...
-OPENAI_BASE_URL=https://your-gateway.example/v1
-OPENAI_MODEL=your-model-id
-AI_PROVIDER=auto
-```
+本地 Functions：`npx wrangler pages dev ./dist` 会自动模拟 `AI` binding，
+访问 `/api/health` 可确认 `ai.binding === true`。
 
 前端公开（可进 `.env.local`）：
 

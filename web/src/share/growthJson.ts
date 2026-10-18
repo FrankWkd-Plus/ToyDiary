@@ -1,3 +1,4 @@
+import { localDate } from '../utils/localDate'
 import type { Entry, Toy } from '../types'
 
 export const GROWTH_JSON_VERSION = 1 as const
@@ -55,5 +56,5 @@ export function parseGrowthImport(raw: unknown): GrowthExportPayload {
 }
 
 export function growthExportFilename() {
-  return `toydairy-growth-${new Date().toISOString().slice(0, 10)}.json`
+  return `toydairy-growth-${localDate()}.json`
 }

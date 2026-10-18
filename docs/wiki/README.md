@@ -24,6 +24,7 @@
 | 本地开发 | [10 · 开发指南](./10-development.md) |
 | 主题 / 视觉系统 | [11 · UI 与主题](./11-ui-theme.md) |
 | 排障 | [12 · 排障手册](./12-troubleshooting.md) |
+| **打包 iOS App / IPA** | [14 · iOS 打包与 IPA](./14-ios-ipa.md) |
 
 ---
 
@@ -72,13 +73,15 @@ Wiki 是**导航层 + 界面深挖**；细节仍以专题文档为准：
 
 ```
 ToyDairy/
+├── .github/workflows/  # ios-unsigned-ipa.yml（手动触发，出未签名 IPA）
 ├── docs/wiki/          ← 你在这里
 ├── docs/               # PRD / api / tech / cloudflare
 ├── web/                # ★ 主应用 SPA + Pages Functions
 │   ├── src/pages/      # 路由页面（TimelinePage = Home）
 │   ├── src/api/        # contracts（DB 接口）+ mockStore（演示库）
 │   ├── migrations/     # D1 schema（设计保留）
-│   └── functions/api/  # chat · analyze-entry · places
+│   ├── functions/api/  # chat · analyze-entry · places
+│   └── ios/            # Capacitor iOS 工程（SPM）
 ├── feature.md · plan.md · readme.md
 └── hardware/           # 可选，非 Web 主路径
 ```

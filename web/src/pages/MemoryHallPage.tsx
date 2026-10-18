@@ -1,60 +1,55 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
-import { useParams } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { useLocation, useParams } from 'react-router-dom'
 import {
   ChevronLeft,
   ChevronRight,
-  Download,
   ImagePlus,
   Pause,
   Play,
   Share2,
   Sparkles,
-  Volume2,
-  VolumeX,
-  X,
 } from 'lucide-react'
 import {
   archivePhotos,
   companionDays,
   toyAvatar,
 } from '../archive/archiveUtils'
-import { useAuth } from '../auth/AuthContext'
+import { api } from '../api/client'
 import { PageHeader } from '../components/PageHeader'
+import { MemoryShareSheet } from '../components/MemoryShareSheet'
 import { useApp } from '../context/AppContext'
-import {
-  DAY_COUNT_FONTS,
-  DAY_COUNT_PALETTES,
-  type DayCountFont,
-  type DayCountPalette,
-} from '../daysmatter/dayCountTheme'
-import { renderDayCountCardPng } from '../share/renderDayCountCardPng'
-import { isMobileClient, shareOrDownloadFile } from '../share/shareHelpers'
 
 /**
  * Memory hall: slideshow + header share icon.
- * Share sheet includes export-only day-count styling (does not affect site theme).
+ * Share sheet builds an editorial keepsake from the current toy and its entries.
  */
 export function MemoryHallPage() {
   const { id } = useParams()
-  const { toys, currentToy, entries, setCurrentToyId, showToast } = useApp()
-  const { prefs, updatePrefs } = useAuth()
+  const location = useLocation()
+  const backTo =
+    (location.state as { from?: string } | null)?.from === 'me'
+      ? '/me'
+      : '/archive'
+  const { toys, showToast } = useApp()
   const toy = toys.find((item) => item.id === id)
+  const [entries, setEntries] = useState<Awaited<ReturnType<typeof api.listEntries>>>([])
   const [slide, setSlide] = useState(0)
   const [playing, setPlaying] = useState(true)
-  const [musicOn, setMusicOn] = useState(() => prefs.memorySound)
   const [shareOpen, setShareOpen] = useState(false)
-  const [exportPalette, setExportPalette] =
-    useState<DayCountPalette>('matcha')
-  const [exportFont, setExportFont] = useState<DayCountFont>('display')
-  const [exportBg, setExportBg] = useState<string | undefined>()
-  const [previewUrl, setPreviewUrl] = useState<string>()
-  const [rendering, setRendering] = useState(false)
-  const albumRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    setMusicOn(prefs.memorySound)
-  }, [prefs.memorySound])
+    if (!id) {
+      setEntries([])
+      return
+    }
+    let cancelled = false
+    void api.listEntries(id).then((list) => {
+      if (!cancelled) setEntries(list)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [id])
 
   // Prevent background page-scroll while share sheet is open
   useEffect(() => {
@@ -77,70 +72,25 @@ export function MemoryHallPage() {
     }
   }, [shareOpen])
 
-  const ready = Boolean(toy && currentToy?.id === toy.id)
-  const photos = useMemo(
-    () => (ready ? archivePhotos(entries) : []),
-    [entries, ready],
-  )
+  const photos = useMemo(() => archivePhotos(entries), [entries])
 
   useEffect(() => {
-    if (toy && currentToy?.id !== toy.id) setCurrentToyId(toy.id)
-  }, [currentToy?.id, setCurrentToyId, toy])
+    setSlide((current) => Math.min(current, Math.max(0, photos.length - 1)))
+  }, [photos.length])
 
   useEffect(() => {
-    if (!playing || photos.length < 2) return
+    if (!playing || shareOpen || photos.length < 2) return
     const timer = window.setInterval(
       () => setSlide((current) => (current + 1) % photos.length),
       3600,
     )
     return () => window.clearInterval(timer)
-  }, [photos.length, playing])
-
-  // Live preview when share sheet open — export only, never writes site daycount style
-  useEffect(() => {
-    if (!shareOpen || !toy) return
-    let cancelled = false
-    setRendering(true)
-    void renderDayCountCardPng({
-      toy,
-      days: companionDays(toy),
-      backgroundUrl: exportBg || photos[slide]?.src,
-      palette: exportPalette,
-      font: exportFont,
-      title: `和 ${toy.name} 相遇`,
-    })
-      .then(async (blob) => {
-        if (cancelled) return
-        const url = URL.createObjectURL(blob)
-        setPreviewUrl((prev) => {
-          if (prev) URL.revokeObjectURL(prev)
-          return url
-        })
-      })
-      .catch(() => {
-        if (!cancelled) showToast('预览生成失败')
-      })
-      .finally(() => {
-        if (!cancelled) setRendering(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [
-    shareOpen,
-    toy,
-    exportBg,
-    exportPalette,
-    exportFont,
-    photos,
-    slide,
-    showToast,
-  ])
+  }, [photos.length, playing, shareOpen])
 
   if (!toy) {
     return (
       <>
-        <PageHeader title="回忆展厅" back="/archive" soft />
+        <PageHeader title="回忆展厅" back={backTo} soft />
         <div className="px-4 py-16 text-center text-sm text-ink-muted">
           这段回忆暂时找不到了
         </div>
@@ -163,74 +113,12 @@ export function MemoryHallPage() {
     setSlide((current) => (current + direction + photos.length) % photos.length)
   }
 
-  async function saveOrShareCard(mode: 'save' | 'share') {
-    if (!toy) return
-    try {
-      setRendering(true)
-      const blob = await renderDayCountCardPng({
-        toy,
-        days,
-        backgroundUrl: exportBg || currentPhoto?.src,
-        palette: exportPalette,
-        font: exportFont,
-        title: `和 ${toy.name} 相遇`,
-      })
-      const filename = `Toy-Dairy-${days}-days.jpg`
-      if (mode === 'share') {
-        const result = await shareOrDownloadFile({
-          blob,
-          filename,
-          title: `${days} DAYS 陪伴纪念`,
-          text: `我和 ${toy.name} 已经认识 ${days} 天了。`,
-        })
-        showToast(
-          result === 'shared'
-            ? '已打开系统分享（可存到相册）'
-            : '纪念卡片已下载',
-        )
-      } else {
-        const result = await shareOrDownloadFile({
-          blob,
-          filename,
-          title: `${days} DAYS 陪伴纪念`,
-          text: `我和 ${toy.name} 的陪伴纪念`,
-        })
-        showToast(
-          result === 'shared' ? '请选择「存储图像」保存到相册' : '纪念卡片已下载',
-        )
-      }
-    } catch {
-      showToast('生成失败，请重试')
-    } finally {
-      setRendering(false)
-    }
-  }
-
-  function onPickExportBg(file: File | null) {
-    if (!file) return
-    if (!file.type.startsWith('image/')) {
-      showToast('请选择图片')
-      return
-    }
-    if (file.size > 6 * 1024 * 1024) {
-      showToast('背景图请小于 6MB')
-      return
-    }
-    const reader = new FileReader()
-    reader.onload = () => {
-      // Export-only — does NOT call saveDayCountStyle / site theme
-      setExportBg(String(reader.result || ''))
-      showToast('已设置导出背景（不影响网站样式）')
-    }
-    reader.readAsDataURL(file)
-  }
-
   return (
     <>
       <PageHeader
         title="回忆展厅"
         subtitle={`我和 ${toy.name} 的 ${days} 天`}
-        back="/archive"
+        back={backTo}
         soft
         right={
           <button
@@ -245,46 +133,37 @@ export function MemoryHallPage() {
         }
       />
       <main className="space-y-5 px-4 pb-5 pt-4">
-        <section className="memory-stage">
-          <img src={currentPhoto.src} alt={currentPhoto.title} />
-          <div className="memory-stage__shade" />
-          <div className="absolute inset-x-0 top-0 z-[2] flex items-center justify-between p-3">
-            <span className="rounded-full bg-black/25 px-2.5 py-1 text-[9px] tracking-widest text-white backdrop-blur-sm">
-              {slide + 1} / {photos.length}
-            </span>
-            <button
-              type="button"
-              onClick={() => {
-                setMusicOn((value) => {
-                  const next = !value
-                  updatePrefs({ memorySound: next })
-                  showToast(next ? '已开启回忆展厅声音' : '已关闭回忆展厅声音')
-                  return next
-                })
-              }}
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-black/25 text-white backdrop-blur-sm"
-              aria-label={musicOn ? '关闭背景音乐' : '开启背景音乐'}
-            >
-              {musicOn ? (
-                <Volume2 className="h-4 w-4" />
-              ) : (
-                <VolumeX className="h-4 w-4" />
-              )}
-            </button>
-          </div>
-          <div className="absolute inset-x-0 bottom-0 z-[2] p-4 text-white">
-            <p className="text-[10px] text-white/75">
-              {currentPhoto.date} · {currentPhoto.location}
-              {musicOn ? ' · ♪ 声音开' : ' · 静音'}
-            </p>
-            <h2 className="mt-1 font-display text-xl">{currentPhoto.title}</h2>
-            <p className="mt-1.5 line-clamp-2 text-[11px] leading-relaxed text-white/90">
-              {currentPhoto.narration}
-            </p>
-          </div>
-        </section>
+        {currentPhoto ? (
+          <section className="memory-stage">
+            <img src={currentPhoto.src} alt={currentPhoto.title} />
+            <div className="memory-stage__shade" />
+            <div className="absolute inset-x-0 top-0 z-[2] flex items-center justify-between p-3">
+              <span className="rounded-full bg-black/25 px-2.5 py-1 text-[9px] tracking-widest text-white backdrop-blur-sm">
+                {slide + 1} / {photos.length}
+              </span>
 
-        <div className="flex items-center justify-center gap-4">
+            </div>
+            <div className="absolute inset-x-0 bottom-0 z-[2] p-4 text-white">
+              <p className="text-[10px] text-white/75">
+                {currentPhoto.date} · {currentPhoto.location}
+              </p>
+              <h2 className="mt-1 font-display text-xl">{currentPhoto.title}</h2>
+              <p className="mt-1.5 line-clamp-2 text-[11px] leading-relaxed text-white/90">
+                {currentPhoto.narration}
+              </p>
+            </div>
+          </section>
+        ) : (
+          <section className="rounded-[1.75rem] border border-dashed border-line bg-cream/60 px-6 py-12 text-center">
+            <ImagePlus className="mx-auto h-8 w-8 text-terra-deep" />
+            <h2 className="mt-3 font-display text-lg text-ink">展厅还在等待第一张照片</h2>
+            <p className="mt-2 text-xs leading-5 text-ink-muted">
+              玩偶头像只属于档案。通过「+」保存带照片的日志后，照片才会进入回忆展厅。
+            </p>
+          </section>
+        )}
+
+        {currentPhoto && <div className="flex items-center justify-center gap-4">
           <button
             type="button"
             onClick={() => moveSlide(-1)}
@@ -313,7 +192,7 @@ export function MemoryHallPage() {
           >
             <ChevronRight className="h-5 w-5" />
           </button>
-        </div>
+        </div>}
 
         <section className="card-paper border border-line/60 p-4">
           <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-matcha-deep">
@@ -356,152 +235,16 @@ export function MemoryHallPage() {
         </section>
       </main>
 
-      {shareOpen &&
-        createPortal(
-          <div
-            className="export-sheet-overlay"
-            role="dialog"
-            aria-modal="true"
-            aria-label="分享纪念图"
-            onClick={() => setShareOpen(false)}
-          >
-            <div
-              data-export-sheet
-              className="export-sheet-panel"
-              onClick={(event) => event.stopPropagation()}
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-display text-lg text-ink">分享纪念图</p>
-                  <p className="text-[10px] text-ink-muted">
-                    正数日样式仅用于导出，不会改网站背景
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShareOpen(false)}
-                  className="flex h-8 w-8 items-center justify-center rounded-full bg-cream"
-                  aria-label="关闭"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-
-              <div className="memory-share-preview mt-3 overflow-hidden rounded-2xl bg-cream">
-                {previewUrl ? (
-                  <img
-                    src={previewUrl}
-                    alt="分享预览"
-                    className="max-h-72 w-full object-contain"
-                  />
-                ) : (
-                  <div className="flex h-48 items-center justify-center text-xs text-ink-muted">
-                    {rendering ? '正在生成预览…' : '预览'}
-                  </div>
-                )}
-              </div>
-
-              <div className="mt-3 space-y-2">
-                <p className="text-[10px] font-medium text-ink-muted">
-                  导出背景（可选相册）
-                </p>
-                <input
-                  ref={albumRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => {
-                    onPickExportBg(e.target.files?.[0] ?? null)
-                    e.target.value = ''
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={() => albumRef.current?.click()}
-                  className="flex w-full items-center gap-2 rounded-xl border border-line/70 bg-cream/50 px-3 py-2.5 text-left text-xs"
-                >
-                  <ImagePlus className="h-4 w-4 text-matcha-deep" />
-                  从相册选择导出背景
-                </button>
-                {exportBg && (
-                  <button
-                    type="button"
-                    onClick={() => setExportBg(undefined)}
-                    className="text-[10px] text-ink-muted underline"
-                  >
-                    清除自定义导出背景
-                  </button>
-                )}
-              </div>
-
-              <div className="mt-3">
-                <p className="mb-1.5 text-[10px] font-medium text-ink-muted">
-                  事件颜色
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {DAY_COUNT_PALETTES.map((p) => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => setExportPalette(p.id)}
-                      className={`rounded-full px-2.5 py-1 text-[10px] ${
-                        exportPalette === p.id
-                          ? 'bg-matcha text-white'
-                          : 'bg-cream text-ink-soft'
-                      }`}
-                    >
-                      {p.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="mt-3">
-                <p className="mb-1.5 text-[10px] font-medium text-ink-muted">
-                  数字字体
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {DAY_COUNT_FONTS.map((f) => (
-                    <button
-                      key={f.id}
-                      type="button"
-                      onClick={() => setExportFont(f.id)}
-                      className={`rounded-full px-2.5 py-1 text-[10px] ${
-                        exportFont === f.id
-                          ? 'bg-matcha text-white'
-                          : 'bg-cream text-ink-soft'
-                      }`}
-                    >
-                      {f.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="mt-4 grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  disabled={rendering}
-                  onClick={() => void saveOrShareCard('save')}
-                  className="flex items-center justify-center gap-1.5 rounded-xl bg-mist-soft py-2.5 text-xs font-semibold text-matcha-deep disabled:opacity-50"
-                >
-                  <Download className="h-4 w-4" />
-                  {isMobileClient() ? '保存到相册' : '下载图片'}
-                </button>
-                <button
-                  type="button"
-                  disabled={rendering}
-                  onClick={() => void saveOrShareCard('share')}
-                  className="flex items-center justify-center gap-1.5 rounded-xl bg-mustard-soft py-2.5 text-xs font-semibold text-terra-deep disabled:opacity-50"
-                >
-                  <Share2 className="h-4 w-4" />
-                  分享
-                </button>
-              </div>
-            </div>
-          </div>,
-          document.body,
-        )}
+      {shareOpen && (
+        <MemoryShareSheet
+          key={toy.id}
+          toy={toy}
+          entries={entries}
+          initialPhotoId={currentPhoto?.entryId}
+          onClose={() => setShareOpen(false)}
+          showToast={showToast}
+        />
+      )}
     </>
   )
 }

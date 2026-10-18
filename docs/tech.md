@@ -30,13 +30,14 @@ API 契约详见 [`docs/api.md`](./api.md)。
 │  └─────────────────────┘  └───────────┬──────────────┘  │
 └───────────────────────────────────────┼─────────────────┘
                                         ▼
-                     OpenAI-compatible / Anthropic gateway
-                     Nominatim (OSM geocoding)
+                     Workers AI (`AI` binding, no key)
+                     Nominatim → Photon (OSM geocoding)
+                     Edge cache (`caches.default`)
 ```
 
 **原则：**
 
-- **密钥只在 Functions**：`OPENAI_*` 永不进 `VITE_*`。
+- **AI 全在 Cloudflare**：Functions 直接调用 Workers AI binding，无需密钥、网关或云服务器。
 - **CRUD 默认 localStorage**：演示可离线保存；REST/D1 **接口契约保留**（`api/contracts.ts` + migration）；KV/D1/R2 已在 `wrangler.jsonc` 预留。
 - **重模块懒加载**：地图 Leaflet、抠图 ONNX 不进冷启动主包。
 
@@ -63,8 +64,8 @@ API 契约详见 [`docs/api.md`](./api.md)。
 | 层 | 选型 |
 |----|------|
 | 运行时 | Cloudflare Pages Functions（`web/functions`） |
-| AI 适配 | `functions/_shared/aiProvider.ts`（OpenAI + Anthropic 自动识别） |
-| 地理 | Nominatim 服务端代理 |
+| AI | Cloudflare Workers AI（`AI` binding，`functions/_shared/workersAi.ts`） |
+| 地理 | Nominatim 代理 → Photon 回退，`caches.default` 边缘缓存 |
 | 配置 | `web/wrangler.jsonc` |
 | 未来存储 | D1 / KV / R2 bindings 已声明，业务未接 |
 
@@ -93,10 +94,11 @@ ToyDairy/
 │   └── PRD.md
 ├── web/
 │   ├── functions/
-│   │   ├── _shared/aiProvider.ts
+│   │   ├── _shared/{http,workersAi,places}.ts
 │   │   └── api/
 │   │       ├── chat.ts
 │   │       ├── analyze-entry.ts
+│   │       ├── health.ts
 │   │       └── places/{search,reverse}.ts
 │   ├── public/             # 静态图、_redirects
 │   ├── src/
@@ -182,7 +184,7 @@ ToyDairy/
 ```
 ConversationPage
   → chatToyReply()
-    → POST /api/chat  (Functions + aiProvider)
+    → POST /api/chat  (Functions + workersAi)
     → 失败：localPersonaReply + 错误气泡/Toast
 ```
 
@@ -198,14 +200,14 @@ ComposePage
   → api.createEntry(+ place)
 ```
 
-### 6.3 Provider 适配（`aiProvider.ts`）
+### 6.3 Provider 适配（`workersAi.ts`）
 
-- OpenAI：`POST {base}/chat/completions`，Bearer  
-- Anthropic：`POST {base}/messages`，x-api-key + Bearer  
-- 响应解析兼容 `choices[]` 与 `content[{type,text}]`  
-- 失败响应带 `auth` 元数据便于排障  
+- 直接调用 `env.AI.run(model, { messages })`，无需 Key / 网关  
+- 模型顺序：`AI_MODEL` → Qwen3 → Llama 3.3 → Llama 3.1，逐个降级  
+- 响应解析兼容 `{ response }` 与 `choices[].message.content`，并剥离 `<think>` 块  
+- 全部失败时返回 `triedModels` / `detail` 便于排障  
 
-**Base URL 必须含 `/v1`**（中转站常见坑：只写域名会返回 HTML 门户页）。
+排障入口：`GET /api/health`。
 
 ---
 
@@ -288,16 +290,16 @@ npx wrangler pages deploy ./dist --project-name=toydiary --branch=main
 
 SPA：`public/_redirects` 非 `/api/*` 回退 `index.html`。
 
-**Dashboard → toydiary → Environment variables → Production：**
+**AI 由 `wrangler.jsonc` 的 `"ai": { "binding": "AI" }` 提供，无需任何密钥。**
+可选环境变量（Dashboard → toydiary → Production）：
 
 ```
-OPENAI_API_KEY=***
-OPENAI_BASE_URL=https://your-gateway/v1
-OPENAI_MODEL=your-model
-AI_PROVIDER=auto   # 或 openai / anthropic
+AI_MODEL=@cf/qwen/qwen3-30b-a3b-fp8   # 可选，覆盖首个模型
 ```
 
-改 env 后需重新部署或等传播。
+部署后访问 `/api/health` 可确认 binding 与模型。旧的 `OPENAI_*` / `AI_PROVIDER` 已不再读取。
+
+改 env 或 binding 后需重新部署或等传播。
 
 预留资源（未接线）：
 

@@ -1,13 +1,13 @@
 import {
   useEffect,
-  useMemo,
   useRef,
   useState,
   type ChangeEvent,
   type FormEvent,
 } from 'react'
 import { createPortal } from 'react-dom'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
+import { demoScopedKey } from '../demo/demoMode'
 import {
   BellOff,
   Camera,
@@ -15,7 +15,6 @@ import {
   ChevronDown,
   ChevronRight,
   ImagePlus,
-  Mic,
   Send,
   Sparkles,
   Trash2,
@@ -23,7 +22,6 @@ import {
 } from 'lucide-react'
 import {
   chatToyReply,
-  formatChatApiError,
   localPersonaReply,
 } from '../ai/chatToyReply'
 import {
@@ -34,6 +32,7 @@ import {
 import {
   getToyVitality,
 } from '../archive/toyVitality'
+import { ChatImage } from '../components/ChatImage'
 import {
   loadChats,
   saveChats,
@@ -41,15 +40,14 @@ import {
 } from '../conversation/chatStorage'
 import { useApp } from '../context/AppContext'
 import { useLocale } from '../i18n'
+import {
+  deletePersistedChatImage,
+  localDiaryPhotoReference,
+  persistChatImage,
+} from '../media/photoStorage'
 import type { Entry, Toy } from '../types'
 
-const QUICK_TOPICS = [
-  '和你说说今天',
-  '回忆一次旅行',
-  '看看你记得什么',
-  '给我一点安慰',
-  '一起写日记',
-] as const
+type QuickTopic = '说说今天' | '回忆我们的故事'
 
 const EMPTY_MESSAGES: ChatMessage[] = []
 
@@ -81,23 +79,13 @@ function createOpeningMessage(toy: Toy, entries: Entry[]): ChatMessage {
 
 function getFeaturedMemory(entries: Entry[]) {
   return (
-    entries.find((entry) => entry.type === 'travel' && entry.imageUrl) ??
+    entries.find((entry) => entry.type === 'travel') ??
     entries.find((entry) => entry.imageUrl) ??
     entries[0]
   )
 }
 
-function fileToDataUrl(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(String(reader.result))
-    reader.onerror = () => reject(new Error('图片读取失败'))
-    reader.readAsDataURL(file)
-  })
-}
-
 export function ConversationPage() {
-  const navigate = useNavigate()
   const { locale } = useLocale()
   const {
     currentToy,
@@ -111,9 +99,10 @@ export function ConversationPage() {
   const [draft, setDraft] = useState('')
   const [toyPickerOpen, setToyPickerOpen] = useState(false)
   const [quietMode, setQuietMode] = useState(
-    () => window.localStorage.getItem('toydairy.quietMode') === 'true',
+    () => window.localStorage.getItem(demoScopedKey('toydairy.quietMode')) === 'true',
   )
   const [pendingImage, setPendingImage] = useState<string>()
+  const [pendingImagePath, setPendingImagePath] = useState<string>()
   const [replying, setReplying] = useState(false)
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
@@ -121,6 +110,10 @@ export function ConversationPage() {
   const endRef = useRef<HTMLDivElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
+  /** Set from inside a state updater, drained by the effect below — a toast
+   *  cannot be raised from there, and swallowing the failure is what made a
+   *  dropped message look like it had been sent. */
+  const chatStorageFullRef = useRef(false)
 
   const currentToyIndex = toys.findIndex((toy) => toy.id === currentToy?.id)
   const avatar = toyAvatar(currentToy, currentToyIndex)
@@ -128,6 +121,8 @@ export function ConversationPage() {
   const messages = currentToy
     ? messagesByToy[currentToy.id] ?? EMPTY_MESSAGES
     : EMPTY_MESSAGES
+  const quickTopic: QuickTopic =
+    entries.length > 0 ? '回忆我们的故事' : '说说今天'
   const latestMemory = getFeaturedMemory(entries)
   const vitality = currentToy
     ? getToyVitality(currentToy, entries)
@@ -143,16 +138,6 @@ export function ConversationPage() {
           .map((entry) => entry.location)
           .filter((place): place is string => Boolean(place)),
   ).size
-
-  const conversationDraft = useMemo(
-    () =>
-      messages
-        .filter((message) => message.role === 'user' && message.text)
-        .slice(-4)
-        .map((message) => message.text)
-        .join('\n'),
-    [messages],
-  )
 
   useEffect(() => {
     if (!currentToy) return
@@ -176,13 +161,19 @@ export function ConversationPage() {
     endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
   }, [messages.length, replying, pendingImage])
 
+  useEffect(() => {
+    if (!chatStorageFullRef.current) return
+    chatStorageFullRef.current = false
+    showToast('本机存储已满，这条聊天记录可能没有保存')
+  })
+
   function appendMessages(toyId: string, nextMessages: ChatMessage[]) {
     setMessagesByToy((current) => {
       const next = {
         ...current,
         [toyId]: [...(current[toyId] ?? []), ...nextMessages],
       }
-      saveChats(next)
+      if (!saveChats(next)) chatStorageFullRef.current = true
       return next
     })
   }
@@ -210,7 +201,6 @@ export function ConversationPage() {
       .filter((m) => m.text)
 
     let replyText = localPersonaReply(currentToy, userText, entries, locale)
-    let errorMessage: ChatMessage | null = null
     try {
       const result = await chatToyReply({
         toy: currentToy,
@@ -222,45 +212,19 @@ export function ConversationPage() {
       })
       replyText = result.reply
       if (result.apiError) {
-        const errorText = formatChatApiError(result.apiError, locale)
-        errorMessage = {
-          id: uid('error'),
-          role: 'system',
-          kind: 'error',
-          text: errorText,
-          createdAt: new Date().toISOString(),
-        }
-        // Toast is always visible even if chat history is scrolled away.
-        const toastLine =
-          errorText
-            .split('\n')
-            .map((line) => line.trim())
-            .find(
-              (line) =>
-                line &&
-                !line.startsWith('AI 调用失败') &&
-                !line.startsWith('AI request failed'),
-            ) ||
-          (locale === 'en' ? 'AI request failed' : 'AI 调用失败')
-        showToast(toastLine.slice(0, 120))
+        showToast(
+          locale === 'en'
+            ? 'Online service is unavailable; replied on this device'
+            : '在线服务暂不可用，已在本机生成回复',
+        )
         console.warn('[chatToyReply] API failed', result.apiError)
       }
     } catch (err) {
-      const errorText = formatChatApiError(
-        {
-          status: 0,
-          body: err instanceof Error ? err.message : String(err),
-        },
-        locale,
+      showToast(
+        locale === 'en'
+          ? 'Online service is unavailable; replied on this device'
+          : '在线服务暂不可用，已在本机生成回复',
       )
-      errorMessage = {
-        id: uid('error'),
-        role: 'system',
-        kind: 'error',
-        text: errorText,
-        createdAt: new Date().toISOString(),
-      }
-      showToast((err instanceof Error ? err.message : 'AI 调用失败').slice(0, 120))
       console.warn('[chatToyReply] request threw', err)
     }
 
@@ -278,15 +242,18 @@ export function ConversationPage() {
             role: 'toy',
             kind: 'memory',
             text: latestMemory.title || '我们的共同记忆',
-            imageUrl: latestMemory.imageUrl,
+            // The hydrated value is a container URL, which breaks when iOS moves
+            // the app container — store the durable reference instead.
+            imageUrl: latestMemory.localImagePath
+              ? localDiaryPhotoReference(latestMemory.localImagePath)
+              : latestMemory.imageUrl,
+            localImagePath: latestMemory.localImagePath,
             entryId: latestMemory.id,
             createdAt: new Date().toISOString(),
           }
         : null
-    // Put the API error after the toy bubble so auto-scroll lands on it.
     const outgoing = [
       reply,
-      ...(errorMessage ? [errorMessage] : []),
       ...(memory ? [memory] : []),
     ]
     appendMessages(currentToy.id, outgoing)
@@ -310,6 +277,7 @@ export function ConversationPage() {
         role: 'user',
         kind: 'image',
         imageUrl: pendingImage,
+        localImagePath: pendingImagePath,
         text: text || '想把这一刻给你看看',
         createdAt: new Date().toISOString(),
       })
@@ -327,27 +295,15 @@ export function ConversationPage() {
     appendMessages(currentToy.id, userMessages)
     setDraft('')
     setPendingImage(undefined)
+    setPendingImagePath(undefined)
     void sendToyReply(pendingImage ? `${text || '想把这一刻给你看看'}（附照片）` : text, {
       includeMemory: /旅行|回忆|记得|以前|去过/.test(text),
       priorMessages,
     })
   }
 
-  function chooseTopic(topic: (typeof QUICK_TOPICS)[number]) {
+  function chooseTopic(topic: QuickTopic) {
     if (!currentToy || replying) return
-    if (topic === '一起写日记') {
-      navigate('/compose', {
-        state: {
-          mode: 'text',
-          ocrText:
-            conversationDraft ||
-            `今天想和${currentToy.name}一起，记下一件小小的事。`,
-          fromConversation: true,
-        },
-      })
-      return
-    }
-
     const topicMsg: ChatMessage = {
       id: uid('topic'),
       role: 'user',
@@ -376,17 +332,31 @@ export function ConversationPage() {
       return
     }
     try {
-      setPendingImage(await fileToDataUrl(file))
+      // Persist while the File is still in hand: the message then carries only
+      // a small reference, so it fits the localStorage budget and survives the
+      // next launch instead of being dropped, as an inline data URL was.
+      const persisted = await persistChatImage(file)
+      // Re-picking replaces the last pick; nothing points at that file any more.
+      void deletePersistedChatImage(pendingImagePath)
+      setPendingImage(persisted.url)
+      setPendingImagePath(persisted.nativePath)
       setDraft('想把这一刻给你看看')
     } catch {
       showToast('图片读取失败，请重新选择')
     }
   }
 
+  /** Dropping the pick leaves an unreferenced file, so it goes with it. */
+  function discardPendingImage() {
+    void deletePersistedChatImage(pendingImagePath)
+    setPendingImage(undefined)
+    setPendingImagePath(undefined)
+  }
+
   function toggleQuietMode() {
     const next = !quietMode
     setQuietMode(next)
-    window.localStorage.setItem('toydairy.quietMode', String(next))
+    window.localStorage.setItem(demoScopedKey('toydairy.quietMode'), String(next))
     showToast(next ? '已开启安静模式，不再主动提醒' : '已恢复温柔提醒')
   }
 
@@ -418,6 +388,7 @@ export function ConversationPage() {
       return
     }
     const remove = new Set(selectedIds)
+    const removed = messages.filter((m) => remove.has(m.id))
     setMessagesByToy((current) => {
       const list = (current[currentToy.id] ?? []).filter((m) => !remove.has(m.id))
       const nextList =
@@ -426,6 +397,11 @@ export function ConversationPage() {
       saveChats(next)
       return next
     })
+    // Only chat photos are owned by the message; a memory card points at a diary
+    // photo, which `relativeChatPath` refuses, so the diary entry keeps its image.
+    for (const message of removed) {
+      void deletePersistedChatImage(message.localImagePath)
+    }
     exitSelectMode()
     showToast(`已删除 ${selectedIds.length} 条消息`)
   }
@@ -433,6 +409,7 @@ export function ConversationPage() {
   function clearAllConversation() {
     if (!currentToy) return
     const opening = createOpeningMessage(currentToy, entries)
+    const cleared = messages
     setMessagesByToy((current) => {
       const next = {
         ...current,
@@ -441,8 +418,12 @@ export function ConversationPage() {
       saveChats(next)
       return next
     })
+    for (const message of cleared) {
+      void deletePersistedChatImage(message.localImagePath)
+    }
     setDraft('')
     setPendingImage(undefined)
+    setPendingImagePath(undefined)
     setReplying(false)
     exitSelectMode()
     showToast('已清空全部聊天记录')
@@ -692,24 +673,23 @@ export function ConversationPage() {
         </section>
       ) : (
       <section className="z-10 mt-auto shrink-0 border-t border-line/50 bg-white/94 px-3.5 pb-2.5 pt-2.5 backdrop-blur-xl">
-        <div className="mb-2 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {QUICK_TOPICS.map((topic) => (
-            <button
-              key={topic}
-              type="button"
-              onClick={() => chooseTopic(topic)}
-              disabled={replying}
-              className="shrink-0 rounded-full border border-line/70 bg-cream/80 px-3 py-1.5 text-[10px] text-ink-soft transition-transform active:scale-95 disabled:opacity-50"
-            >
-              {topic}
-            </button>
-          ))}
+        <div className="mb-2 flex">
+          <button
+            type="button"
+            onClick={() => chooseTopic(quickTopic)}
+            disabled={replying}
+            className="inline-flex min-h-8 items-center justify-center gap-1 rounded-full border border-line/70 bg-cream/75 px-3 py-1.5 text-[10px] font-medium text-ink-soft transition-transform active:scale-[0.98] disabled:opacity-50"
+          >
+            <Sparkles className="h-3 w-3 text-terra-deep" />
+            {quickTopic}
+          </button>
         </div>
 
         {pendingImage && (
           <div className="mb-2 flex items-center gap-2 rounded-2xl bg-mist-soft p-2">
-            <img
+            <ChatImage
               src={pendingImage}
+              localPath={pendingImagePath}
               alt="待发送图片"
               className="h-12 w-12 rounded-xl object-cover"
             />
@@ -718,7 +698,7 @@ export function ConversationPage() {
             </span>
             <button
               type="button"
-              onClick={() => setPendingImage(undefined)}
+              onClick={discardPendingImage}
               className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-ink-muted"
               aria-label="移除待发送图片"
             >
@@ -761,14 +741,7 @@ export function ConversationPage() {
               placeholder={`和${currentToy.name}说点什么…`}
               className="max-h-20 min-h-5 min-w-0 flex-1 resize-none bg-transparent text-xs leading-5 text-ink outline-none placeholder:text-ink-muted"
             />
-            <button
-              type="button"
-              onClick={() => showToast('按住说话功能将在下一版本开放')}
-              className="ml-1 flex h-5 w-5 shrink-0 items-center justify-center text-ink-muted"
-              aria-label="语音输入"
-            >
-              <Mic className="h-4 w-4" />
-            </button>
+
           </div>
 
           <button
@@ -947,13 +920,12 @@ function MessageBubble({
           to={`/entries/${message.entryId}`}
           className="w-[76%] overflow-hidden rounded-[1.15rem] rounded-bl-md bg-white shadow-[var(--shadow-warm)] ring-1 ring-line/50 active:scale-[0.99]"
         >
-          {message.imageUrl && (
-            <img
-              src={message.imageUrl}
-              alt={message.text || '共同回忆'}
-              className="h-32 w-full object-cover"
-            />
-          )}
+          <ChatImage
+            src={message.imageUrl}
+            localPath={message.localImagePath}
+            alt={message.text || '共同回忆'}
+            className="h-32 w-full object-cover"
+          />
           <div className="p-3">
             <span className="flex items-center gap-1 text-[9px] font-medium text-terra-deep">
               <Sparkles className="h-3 w-3" />
@@ -986,9 +958,10 @@ function MessageBubble({
             : 'rounded-[1.15rem] rounded-bl-md bg-white px-3.5 py-2.5 text-ink-soft ring-1 ring-line/50'
         }`}
       >
-        {message.kind === 'image' && message.imageUrl && (
-          <img
+        {message.kind === 'image' && (
+          <ChatImage
             src={message.imageUrl}
+            localPath={message.localImagePath}
             alt="对话图片"
             className="-mx-3.5 -mt-2.5 mb-2.5 max-h-52 w-[calc(100%+1.75rem)] object-cover"
           />

@@ -1,3 +1,4 @@
+import { companionStartDate } from '../archive/archiveUtils'
 /**
  * Export Days Matter–style companion / count-up card as PNG.
  * Background / font / palette apply ONLY to this export — never mutates site theme.
@@ -184,7 +185,7 @@ export async function renderDayCountCardPng(
   // Footer meta inside card
   ctx.fillStyle = pal.labelColor
   ctx.font = '500 18px "Noto Sans SC", sans-serif'
-  const birth = opts.toy.birthDate
+  const birth = companionStartDate(opts.toy)
   ctx.fillText(
     opts.isFuture
       ? `相遇日: ${birth}`
@@ -220,7 +221,7 @@ export async function renderDayCountCardPng(
   // Brand line under card
   ctx.fillStyle = pal.number
   ctx.font = '600 18px "Noto Sans SC", sans-serif'
-  ctx.fillText('Toy Dairy · 把陪伴写进时间里', W / 2, H - 56)
+  ctx.fillText('Toy Diary · 把陪伴写进时间里', W / 2, H - 56)
 
   // JPEG is smaller/faster; PNG kept if caller expects transparency — solid bg so JPEG ok
   const blob = await new Promise<Blob | null>((resolve) =>

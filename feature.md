@@ -414,9 +414,12 @@ CORS：Functions 层 `Access-Control-Allow-Origin: *`（演示向）。
 
 ```
 web/functions/
-  _shared/aiProvider.ts      # OpenAI / Anthropic 适配
+  _shared/http.ts            # CORS / JSON
+  _shared/workersAi.ts       # Workers AI + 模型降级
+  _shared/places.ts          # Nominatim / Photon + 边缘缓存
   api/chat.ts
   api/analyze-entry.ts
+  api/health.ts
   api/places/search.ts
   api/places/reverse.ts
 ```
@@ -454,7 +457,8 @@ web/functions/
   "date": "2026-07-24",
   "location": "上海 · 武康路",
   "userNote": "今天带熊看日落",
-  "imageDataUrl": "data:image/jpeg;base64,…",
+  "hasPhoto": true,
+  "imageToneDescription": "照片整体偏暖，夕阳的黄橙色调",
   "toy": { "name": "…", "role": "…", "traits": [], "bio": "…", "monologue": "…" }
 }
 ```
@@ -463,26 +467,28 @@ web/functions/
 
 前端：`web/src/ai/analyzeEntry.ts`。失败 `generateLocalAnalysis`。
 
-#### Provider 适配（`aiProvider.ts`）
+#### Provider 适配（`_shared/workersAi.ts`）
 
-| 模式 | 行为 |
+AI 直接跑在 **Cloudflare Workers AI**（`wrangler.jsonc` 的 `"ai": { "binding": "AI" }`），
+无需 Key / 网关 / 云服务器。模型按顺序自动降级：
+
+| 顺序 | 模型 |
 |------|------|
-| `AI_PROVIDER=openai` | `POST {base}/chat/completions` |
-| `AI_PROVIDER=anthropic` | `POST {base}/messages` |
-| `auto`（默认） | 按 base URL / 模型名（如 `claude-*`）判断；可回退 |
+| 1 | `AI_MODEL`（可选） |
+| 2 | `@cf/qwen/qwen3-30b-a3b-fp8` |
+| 3 | `@cf/meta/llama-3.3-70b-instruct-fp8-fast` |
+| 4 | `@cf/meta/llama-3.1-8b-instruct` |
 
-**Base URL 须含 `/v1`**（中转站常见坑）。
+响应兼容 `{ response }` 与 `choices[].message.content`，并剥离 `<think>` 块。
 
-#### 服务端环境变量（Dashboard / `web/.dev.vars`，**禁止** `VITE_*`）
+#### 服务端环境变量（Dashboard，均可选）
 
 | 变量 | 类型 | 必填 | 含义 |
 |------|------|------|------|
-| `OPENAI_API_KEY` | Secret | 是* | 上游 Key（OpenAI/Anthropic 网关通用名） |
-| `OPENAI_BASE_URL` | Text/Secret | 否 | 默认官方 OpenAI 或 Anthropic |
-| `OPENAI_MODEL` | Text | 否 | 如 `gpt-4o-mini` / `claude-3-5-haiku-latest` |
-| `AI_PROVIDER` | Text | 否 | `openai` \| `anthropic` \| `auto` |
+| `AI_MODEL` | Text | 否 | 覆盖首个 Workers AI 模型 id |
+| `ENVIRONMENT` | Text | 否 | `/api/health` 回显 |
 
-\* 地点 API 不需要 AI Key。
+旧的 `OPENAI_*` / `AI_PROVIDER` 已不再读取。排障：`GET /api/health`。
 
 #### 前端公开环境变量
 
